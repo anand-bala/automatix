@@ -1,21 +1,39 @@
-FROM ghcr.io/prefix-dev/pixi:0.39.4 AS build
+FROM ghcr.io/astral-sh/uv:debian as builder
 
-# copy source code, pixi.toml and pixi.lock to the container
+# Enable bytecode compilation
+# Copy from the cache instead of linking since it's a mounted volume
+# Only use the managed Python version
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_PREFERENCE=only-managed
+
+# Configure the Python directory so it is consistent
+ENV UV_PYTHON_INSTALL_DIR /python
+
+# Install Python before the project for caching
+RUN uv python install 3.12
+
+# Install the project into `/app`
 WORKDIR /app
-COPY . .
-RUN pixi install --frozen -e dev
-# create the shell-hook bash script to activate the environment
-RUN pixi shell-hook --frozen -e dev -s bash > /shell-hook
-RUN echo "#!/bin/bash" > /app/entrypoint.sh
-RUN cat /shell-hook >> /app/entrypoint.sh
-# extend the shell-hook script to run the command passed to the container
-RUN echo 'exec "$@"' >> /app/entrypoint.sh
+COPY uv.lock pyproject.toml /app/
 
-FROM ubuntu:24.04 AS production
-WORKDIR /app
-COPY --from=build /app /app
-COPY --from=build --chmod=0755 /app/entrypoint.sh /app/entrypoint.sh
+# Install the project's dependencies using the lockfile and settings
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --all-groups
 
-ENTRYPOINT [ "/app/entrypoint.sh" ]
-CMD [ "python3", "/app/examples/swarm-monitoring/run_hscc_experiments.py" ]
+ADD . /app
+# Installing separately from its dependencies allows optimal layer caching
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --all-groups
 
+# Then, use a final image without uv
+FROM debian:bookworm-slim
+
+# Copy the Python version
+COPY --from=builder /python /python
+
+# Copy the application from the builder
+COPY --from=builder /app /app
+
+# Place executables in the environment at the front of the path
+ENV PATH="/app/.venv/bin:$PATH"
+
+CMD ["python", "/app/examples/swarm-monitoring/run_hscc_experiments.py"]

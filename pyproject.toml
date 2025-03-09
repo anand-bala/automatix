@@ -18,76 +18,31 @@ dependencies = [
   "lark~=1.2",
 ]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[project.optional-dependencies]
+cuda = ["jax[cuda]~=0.4"]
+
+[dependency-groups]
+dev = [
+  "black>=25.1.0",
+  "graphviz>=0.20.3",
+  "ipython>=9.0.2",
+  "isort>=6.0.1",
+  "mkdocs>=1.6.1",
+  "mkdocs-material>=9.6.7",
+  "mkdocstrings[python]>=0.28.3",
+  "mypy>=1.15.0",
+  "pytest>=8.3.5",
+  "ruff>=0.9.10",
+]
+examples = ["matplotlib", "pydantic>=2.10.6", "scienceplots", "scipy>=1.15.2"]
 
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
-[tool.pixi.project]
-channels = ["conda-forge"]
-platforms = ["linux-64", "osx-64"]
 
-[tool.pixi.dependencies]
-typing-extensions = "*"
-jax = "~=0.4"
-jaxtyping = "~=0.2"
-numpy = "~=1.26"
-equinox = "~=0.11"
-sympy = "~=1.12"
-networkx = "~=3.2"
-lark = "~=1.2"
-
-[tool.pixi.pypi-dependencies]
-automatix = { path = ".", editable = true }
-
-[tool.pixi.host-dependencies]
-pip = "*"
-
-[tool.pixi.feature.dev.tasks]
-docs = "PYTHONPATH=src mkdocs build"
-serve-docs = "PYTHONPATH=src mkdocs serve"
-ruff = "ruff check --fix --exit-non-zero-on-fix ."
-black = "black src"
-isort = "isort src"
-mypy = "mypy src"
-lint = { depends_on = ["black", "isort", "ruff", "mypy"] }
-test = "pytest"
-
-[tool.pixi.feature.dev.build-dependencies]
-mkdocs = "*"
-mkdocstrings = "*"
-mkdocstrings-python = "*"
-mkdocs-material = "*"
-ruff = ">=0.5.3"
-black = "*"
-isort = "*"
-mypy = "*"
-ipython = "*"
-pytest = "*"
-graphviz = "*"
-
-[tool.pixi.feature.examples.tasks]
-hscc25 = "python3 ./examples/swarm-monitoring/run_hscc_experiments.py"
-
-[tool.pixi.feature.examples.dependencies]
-# brax = "*"
-matplotlib = "*"
-scienceplots = "*"
-pydantic = ">=2.9.2,<3"
-scipy = "*"
-quarto = "*"
-jupyter = ">=1.1.1,<2"
-mkdocs-jupyter = ">=0.25.1,<0.26"
-
-[tool.pixi.environments]
-default = ["dev"]
-dev = ["dev", "examples"]
-# cuda11 = ["cuda11"]
-# cuda11-dev = ["cuda11", "dev", "examples"]
-# cuda12 = ["cuda12"]
-# cuda12-dev = ["cuda12", "dev", "examples"]
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"
@@ -101,32 +56,12 @@ show_error_codes = true
 line-length = 127
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "N", "B", "ANN", "PYI"]
-ignore = ["ANN101", "ANN102", "F722"]
+extend-select = ["E", "F", "W", "N", "B", "ANN", "PYI", "I"]
+extend-ignore = ["F722"]
 
-[tool.ruff.lint.per-file-ignores]
+[tool.ruff.lint.extend-per-file-ignores]
 "*.py" = ["B905", "E203", "E501", "W291", "W293"]
 "*.pyi" = ["B", "E501", "E701"]
-
-[tool.flake8]
-max-line-length = 127
-max-complexity = 10
-per-file-ignores = [
-  "__init__.py: F401",
-  "__init__.pyi: F401",
-  "*.py: B905, B907, B950, E203, E501, W503, W291, W293",
-  "*.pyi: B, E301, E302, E305, E501, E701, E704, W503",
-]
-
-
-[tool.isort]
-profile = "black"
-line_length = 127
-skip_gitignore = false
-group_by_package = true
-
-[tool.black]
-line-length = 127
 
 [tool.pyright]
 include = ["src", "examples"]
