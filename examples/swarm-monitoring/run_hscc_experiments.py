@@ -28,7 +28,9 @@ def import_from_path(module_name: str, file_path: Path) -> ModuleType:
 
     assert file_path.is_file()
 
-    module_spec = importlib.util.spec_from_file_location(module_name, file_path.absolute())
+    module_spec = importlib.util.spec_from_file_location(
+        module_name, file_path.absolute()
+    )
     assert module_spec is not None
     module = importlib.util.module_from_spec(module_spec)
     assert module_spec.loader is not None
@@ -36,7 +38,9 @@ def import_from_path(module_name: str, file_path: Path) -> ModuleType:
     return module
 
 
-monitoring_utils = import_from_path("monitoring_utils", CURRENT_DIR / "monitoring_example.py")
+monitoring_utils = import_from_path(
+    "monitoring_utils", CURRENT_DIR / "monitoring_example.py"
+)
 
 
 EXPERIMENTS = [
@@ -82,10 +86,11 @@ def forward_run(
 
 @dataclass
 class Args:
-
     @classmethod
     def parse_args(cls) -> "Args":
-        parser = argparse.ArgumentParser(description="Run all experiments for HSCC 2025")
+        parser = argparse.ArgumentParser(
+            description="Run all experiments for HSCC 2025"
+        )
 
         args = parser.parse_args()
         return Args(**vars(args))

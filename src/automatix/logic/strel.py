@@ -17,7 +17,6 @@ class _Ast(ast_utils.Ast):
 
 
 class Expr(_Ast, ABC):
-
     def __invert__(self) -> "Expr":
         match self:
             case NotOp(arg):
@@ -346,7 +345,6 @@ class UntilOp(Expr):
 
 
 class _TransformTerminals(Transformer):
-
     def CNAME(self, s: Token) -> str:  # noqa: N802
         return str(s)
 

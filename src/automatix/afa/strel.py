@@ -205,7 +205,7 @@ class Transitions(AbstractTransition[Alph, Q, K]):
                 )
                 self._add_expr_alias(phi, expr)
                 return delta(expr)
-        raise RuntimeError(f"Unknown [start, end] interval {(start,end)}")
+        raise RuntimeError(f"Unknown [start, end] interval {(start, end)}")
 
     def _expand_until(self, input: Alph, phi: strel.UntilOp, loc: Location) -> Poly[K]:
         # lhs U[t1,t2] rhs = (F[t1,t2] rhs) & (lhs U[t1,] rhs)

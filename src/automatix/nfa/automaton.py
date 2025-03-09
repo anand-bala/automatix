@@ -10,7 +10,6 @@ from automatix.nfa.predicate import AbstractPredicate
 
 
 class NFA:
-
     def __init__(self) -> None:
         self._graph = nx.DiGraph()
         self._initial_location: set[int] = set()

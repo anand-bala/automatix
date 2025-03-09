@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Mapping, Self, TypeAlias, final
+from typing import Mapping, Self, TypeAlias, final
 
 import dd.autoref as bddlib
 from typing_extensions import override

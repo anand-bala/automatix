@@ -320,7 +320,7 @@ Monitoring for ego locations: {list(ego_locs.keys())}
             )
 
         print()
-        print(f"==> Overall average: {sum(overall_results)/len(overall_results):.6e} sec per step")
+        print(f"==> Overall average: {sum(overall_results) / len(overall_results):.6e} sec per step")
     else:
         print("Begin monitoring trace")
         start_time = perf_counter_ns()
@@ -328,7 +328,7 @@ Monitoring for ego locations: {list(ego_locs.keys())}
         end_time = perf_counter_ns()
         t_delta = (end_time - start_time) * 10e-9
         print(f"Completed monitoring in: \t\t{t_delta:.6e} seconds")
-        print(f"Average per step time: \t\t{t_delta/len(trace)} seconds")
+        print(f"Average per step time: \t\t{t_delta / len(trace)} seconds")
         print()
         for name, sat in check.items():
             print(f"\tphi @ {name} = {sat}")
@@ -401,7 +401,6 @@ def profile_monitoring(
 
 
 def main(args: Args) -> None:
-
     print("================================================================================")
     # print(
     #     """
