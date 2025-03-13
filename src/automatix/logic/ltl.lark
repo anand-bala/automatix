@@ -1,0 +1,30 @@
+?phi: "(" phi ")"
+    | or_op
+    | identifier
+    | constant
+
+// Binary ops
+?or_op: (phi "|")? and_op
+?and_op: (phi "&")? until_op
+?until_op: (phi ("until" | "U") [time_interval])? unary_op
+
+?unary_op: ("globally" | "G") [time_interval] phi    -> globally_op
+         | ("eventually" | "F") [time_interval] phi  -> eventually_op
+         | ("next" | "X") [ "[" INT "]" ] phi        -> next_op
+         | ("!" | "~") phi                           -> not_op
+         | phi
+
+time_interval: "[" [INT] "," [INT] "]"
+distance_interval: "[" [NUMBER] "," [NUMBER] "]"
+
+identifier: CNAME | ESCAPED_STRING
+constant: "true" | "false"
+
+%import common.ESCAPED_STRING
+%import common.CNAME
+%import common.WS
+%import common.INT
+%import common.NUMBER
+%ignore WS
+
+
