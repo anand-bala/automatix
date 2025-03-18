@@ -91,9 +91,7 @@ class AstTransformer(Transformer):
         self._name: str | None = None
 
     @v_args(inline=True)
-    def automaton(
-        self, header: Header, body: dict[State, list[Transition]]
-    ) -> ParsedAutomaton:
+    def automaton(self, header: Header, body: dict[State, list[Transition]]) -> ParsedAutomaton:
         aut = ParsedAutomaton(header, body)
 
         return aut
@@ -136,9 +134,7 @@ class AstTransformer(Transformer):
     def predicates(self, num_predicates: int, *predicates: str) -> None:
         if len(self._predicates) > 0:
             raise DuplicateHeaderError("Start")
-        assert (
-            len(predicates) == num_predicates
-        ), "Number of predicates does not match defined predicates"
+        assert len(predicates) == num_predicates, "Number of predicates does not match defined predicates"
         self._predicates = list(predicates)
 
     @v_args(inline=True)
@@ -148,9 +144,7 @@ class AstTransformer(Transformer):
         self._aliases[name] = target
 
     @v_args(inline=True)
-    def automaton_acc(
-        self, num_sets: int, condition: acc_expr.AcceptanceFormula
-    ) -> None:
+    def automaton_acc(self, num_sets: int, condition: acc_expr.AcceptanceFormula) -> None:
         if hasattr(self, "_acc") or hasattr(self, "_num_accept_sets"):
             raise DuplicateHeaderError("Acceptance")
         self._num_accept_sets = num_sets
@@ -168,17 +162,13 @@ class AstTransformer(Transformer):
         self._name = name
 
     @v_args(inline=True)
-    def body(
-        self, *transitions: tuple[State, list[Transition]]
-    ) -> dict[State, list[Transition]]:
+    def body(self, *transitions: tuple[State, list[Transition]]) -> dict[State, list[Transition]]:
         if transitions is None or len(transitions) == 0:
             return dict()
         return dict(transitions)
 
     @v_args(inline=True)
-    def transitions(
-        self, state: State, *edges: Transition
-    ) -> tuple[State, list[Transition]]:
+    def transitions(self, state: State, *edges: Transition) -> tuple[State, list[Transition]]:
         if edges is None or len(edges) == 0:
             ret_edges = []
         else:
@@ -263,15 +253,11 @@ class AstTransformer(Transformer):
         return acc_expr.Inf(invert, arg_set)
 
     @v_args(inline=True)
-    def acc_and(
-        self, lhs: acc_expr.AcceptanceFormula, rhs: acc_expr.AcceptanceFormula
-    ) -> acc_expr.AcceptanceFormula:
+    def acc_and(self, lhs: acc_expr.AcceptanceFormula, rhs: acc_expr.AcceptanceFormula) -> acc_expr.AcceptanceFormula:
         return lhs & rhs
 
     @v_args(inline=True)
-    def acc_or(
-        self, lhs: acc_expr.AcceptanceFormula, rhs: acc_expr.AcceptanceFormula
-    ) -> acc_expr.AcceptanceFormula:
+    def acc_or(self, lhs: acc_expr.AcceptanceFormula, rhs: acc_expr.AcceptanceFormula) -> acc_expr.AcceptanceFormula:
         return lhs | rhs
 
     def INT(self, tok: Token) -> int:  # noqa: N802

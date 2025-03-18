@@ -1,7 +1,7 @@
 import pytest
 
 import automatix.logic.strel as strel
-from automatix.logic.ltl import Identifier, OrOp, TimeInterval
+from automatix.logic.ltl import Identifier, TimeInterval
 
 CASES = [
     (
@@ -9,9 +9,7 @@ CASES = [
         strel.AndOp(
             strel.GloballyOp(None, strel.NotOp(strel.Identifier("obstacle"))),
             strel.UntilOp(
-                strel.SomewhereOp(
-                    strel.DistanceInterval(0, 2), strel.Identifier("groundstation")
-                ),
+                strel.SomewhereOp(strel.DistanceInterval(0, 2), strel.Identifier("groundstation")),
                 None,
                 strel.Identifier("goal"),
             ),
@@ -22,9 +20,7 @@ CASES = [
         strel.GloballyOp(
             None,
             strel.OrOp(
-                strel.SomewhereOp(
-                    strel.DistanceInterval(1, 2), strel.Identifier("drone")
-                ),
+                strel.SomewhereOp(strel.DistanceInterval(1, 2), strel.Identifier("drone")),
                 strel.EventuallyOp(
                     TimeInterval(0, 100),
                     strel.SomewhereOp(

@@ -49,9 +49,7 @@ class TimeInterval(_Ast):
 
     def is_untimed(self) -> bool:
         """If the interval is [0, inf]"""
-        return (self.start is None or self.start == 0.0) and (
-            self.end is None or math.isinf(self.end)
-        )
+        return (self.start is None or self.start == 0.0) and (self.end is None or math.isinf(self.end))
 
     def __post_init__(self) -> None:
         match (self.start, self.end):
@@ -94,9 +92,7 @@ class Identifier(Expr):
 
     def __post_init__(self) -> None:
         assert len(self.name) > 0, "Identifier has to have a non-empty value"
-        assert (
-            not self.name.isspace()
-        ), "Identifier cannot have only whitespace characters"
+        assert not self.name.isspace(), "Identifier cannot have only whitespace characters"
 
     def __str__(self) -> str:
         if self.name.isalnum():
@@ -231,9 +227,7 @@ class EventuallyOp(Expr):
                 assert t1 > 0
                 # F[t1, t2] = X[t1] F[0,t2-t1] arg
                 # Nested nexts until t1
-                return NextOp(
-                    t1, EventuallyOp(TimeInterval(0, t2 - t1), self.arg)
-                ).expand_intervals()
+                return NextOp(t1, EventuallyOp(TimeInterval(0, t2 - t1), self.arg)).expand_intervals()
             case TimeInterval():
                 raise RuntimeError(f"Unexpected time interval {self.interval}")
 
@@ -267,13 +261,9 @@ class UntilOp(Expr):
                     arg=UntilOp(interval=None, lhs=new_lhs, rhs=new_rhs),
                 ).expand_intervals()
             case TimeInterval(t1, _):
-                z1 = EventuallyOp(
-                    interval=self.interval, arg=new_lhs
-                ).expand_intervals()
+                z1 = EventuallyOp(interval=self.interval, arg=new_lhs).expand_intervals()
                 until_interval = TimeInterval(t1, None)
-                z2 = UntilOp(
-                    interval=until_interval, lhs=new_lhs, rhs=new_rhs
-                ).expand_intervals()
+                z2 = UntilOp(interval=until_interval, lhs=new_lhs, rhs=new_rhs).expand_intervals()
                 return AndOp(z1, z2)
 
 

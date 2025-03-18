@@ -46,9 +46,7 @@ class DistanceInterval(_Ast):
             case (float(start), float(end)) if start < 0 or end < 0:
                 raise ValueError("Distane cannot be less than 0")
             case (float(start), float(end)) if start >= end:
-                raise ValueError(
-                    f"Distance interval cannot have `start` >= `end` ({start} >= {end})"
-                )
+                raise ValueError(f"Distance interval cannot have `start` >= `end` ({start} >= {end})")
 
 
 @dataclass(eq=True, frozen=True, slots=True)
