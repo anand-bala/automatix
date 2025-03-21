@@ -1,0 +1,64 @@
+site_name: "Symbolic (Weighted) Automata"
+site_description: The documentation for using Anand's symbolic weighted automata library.
+site_author: Anand Balakrishnan
+site_url: https://anand-bala.github.io/automatix
+
+repo_url: https://github.com/anand-bala/automatix
+repo_name: anand-bala/automatix
+
+theme:
+  name: "material"
+  # custom_dir: overrides
+
+edit_uri: "" # No edit button, as some of our pages are in /docs and some in /examples via symlink, so it's impossible for them all to be accurate
+strict: true # Don't allow warnings during the build process
+
+extra_javascript:
+  # The below three make MathJax work, see https://squidfunk.github.io/mkdocs-material/reference/mathjax/
+  - _static/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
+extra_css:
+  - _static/custom_style.css
+
+
+markdown_extensions:
+  - pymdownx.arithmatex: # Render LaTeX via MathJax
+      generic: true
+  - pymdownx.superfences # Seems to enable syntax highlighting when used with the Material theme.
+  - pymdownx.details # Allowing hidden expandable regions denoted by ???
+  - pymdownx.snippets: # Include one Markdown file into another
+      base_path: docs
+  - admonition
+  - toc:
+      permalink: "¤" # Adds a clickable permalink to each section heading
+      toc_depth: 4
+
+plugins:
+  - search # default search plugin; needs manually re-enabling when using any other plugins
+  - autorefs # Cross-links to headings
+  - mkdocs-jupyter:
+      execute: true
+      kernel_name: python3
+      no_input: True
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            inherited_members: true # Allow looking up inherited methods
+            show_root_heading: true # actually display anything at all...
+            show_root_full_path: true # display "diffrax.asdf" not just "asdf"
+            show_if_no_docstring: true
+            show_signature_annotations: true
+            show_source: false # don't include source code
+            members_order: source # order methods according to their order of definition in the source code, not alphabetical order
+            heading_level: 4
+
+
+nav:
+  - Overview: "index.md"
+  # - Examples:
+  #     - Motion Planning:
+  #         - "examples/motion_planning/pusher.py"
+  - API Reference:
+      - automatix.nfa: "api/nfa.md"

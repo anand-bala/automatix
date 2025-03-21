@@ -24,7 +24,7 @@ test:
 .PHONY: test
 
 docs:
-	PYTHONPATH=src uvx mkdocs build
+	PYTHONPATH=src uv run mkdocs build
 .PHONY: docs
 
 serve-docs:

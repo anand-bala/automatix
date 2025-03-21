@@ -1,0 +1,1 @@
+::: automatix.nfa
