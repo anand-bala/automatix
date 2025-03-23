@@ -142,49 +142,42 @@ class AcceptanceCondition(ABC):
     def __len__(self) -> int: ...
 
     @staticmethod
-    def from_name(
-        name: str, props: list[bool | int | str] | None = None
-    ) -> "AcceptanceCondition":
+    def from_name(name: str, props: list[bool | int | str] | None = None) -> "AcceptanceCondition":
         if props is None:
             props = []
         match name:
             case "Buchi":
                 return Buchi()
             case "generalized-Buchi":
-                assert (
-                    len(props) == 1 and isinstance(props[0], int) and props[0] >= 0
-                ), "Generalized Buchi condition needs one integer property"
+                assert len(props) == 1 and isinstance(props[0], int) and props[0] >= 0, (
+                    "Generalized Buchi condition needs one integer property"
+                )
                 return GeneralizedBuchi(props[0])
             case "co-Buchi":
                 return CoBuchi()
             case "generalized-co-Buchi":
-                assert (
-                    len(props) == 1 and isinstance(props[0], int) and props[0] >= 0
-                ), "Generalized Co-Buchi condition needs one integer property"
+                assert len(props) == 1 and isinstance(props[0], int) and props[0] >= 0, (
+                    "Generalized Co-Buchi condition needs one integer property"
+                )
                 return GeneralizedCoBuchi(props[0])
             case "Streett":
-                assert (
-                    len(props) == 1 and isinstance(props[0], int) and props[0] >= 0
-                ), "Streett condition needs one integer property"
+                assert len(props) == 1 and isinstance(props[0], int) and props[0] >= 0, (
+                    "Streett condition needs one integer property"
+                )
                 return Streett(props[0])
             case "Rabin":
-                assert (
-                    len(props) == 1 and isinstance(props[0], int) and props[0] >= 0
-                ), "Rabin condition needs one integer property"
+                assert len(props) == 1 and isinstance(props[0], int) and props[0] >= 0, (
+                    "Rabin condition needs one integer property"
+                )
                 return Rabin(props[0])
 
             case "parity":
                 assert (
-                    len(props) == 3
-                    and isinstance(props[0], str)
-                    and isinstance(props[1], str)
-                    and isinstance(props[2], int)
+                    len(props) == 3 and isinstance(props[0], str) and isinstance(props[1], str) and isinstance(props[2], int)
                 ), "Parity condition needs 3 properties of (str, str, int)"
                 return Parity(props[2], max=props[0] == "max", odd=props[1] == "odd")
             case _:
-                raise ValueError(
-                    f"Unknown/unsupported named acceptance condition: {name} {props}"
-                )
+                raise ValueError(f"Unknown/unsupported named acceptance condition: {name} {props}")
 
 
 @dataclass(frozen=True)
