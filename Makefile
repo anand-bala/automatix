@@ -28,7 +28,7 @@ docs:
 .PHONY: docs
 
 serve-docs:
-	PYTHONPATH=src mkdocs serve
+	PYTHONPATH=src uv run mkdocs serve
 .PHONY: serve-docs
 
 hscc25experiments: ./examples/swarm-monitoring/run_hscc_experiments.py
