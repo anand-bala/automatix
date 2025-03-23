@@ -4,8 +4,15 @@ from typing import Any, Union
 
 from lark import Lark, ParseTree, Token, Transformer, v_args
 
-import automatix.hoa.acceptance_cond as acc_expr
 import automatix.hoa.label_expr as guard
+from automatix.base.acceptance_conditions import (
+    AcceptanceCondition,
+    AccExpr,
+    Fin,
+    GenericCondition,
+    Inf,
+    Literal,
+)
 from automatix.hoa.label_expr import LabelExpr
 
 
@@ -44,12 +51,10 @@ class UndefinedAliasError(HoaSyntaxError):
 
 @dataclass(frozen=True, eq=True, kw_only=True)
 class Header:
-    num_accepting_sets: int
-    acc_cond: acc_expr.AcceptanceFormula
-    acc_name: tuple[str, list[bool | int | str] | None] | None = None
+    acc: AcceptanceCondition
     name: str | None = None
     num_states: int | None = None
-    initial: list[int] | None = None
+    initial: list[list[int]] = field(default_factory=list)
     predicates: list[str] = field(default_factory=list)
     aliases: dict[str, LabelExpr] = field(default_factory=dict)
     properties: list[str] = field(default_factory=list)
@@ -84,17 +89,19 @@ class AstTransformer(Transformer):
         super().__init__(visit_tokens)
         self._aliases: dict[str, LabelExpr] = dict()
         self._num_states: int | None = None
-        self._initial_states: list[int] = []
+        self._initial_states: list[list[int]] = []
         self._predicates: list[str] = []
 
         self._num_accept_sets: int
-        self._acc: acc_expr.AcceptanceFormula
+        self._acc: AccExpr
 
         self._acc_name: tuple[str, list[bool | int | str] | None] | None = None
         self._name: str | None = None
 
     @v_args(inline=True)
-    def automaton(self, header: Header, body: dict[State, list[Transition]]) -> ParsedAutomaton:
+    def automaton(
+        self, header: Header, body: dict[State, list[Transition]]
+    ) -> ParsedAutomaton:
         aut = ParsedAutomaton(header, body)
 
         return aut
@@ -102,15 +109,19 @@ class AstTransformer(Transformer):
     def header(self, _: list[Any]) -> Header:
         if not hasattr(self, "_acc") or not hasattr(self, "_num_accept_sets"):
             raise MissingHeaderError("Acceptance")
+        if self._acc_name is not None:
+            acc_name, acc_props = self._acc_name
+            acc = AcceptanceCondition.from_name(acc_name, acc_props)
+            assert acc.to_expr() == self._acc
+        else:
+            acc = GenericCondition(self._num_accept_sets, self._acc)
         return Header(
+            acc=acc,
             name=self._name,
             num_states=self._num_states,
             initial=self._initial_states,
             predicates=self._predicates,
             aliases=self._aliases,
-            num_accepting_sets=self._num_accept_sets,
-            acc_cond=self._acc,
-            acc_name=self._acc_name,
         )
 
     @v_args(inline=True)
@@ -127,17 +138,17 @@ class AstTransformer(Transformer):
 
     @v_args(inline=True)
     def initial_states(self, children: list[int]) -> None:
-        if len(self._initial_states) > 0:
-            raise DuplicateHeaderError("Start")
         assert isinstance(children, list) and len(children) > 0
         assert all(map(lambda s: isinstance(s, int) and s >= 0, children))
-        self._initial_states = children
+        self._initial_states.append(children)
 
     @v_args(inline=True)
     def predicates(self, num_predicates: int, *predicates: str) -> None:
         if len(self._predicates) > 0:
-            raise DuplicateHeaderError("Start")
-        assert len(predicates) == num_predicates, "Number of predicates does not match defined predicates"
+            raise DuplicateHeaderError("AP")
+        assert (
+            len(predicates) == num_predicates
+        ), "Number of predicates does not match defined predicates"
         self._predicates = list(predicates)
 
     @v_args(inline=True)
@@ -147,7 +158,7 @@ class AstTransformer(Transformer):
         self._aliases[name] = target
 
     @v_args(inline=True)
-    def automaton_acc(self, num_sets: int, condition: acc_expr.AcceptanceFormula) -> None:
+    def automaton_acc(self, num_sets: int, condition: AccExpr) -> None:
         if hasattr(self, "_acc") or hasattr(self, "_num_accept_sets"):
             raise DuplicateHeaderError("Acceptance")
         self._num_accept_sets = num_sets
@@ -165,13 +176,17 @@ class AstTransformer(Transformer):
         self._name = name
 
     @v_args(inline=True)
-    def body(self, *transitions: tuple[State, list[Transition]]) -> dict[State, list[Transition]]:
+    def body(
+        self, *transitions: tuple[State, list[Transition]]
+    ) -> dict[State, list[Transition]]:
         if transitions is None or len(transitions) == 0:
             return dict()
         return dict(transitions)
 
     @v_args(inline=True)
-    def transitions(self, state: State, *edges: Transition) -> tuple[State, list[Transition]]:
+    def transitions(
+        self, state: State, *edges: Transition
+    ) -> tuple[State, list[Transition]]:
         if edges is None or len(edges) == 0:
             ret_edges = []
         else:
@@ -198,10 +213,12 @@ class AstTransformer(Transformer):
         return Transition(state_conj, label, acc_sig)
 
     @v_args(inline=True)
-    def acc_sig(self, *sets: int) -> list[int] | None:
-        if sets is None:
-            return None
+    def acc_sig(self, *sets: int) -> list[int]:
         return list(sets)
+
+    @v_args(inline=True)
+    def acc_props(self, *props: bool | int | str) -> list[bool | int | str]:
+        return list(props)
 
     @v_args(inline=True)
     def label_atom(self, val: bool | int | str) -> guard.LabelExpr:
@@ -234,9 +251,9 @@ class AstTransformer(Transformer):
         assert len(children) > 0
         return list(children)
 
-    def acc_bool(self, arg: bool) -> acc_expr.AcceptanceFormula:
+    def acc_bool(self, arg: bool) -> AccExpr:
         assert isinstance(arg, bool)
-        return acc_expr.Literal(arg)
+        return Literal(arg)
 
     @v_args(inline=True)
     def acc_set(self, invert: str | None, label: int) -> tuple[bool, int]:
@@ -245,21 +262,21 @@ class AstTransformer(Transformer):
         return (invert is not None and invert == "!", label)
 
     @v_args(inline=True)
-    def acc_fin(self, acc_set: tuple[bool, int]) -> acc_expr.Fin:
+    def acc_fin(self, acc_set: tuple[bool, int]) -> Fin:
         invert, arg_set = acc_set
-        return acc_expr.Fin(invert, arg_set)
+        return Fin(arg_set, invert)
 
     @v_args(inline=True)
-    def acc_inf(self, acc_set: tuple[bool, int]) -> acc_expr.Inf:
+    def acc_inf(self, acc_set: tuple[bool, int]) -> Inf:
         invert, arg_set = acc_set
-        return acc_expr.Inf(invert, arg_set)
+        return Inf(arg_set, invert)
 
     @v_args(inline=True)
-    def acc_and(self, lhs: acc_expr.AcceptanceFormula, rhs: acc_expr.AcceptanceFormula) -> acc_expr.AcceptanceFormula:
+    def acc_and(self, lhs: AccExpr, rhs: AccExpr) -> AccExpr:
         return lhs & rhs
 
     @v_args(inline=True)
-    def acc_or(self, lhs: acc_expr.AcceptanceFormula, rhs: acc_expr.AcceptanceFormula) -> acc_expr.AcceptanceFormula:
+    def acc_or(self, lhs: AccExpr, rhs: AccExpr) -> AccExpr:
         return lhs | rhs
 
     def INT(self, tok: Token) -> int:  # noqa: N802

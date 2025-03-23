@@ -7,7 +7,7 @@ format_version: "HOA:" IDENTIFIER
              | "AP:" INT ESCAPED_STRING*                                -> predicates
              | "Alias:" ANAME label_expr                        -> alias
              | "Acceptance:" INT acceptance_cond                -> automaton_acc
-             | "acc-name:" IDENTIFIER (BOOLEAN|INT|IDENTIFIER)* -> acc_name
+             | "acc-name:" IDENTIFIER acc_props -> acc_name
              | "tool:" ESCAPED_STRING ESCAPED_STRING?                           -> tool
              | "name:" ESCAPED_STRING                                   -> name
              | "properties:" IDENTIFIER*                        -> properties
@@ -18,6 +18,7 @@ transitions: state_name edge*
 state_name       : "State:" [label] INT [ESCAPED_STRING] [acc_sig]
 edge             : [label] state_conj [acc_sig]
 acc_sig          : "{" INT* "}"
+acc_props        : (BOOLEAN|INT|IDENTIFIER)*
 ?label            : "[" label_expr "]"
 
 state_conj: INT ("&" INT)*
