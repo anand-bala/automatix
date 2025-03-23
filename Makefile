@@ -20,7 +20,7 @@ lint:
 .PHONY: lint
 
 test:
-	uvx pytest
+	uv run pytest
 .PHONY: test
 
 docs:

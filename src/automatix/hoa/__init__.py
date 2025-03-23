@@ -55,15 +55,18 @@ class Header:
     properties: list[str] = field(default_factory=list)
 
 
-@dataclass(frozen=True, eq=True)
+@dataclass(frozen=True)
 class State:
     idx: int
     label: LabelExpr | None = None
     acc_set: list[int] | None = None
     description: str | None = None
 
+    def __hash__(self) -> int:
+        return hash(self.idx)
 
-@dataclass(frozen=True, eq=True)
+
+@dataclass(frozen=True)
 class Transition:
     dst: list[int]
     label: LabelExpr | None = None
@@ -227,10 +230,9 @@ class AstTransformer(Transformer):
         return lhs | rhs
 
     @v_args(inline=True)
-    def state_conj(self, children: int | list[int]) -> list[int]:
-        if isinstance(children, int):
-            return [children]
-        return children
+    def state_conj(self, *children: int) -> list[int]:
+        assert len(children) > 0
+        return list(children)
 
     def acc_bool(self, arg: bool) -> acc_expr.AcceptanceFormula:
         assert isinstance(arg, bool)
