@@ -8,13 +8,9 @@ info() {
 
 if ! nvidia_smi="$(type -p "nvidia-smi")" || [[ -z "$nvidia_smi" ]]; then
   info "Did not detect nvidia-smi, using non-GPU environment"
-  uv sync --frozen
 else
-  # HACK: may be a bit fragile
-  # Return the __cuda virtual system requirement version from pixi
-  cuda_major_version=$(pixi info | awk 'BEGIN { FS = "[: \t\n=.]+"}; /__cuda/ { print $3}; ')
-  info "Detected CUDA major version: $cuda_major_version"
-  uv sync --extra cuda --frozen
+  cuda_major_version=$(nvidia-smi --version | awk 'BEGIN { FS = "[:space:]*:[:space:]*"}; /^CUDA Version/ {print $2};')
+  info "Detected CUDA version: $cuda_major_version"
 fi
 
 if xhost_cmd="$(type -p "xhost")" && [[ -n "$xhost_cmd" ]]; then
@@ -24,4 +20,5 @@ if xhost_cmd="$(type -p "xhost")" && [[ -n "$xhost_cmd" ]]; then
   }
 fi
 
+make dev
 source ./.venv/bin/activate
