@@ -72,12 +72,3 @@ reportUnknownMemberType = false
 reportUnknownParameterType = false
 reportUnknownVariableType = false
 reportUnknownArgumentType = false
-
-[tool.basedpyright]
-include = ["src", "examples"]
-pythonVersion = "3.11"
-pythonPlatform = "All"
-reportUnknownMemberType = false
-reportUnknownParameterType = false
-reportUnknownVariableType = false
-reportUnknownArgumentType = false
