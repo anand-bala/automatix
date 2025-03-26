@@ -75,6 +75,9 @@ class And(AccExpr):
     def dual(self) -> "AccExpr":
         return Or([e.dual() for e in self.args])
 
+    def __str__(self) -> str:
+        return "(" + " & ".join(str(arg) for arg in self.args) + ")"
+
 
 @dataclass(frozen=True, slots=True, eq=True)
 class Or(AccExpr):
@@ -83,6 +86,9 @@ class Or(AccExpr):
     @override
     def dual(self) -> "AccExpr":
         return And([e.dual() for e in self.args])
+
+    def __str__(self) -> str:
+        return "(" + " | ".join(str(arg) for arg in self.args) + ")"
 
 
 @dataclass(frozen=True, slots=True, eq=True)
@@ -94,6 +100,11 @@ class Fin(AccExpr):
     def dual(self) -> "AccExpr":
         return Inf(self.arg, self.invert)
 
+    def __str__(self) -> str:
+        if self.invert:
+            return f"Fin(!{self.arg})"
+        return f"Fin({self.arg})"
+
 
 @dataclass(frozen=True, slots=True, eq=True)
 class Inf(AccExpr):
@@ -104,6 +115,11 @@ class Inf(AccExpr):
     def dual(self) -> "AccExpr":
         return Fin(self.arg, self.invert)
 
+    def __str__(self) -> str:
+        if self.invert:
+            return f"Inf(!{self.arg})"
+        return f"Inf({self.arg})"
+
 
 @dataclass(frozen=True, slots=True, eq=True)
 class Literal(AccExpr):
@@ -112,6 +128,9 @@ class Literal(AccExpr):
     @override
     def dual(self) -> "AccExpr":
         return Literal(not self.value)
+
+    def __str__(self) -> str:
+        return "t" if self.value else "f"
 
 
 class AcceptanceCondition(ABC):
