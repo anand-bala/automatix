@@ -12,6 +12,30 @@
         ],
         "./examples/swarm-monitoring/monitoring_example.py": [
             {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 19,
+                    "endColumn": 26,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 28,
+                    "endColumn": 43,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 51,
+                    "endColumn": 59,
+                    "lineCount": 1
+                }
+            },
+            {
                 "code": "reportMissingImports",
                 "range": {
                     "startColumn": 5,
@@ -76,6 +100,78 @@
                 }
             },
             {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 9,
+                    "lineCount": 3
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 109,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 112,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 9,
+                    "lineCount": 6
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 105,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 110,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 109,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 86,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 96,
+                    "lineCount": 1
+                }
+            },
+            {
                 "code": "reportUntypedFunctionDecorator",
                 "range": {
                     "startColumn": 5,
@@ -130,9 +226,41 @@
                     "endColumn": 27,
                     "lineCount": 1
                 }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 12,
+                    "endColumn": 49,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportAssignmentType",
+                "range": {
+                    "startColumn": 39,
+                    "endColumn": 89,
+                    "lineCount": 1
+                }
             }
         ],
         "./examples/swarm-monitoring/run_hscc_experiments.py": [
+            {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 19,
+                    "endColumn": 26,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 28,
+                    "endColumn": 36,
+                    "lineCount": 1
+                }
+            },
             {
                 "code": "reportMissingTypeArgument",
                 "range": {
@@ -140,9 +268,131 @@
                     "endColumn": 27,
                     "lineCount": 1
                 }
+            },
+            {
+                "code": "reportUnusedParameter",
+                "range": {
+                    "startColumn": 9,
+                    "endColumn": 13,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 41,
+                    "lineCount": 1
+                }
+            }
+        ],
+        "./src/automatix/afa/automaton.py": [
+            {
+                "code": "reportUnannotatedClassAttribute",
+                "range": {
+                    "startColumn": 13,
+                    "endColumn": 25,
+                    "lineCount": 1
+                }
             }
         ],
         "./src/automatix/afa/strel.py": [
+            {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 29,
+                    "endColumn": 39,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 41,
+                    "endColumn": 49,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 51,
+                    "endColumn": 59,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 61,
+                    "endColumn": 68,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportImplicitOverride",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 16,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 43,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnreachable",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 75,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 24,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnannotatedClassAttribute",
+                "range": {
+                    "startColumn": 13,
+                    "endColumn": 25,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnannotatedClassAttribute",
+                "range": {
+                    "startColumn": 13,
+                    "endColumn": 25,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnannotatedClassAttribute",
+                "range": {
+                    "startColumn": 13,
+                    "endColumn": 25,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnannotatedClassAttribute",
+                "range": {
+                    "startColumn": 13,
+                    "endColumn": 21,
+                    "lineCount": 1
+                }
+            },
             {
                 "code": "reportMissingTypeArgument",
                 "range": {
@@ -150,9 +400,41 @@
                     "endColumn": 24,
                     "lineCount": 1
                 }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 12,
+                    "endColumn": 23,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 12,
+                    "endColumn": 34,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportAssignmentType",
+                "range": {
+                    "startColumn": 58,
+                    "endColumn": 105,
+                    "lineCount": 1
+                }
             }
         ],
         "./src/automatix/algebra/abc.py": [
+            {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 28,
+                    "endColumn": 35,
+                    "lineCount": 1
+                }
+            },
             {
                 "code": "reportMissingTypeArgument",
                 "range": {
@@ -163,6 +445,22 @@
             }
         ],
         "./src/automatix/algebra/polynomials/boolean.py": [
+            {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 19,
+                    "endColumn": 26,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnnecessaryTypeIgnoreComment",
+                "range": {
+                    "startColumn": 54,
+                    "endColumn": 74,
+                    "lineCount": 1
+                }
+            },
             {
                 "code": "reportPrivateUsage",
                 "range": {
@@ -192,6 +490,22 @@
                 "range": {
                     "startColumn": 67,
                     "endColumn": 72,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 50,
+                    "endColumn": 61,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportPrivateUsage",
+                "range": {
+                    "startColumn": 68,
+                    "endColumn": 73,
                     "lineCount": 1
                 }
             },
@@ -250,85 +564,87 @@
                     "endColumn": 56,
                     "lineCount": 1
                 }
-            }
-        ],
-        "./src/automatix/hoa/__init__.py": [
-            {
-                "code": "reportUnnecessaryComparison",
-                "range": {
-                    "startColumn": 17,
-                    "endColumn": 18,
-                    "lineCount": 1
-                }
-            }
-        ],
-        "./src/automatix/logic/ltl.py": [
-            {
-                "code": "reportMatchNotExhaustive",
-                "range": {
-                    "startColumn": 14,
-                    "endColumn": 36,
-                    "lineCount": 1
-                }
             },
             {
-                "code": "reportMatchNotExhaustive",
+                "code": "reportImplicitOverride",
                 "range": {
-                    "startColumn": 14,
-                    "endColumn": 36,
+                    "startColumn": 8,
+                    "endColumn": 15,
                     "lineCount": 1
                 }
-            },
+            }
+        ],
+        "./src/automatix/algebra/semiring/jax_backend.py": [
             {
-                "code": "reportMatchNotExhaustive",
+                "code": "reportDeprecated",
                 "range": {
-                    "startColumn": 14,
+                    "startColumn": 19,
                     "endColumn": 24,
                     "lineCount": 1
                 }
             },
             {
-                "code": "reportMatchNotExhaustive",
+                "code": "reportDeprecated",
                 "range": {
-                    "startColumn": 14,
-                    "endColumn": 27,
+                    "startColumn": 18,
+                    "endColumn": 23,
                     "lineCount": 1
                 }
             },
             {
-                "code": "reportMatchNotExhaustive",
+                "code": "reportDeprecated",
                 "range": {
-                    "startColumn": 14,
-                    "endColumn": 27,
+                    "startColumn": 19,
+                    "endColumn": 24,
                     "lineCount": 1
                 }
             },
             {
-                "code": "reportMatchNotExhaustive",
+                "code": "reportImplicitAbstractClass",
                 "range": {
-                    "startColumn": 14,
-                    "endColumn": 27,
+                    "startColumn": 6,
+                    "endColumn": 22,
+                    "lineCount": 1
+                }
+            }
+        ],
+        "./src/automatix/algebra/semiring/utils/logsumexp.py": [
+            {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 19,
+                    "endColumn": 24,
                     "lineCount": 1
                 }
             },
             {
-                "code": "reportMissingTypeArgument",
+                "code": "reportDeprecated",
                 "range": {
-                    "startColumn": 26,
-                    "endColumn": 37,
+                    "startColumn": 19,
+                    "endColumn": 24,
                     "lineCount": 1
                 }
-            },
+            }
+        ],
+        "./src/automatix/algebra/semiring/utils/logsumexp.pyi": [
             {
-                "code": "reportMissingTypeArgument",
+                "code": "reportDeprecated",
                 "range": {
-                    "startColumn": 29,
-                    "endColumn": 40,
+                    "startColumn": 19,
+                    "endColumn": 24,
                     "lineCount": 1
                 }
             }
         ],
         "./src/automatix/logic/strel.py": [
+            {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 19,
+                    "endColumn": 27,
+                    "lineCount": 1
+                }
+            },
             {
                 "code": "reportPrivateUsage",
                 "range": {
@@ -346,10 +662,66 @@
                 }
             },
             {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 11,
+                    "endColumn": 19,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 9,
+                    "endColumn": 17,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportImplicitOverride",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 15,
+                    "lineCount": 1
+                }
+            },
+            {
                 "code": "reportMatchNotExhaustive",
                 "range": {
                     "startColumn": 14,
                     "endColumn": 36,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportImplicitOverride",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 15,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportImplicitOverride",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 15,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportImplicitOverride",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 15,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportImplicitOverride",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 15,
                     "lineCount": 1
                 }
             },
@@ -364,10 +736,116 @@
         ],
         "./src/automatix/nfa/automaton.py": [
             {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 29,
+                    "endColumn": 37,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 39,
+                    "endColumn": 43,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnannotatedClassAttribute",
+                "range": {
+                    "startColumn": 13,
+                    "endColumn": 19,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 14,
+                    "endColumn": 18,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 21,
+                    "endColumn": 29,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportDeprecated",
+                "range": {
+                    "startColumn": 19,
+                    "endColumn": 27,
+                    "lineCount": 1
+                }
+            },
+            {
                 "code": "reportPrivateUsage",
                 "range": {
                     "startColumn": 34,
                     "endColumn": 40,
+                    "lineCount": 1
+                }
+            }
+        ],
+        "./src/automatix/nfa/predicate.py": [
+            {
+                "code": "reportImplicitAbstractClass",
+                "range": {
+                    "startColumn": 6,
+                    "endColumn": 23,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportImplicitOverride",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 15,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportImplicitOverride",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 14,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportImplicitOverride",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 15,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportImplicitOverride",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 14,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportImplicitOverride",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 15,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportImplicitOverride",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 14,
                     "lineCount": 1
                 }
             }

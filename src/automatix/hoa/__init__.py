@@ -237,8 +237,6 @@ class AstTransformer(Transformer):  # pyright: ignore[reportMissingTypeArgument]
                 if alias not in self._aliases:
                     raise UndefinedAliasError(alias)
                 return self._aliases[alias]
-            case _:
-                raise TypeError(f"Unexpected type of LabelExpr atom: `{type(val)}`")
 
     @v_args(inline=True)
     def label_not(self, arg: LabelExpr) -> LabelExpr:

@@ -17,7 +17,7 @@ class Args:
             description="Test parsing HOA files",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
-        parser.add_argument("infile", type=lambda p: Path(p))
+        _ = parser.add_argument("infile", type=lambda p: Path(p))
 
         args = parser.parse_args()
         assert (

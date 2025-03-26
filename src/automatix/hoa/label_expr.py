@@ -53,6 +53,7 @@ class LabelExpr(ABC):
 class And(LabelExpr):
     args: list[LabelExpr]
 
+    @override
     def __str__(self) -> str:
         return "(" + " & ".join(str(arg) for arg in self.args) + ")"
 
@@ -61,6 +62,7 @@ class And(LabelExpr):
 class Or(LabelExpr):
     args: list[LabelExpr]
 
+    @override
     def __str__(self) -> str:
         return "(" + " | ".join(str(arg) for arg in self.args) + ")"
 
@@ -69,6 +71,7 @@ class Or(LabelExpr):
 class Not(LabelExpr):
     arg: LabelExpr
 
+    @override
     def __str__(self) -> str:
         return f"!{str(self.arg)}"
 
@@ -77,6 +80,7 @@ class Not(LabelExpr):
 class Predicate(LabelExpr):
     idx: int
 
+    @override
     def __str__(self) -> str:
         return str(self.idx)
 
@@ -85,6 +89,7 @@ class Predicate(LabelExpr):
 class Literal(LabelExpr):
     value: bool
 
+    @override
     def __str__(self) -> str:
         return "t" if self.value else "f"
 

@@ -75,6 +75,7 @@ class And(AccExpr):
     def dual(self) -> "AccExpr":
         return Or([e.dual() for e in self.args])
 
+    @override
     def __str__(self) -> str:
         return "(" + " & ".join(str(arg) for arg in self.args) + ")"
 
@@ -87,6 +88,7 @@ class Or(AccExpr):
     def dual(self) -> "AccExpr":
         return And([e.dual() for e in self.args])
 
+    @override
     def __str__(self) -> str:
         return "(" + " | ".join(str(arg) for arg in self.args) + ")"
 
@@ -100,6 +102,7 @@ class Fin(AccExpr):
     def dual(self) -> "AccExpr":
         return Inf(self.arg, self.invert)
 
+    @override
     def __str__(self) -> str:
         if self.invert:
             return f"Fin(!{self.arg})"
@@ -115,6 +118,7 @@ class Inf(AccExpr):
     def dual(self) -> "AccExpr":
         return Fin(self.arg, self.invert)
 
+    @override
     def __str__(self) -> str:
         if self.invert:
             return f"Inf(!{self.arg})"
@@ -129,6 +133,7 @@ class Literal(AccExpr):
     def dual(self) -> "AccExpr":
         return Literal(not self.value)
 
+    @override
     def __str__(self) -> str:
         return "t" if self.value else "f"
 
