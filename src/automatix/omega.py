@@ -1,35 +1,3 @@
-"""Generalized omega-regular acceptance conditions
-
-Acceptance formulas are positive Boolean formula over atoms of the form
-`t`, `f`, `Inf(n)`, or `Fin(n)`, where `n` is a non-negative integer
-denoting an acceptance set.
-
-- `t` denotes the true acceptance condition: any run is accepting
-- `f` denotes the false acceptance condition: no run is accepting
-- `Inf(n)` means that a run is accepting if it visits infinitely often
-    the acceptance set `n`
-- `Fin(n)` means that a run is accepting if it visits finitely often the
-    acceptance set `n`
-
-The above atoms can be combined using only the operator `&` and `|`
-(with obvious semantics), and parentheses for grouping. Note that there
-is no negation, but an acceptance condition can be negated swapping `t`
-and `f`, `&` and `|`, and `Fin(n)` and `Inf(n)`.
-
-For instance the formula `Inf(0)&Inf(1)` specifies that accepting runs
-should visit infinitely often the acceptance 0, and infinitely often the
-acceptance set 1. This corresponds the generalized Büchi acceptance with
-two sets.
-
-The opposite acceptance condition `Fin(0)|Fin(1)` is known as
-*generalized co-Büchi acceptance* (with two sets). Accepting runs have
-to visit finitely often set 0 *or* finitely often set 1.
-
-A *Rabin acceptance condition* with 3 pairs corresponds to the following
-formula: `(Fin(0)&Inf(1)) | (Fin(2)&Inf(3)) |
-(Fin(4)&Inf(5))`
-"""
-
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -37,6 +5,37 @@ from typing_extensions import override
 
 
 class AccExpr(ABC):
+    """Generalized omega-regular acceptance conditions
+
+    Acceptance formulas are positive Boolean formula over atoms of the form
+    `t`, `f`, `Inf(n)`, or `Fin(n)`, where `n` is a non-negative integer
+    denoting an acceptance set.
+
+    - `t` denotes the true acceptance condition: any run is accepting
+    - `f` denotes the false acceptance condition: no run is accepting
+    - `Inf(n)` means that a run is accepting if it visits infinitely often
+        the acceptance set `n`
+    - `Fin(n)` means that a run is accepting if it visits finitely often the
+        acceptance set `n`
+
+    The above atoms can be combined using only the operator `&` and `|`
+    (with obvious semantics), and parentheses for grouping. Note that there
+    is no negation, but an acceptance condition can be negated swapping `t`
+    and `f`, `&` and `|`, and `Fin(n)` and `Inf(n)`.
+
+    For instance the formula `Inf(0)&Inf(1)` specifies that accepting runs
+    should visit infinitely often the acceptance 0, and infinitely often the
+    acceptance set 1. This corresponds the generalized Büchi acceptance with
+    two sets.
+
+    The opposite acceptance condition `Fin(0)|Fin(1)` is known as
+    *generalized co-Büchi acceptance* (with two sets). Accepting runs have
+    to visit finitely often set 0 *or* finitely often set 1.
+
+    A *Rabin acceptance condition* with 3 pairs corresponds to the following
+    formula: `(Fin(0)&Inf(1)) | (Fin(2)&Inf(3)) |
+    (Fin(4)&Inf(5))`
+    """
 
     def __and__(self, other: "AccExpr") -> "AccExpr":
         match (self, other):

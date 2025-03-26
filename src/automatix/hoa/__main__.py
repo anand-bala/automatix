@@ -20,7 +20,9 @@ class Args:
         parser.add_argument("infile", type=lambda p: Path(p))
 
         args = parser.parse_args()
-        assert args.infile.is_file(), "Input file doesn't exist"
+        assert (
+            isinstance(args.infile, Path) and args.infile.is_file()
+        ), "Input file doesn't exist"
 
         return Args(args.infile)
 

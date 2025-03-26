@@ -65,6 +65,7 @@ extend-ignore = ["F722"]
 "*.pyi" = ["B", "E501", "E701"]
 
 [tool.pyright]
+typeCheckingMode = "strict"
 include = ["src", "examples"]
 pythonVersion = "3.11"
 pythonPlatform = "All"

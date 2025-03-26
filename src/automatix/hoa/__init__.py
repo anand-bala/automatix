@@ -1,11 +1,15 @@
+# pyright: reportExplicitAny=false
+
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Union
+from typing import Any
 
 from lark import Lark, ParseTree, Token, Transformer, v_args
+from typing_extensions import override
 
 import automatix.hoa.label_expr as guard
-from automatix.base.acceptance_conditions import (
+from automatix.hoa.label_expr import LabelExpr
+from automatix.omega import (
     AcceptanceCondition,
     AccExpr,
     Fin,
@@ -13,13 +17,14 @@ from automatix.base.acceptance_conditions import (
     Inf,
     Literal,
 )
-from automatix.hoa.label_expr import LabelExpr
 
 
 class HoaSyntaxError(Exception):
     def __init__(self, label: str = "") -> None:
+        super().__init__()
         self.label: str = label
 
+    @override
     def __str__(self) -> str:
         return f"{self.label}"
 
@@ -67,6 +72,7 @@ class State:
     acc_set: list[int] | None = None
     description: str | None = None
 
+    @override
     def __hash__(self) -> int:
         return hash(self.idx)
 
@@ -84,7 +90,7 @@ class ParsedAutomaton:
     body: dict[State, list[Transition]]
 
 
-class AstTransformer(Transformer):
+class AstTransformer(Transformer):  # pyright: ignore[reportMissingTypeArgument]
     def __init__(self, visit_tokens: bool = True) -> None:
         super().__init__(visit_tokens)
         self._aliases: dict[str, LabelExpr] = dict()
@@ -99,7 +105,9 @@ class AstTransformer(Transformer):
         self._name: str | None = None
 
     @v_args(inline=True)
-    def automaton(self, header: Header, body: dict[State, list[Transition]]) -> ParsedAutomaton:
+    def automaton(
+        self, header: Header, body: dict[State, list[Transition]]
+    ) -> ParsedAutomaton:
         aut = ParsedAutomaton(header, body)
 
         return aut
@@ -144,7 +152,9 @@ class AstTransformer(Transformer):
     def predicates(self, num_predicates: int, *predicates: str) -> None:
         if len(self._predicates) > 0:
             raise DuplicateHeaderError("AP")
-        assert len(predicates) == num_predicates, "Number of predicates does not match defined predicates"
+        assert (
+            len(predicates) == num_predicates
+        ), "Number of predicates does not match defined predicates"
         self._predicates = list(predicates)
 
     @v_args(inline=True)
@@ -172,14 +182,18 @@ class AstTransformer(Transformer):
         self._name = name
 
     @v_args(inline=True)
-    def body(self, *transitions: tuple[State, list[Transition]]) -> dict[State, list[Transition]]:
-        if transitions is None or len(transitions) == 0:
+    def body(
+        self, *transitions: tuple[State, list[Transition]]
+    ) -> dict[State, list[Transition]]:
+        if len(transitions) == 0:
             return dict()
         return dict(transitions)
 
     @v_args(inline=True)
-    def transitions(self, state: State, *edges: Transition) -> tuple[State, list[Transition]]:
-        if edges is None or len(edges) == 0:
+    def transitions(
+        self, state: State, *edges: Transition
+    ) -> tuple[State, list[Transition]]:
+        if len(edges) == 0:
             ret_edges = []
         else:
             ret_edges = list(edges)
@@ -249,7 +263,7 @@ class AstTransformer(Transformer):
 
     @v_args(inline=True)
     def acc_set(self, invert: str | None, label: int) -> tuple[bool, int]:
-        assert isinstance(invert, Union[str, None])
+        assert isinstance(invert, str | None)
         assert isinstance(label, int)
         return (invert is not None and invert == "!", label)
 
