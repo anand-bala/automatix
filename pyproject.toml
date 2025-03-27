@@ -38,12 +38,8 @@ dev = [
 examples = ["matplotlib", "pydantic>=2.10.6", "scienceplots", "scipy>=1.15.2"]
 
 [build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
-
-
-[tool.setuptools.packages.find]
-where = ["src"]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"

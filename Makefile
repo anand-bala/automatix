@@ -14,8 +14,8 @@ else
 endif
 
 # Default: create the dev environment
-.PHONY: dev
 dev: uv.lock | .venv
+.PHONY: dev
 
 lint:
 	uvx ruff format 
@@ -24,15 +24,15 @@ lint:
 .PHONY: lint
 
 test:
-	uv run pytest
+	uv run --dev pytest
 .PHONY: test
 
 docs:
-	PYTHONPATH=src uv run mkdocs build
+	PYTHONPATH=src uv run --dev mkdocs build
 .PHONY: docs
 
 serve-docs:
-	PYTHONPATH=src uv run mkdocs serve
+	PYTHONPATH=src uv run --dev mkdocs serve
 .PHONY: serve-docs
 
 hscc25experiments: ./examples/swarm-monitoring/run_hscc_experiments.py
