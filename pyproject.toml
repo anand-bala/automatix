@@ -1,8 +1,8 @@
 [project]
 name = "automatix"
 authors = [{ name = "Anand Balakrishnan", email = "anandbala1597@gmail.com" }]
-description = "Symbolic automata using JAX"
-version = "0.1.0"
+description = "Symbolic (weighted) automata monitors"
+version = "0.3.0"
 requires-python = "~=3.11"
 
 dependencies = [
