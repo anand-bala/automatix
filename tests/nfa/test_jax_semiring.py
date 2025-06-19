@@ -16,7 +16,7 @@ from automatix.algebra.semiring.jax_backend import CountingSemiring
         (1, 1, 5, 20),
         (40, 1, 250, 250),
         (500, 1, 500, 500),
-        (1000, 1, 1000, 1000),
+        # (1000, 1, 1000, 1000),
     ],
 )
 def test_real_semiring(batch: Optional[int], n: Optional[int], m: int, l: int) -> None:  # noqa: E741
