@@ -105,9 +105,7 @@ class AstTransformer(Transformer):  # pyright: ignore[reportMissingTypeArgument]
         self._name: str | None = None
 
     @v_args(inline=True)
-    def automaton(
-        self, header: Header, body: dict[State, list[Transition]]
-    ) -> ParsedAutomaton:
+    def automaton(self, header: Header, body: dict[State, list[Transition]]) -> ParsedAutomaton:
         aut = ParsedAutomaton(header, body)
 
         return aut
@@ -152,9 +150,7 @@ class AstTransformer(Transformer):  # pyright: ignore[reportMissingTypeArgument]
     def predicates(self, num_predicates: int, *predicates: str) -> None:
         if len(self._predicates) > 0:
             raise DuplicateHeaderError("AP")
-        assert (
-            len(predicates) == num_predicates
-        ), "Number of predicates does not match defined predicates"
+        assert len(predicates) == num_predicates, "Number of predicates does not match defined predicates"
         self._predicates = list(predicates)
 
     @v_args(inline=True)
@@ -182,17 +178,13 @@ class AstTransformer(Transformer):  # pyright: ignore[reportMissingTypeArgument]
         self._name = name
 
     @v_args(inline=True)
-    def body(
-        self, *transitions: tuple[State, list[Transition]]
-    ) -> dict[State, list[Transition]]:
+    def body(self, *transitions: tuple[State, list[Transition]]) -> dict[State, list[Transition]]:
         if len(transitions) == 0:
             return dict()
         return dict(transitions)
 
     @v_args(inline=True)
-    def transitions(
-        self, state: State, *edges: Transition
-    ) -> tuple[State, list[Transition]]:
+    def transitions(self, state: State, *edges: Transition) -> tuple[State, list[Transition]]:
         if len(edges) == 0:
             ret_edges = []
         else:

@@ -26,9 +26,7 @@ class NFW(WordAutomaton[Alph, Q]):
         self._final_states: set[Q] = set()
         self._is_deterministic: bool | None = None
 
-    def add_location(
-        self, location: Q, initial: bool = False, final: bool = False
-    ) -> None:
+    def add_location(self, location: Q, initial: bool = False, final: bool = False) -> None:
         """Add a location to the automaton."""
         if location in self._adj:
             raise ValueError(f"Location {location} already exists in automaton")
@@ -82,17 +80,13 @@ class AFW(WordAutomaton[Alph, Q]):
         super().__init__()
 
         self._alph = alphabet
-        self._adj: dict[Q, dict[Alph, set[Q | tuple[Q, ...]]]] = defaultdict(
-            lambda: defaultdict(set)
-        )
+        self._adj: dict[Q, dict[Alph, set[Q | tuple[Q, ...]]]] = defaultdict(lambda: defaultdict(set))
         self._initial_states: set[Q] = set()
         self._final_states: set[Q] = set()
         self._is_deterministic: bool | None = None
         self._is_alternating: bool | None = None
 
-    def add_location(
-        self, location: Q, initial: bool = False, final: bool = False
-    ) -> None:
+    def add_location(self, location: Q, initial: bool = False, final: bool = False) -> None:
         """Add a location to the automaton."""
         if location in self._adj:
             raise ValueError(f"Location {location} already exists in automaton")
@@ -102,14 +96,10 @@ class AFW(WordAutomaton[Alph, Q]):
             self._initial_states.add(location)
         assert len(self._adj[location]) == 0
 
-    def add_transition(
-        self, src: Q, guard: Alph, dst: Iterable[Q | tuple[Q, ...]]
-    ) -> None:
+    def add_transition(self, src: Q, guard: Alph, dst: Iterable[Q | tuple[Q, ...]]) -> None:
         dst = set(dst)
         self._is_deterministic = len(dst) == 1
-        self._is_alternating = any(
-            len(out) > 1 for out in dst if isinstance(out, tuple)
-        )
+        self._is_alternating = any(len(out) > 1 for out in dst if isinstance(out, tuple))
         self._adj[src][guard].update(dst)
 
     @override
