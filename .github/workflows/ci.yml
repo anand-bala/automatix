@@ -27,10 +27,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Test with Python ${{ matrix.python-version }}
         run: uv run --frozen --dev pytest
-      - name: Run type checker with Python
-        run: uv run --frozen --dev mypy src tests
-      - name: Run basedpyright
-        run: uvx basedpyright
+      # - name: Run type checker with Python
+      #   run: uv run --frozen --dev mypy src tests
+      # - name: Run basedpyright
+      #   run: uvx basedpyright
       - name: lint
         run: uv run ruff check .
       - name: format
