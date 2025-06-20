@@ -2,8 +2,8 @@
 name = "argus-automatix"
 authors = [{ name = "Anand Balakrishnan", email = "anandbala1597@gmail.com" }]
 description = "Symbolic (weighted) automata monitors"
-version = "0.3.1"
-requires-python = "~=3.11"
+version = "0.3.2"
+requires-python = ">=3.10,<3.13"
 
 dependencies = [
   "typing-extensions",
@@ -13,26 +13,26 @@ dependencies = [
   "numpy~=1.26",
   "equinox~=0.11",
   "networkx~=3.2",
-  "dd~=0.6.0",
   "lark~=1.2",
 ]
 
 [project.optional-dependencies]
 cuda = ["jax[cuda]~=0.4"]
+polynomials = ["dd"]
 
 [dependency-groups]
 dev = [
-  "black>=25.1.0",
-  "graphviz>=0.20.3",
-  "ipython>=9.0.2",
-  "isort>=6.0.1",
-  "mkdocs>=1.6.1",
-  "mkdocs-jupyter>=0.25.1",
-  "mkdocs-material>=9.6.7",
-  "mkdocstrings[python]>=0.28.3",
-  "mypy>=1.15.0",
-  "pytest>=8.3.5",
-  "ruff>=0.9.10",
+  "black",
+  "graphviz",
+  "ipython",
+  "isort",
+  "mkdocs",
+  "mkdocs-jupyter",
+  "mkdocs-material",
+  "mkdocstrings[python]",
+  "mypy",
+  "pytest",
+  "ruff",
 ]
 examples = ["matplotlib", "pydantic>=2.10.6", "scienceplots", "scipy>=1.15.2"]
 
@@ -64,7 +64,7 @@ extend-ignore = ["F722"]
 
 [tool.pyright]
 include = ["src", "examples"]
-pythonVersion = "3.11"
+pythonVersion = "3.10"
 pythonPlatform = "All"
 reportUnknownMemberType = false
 reportUnknownParameterType = false
