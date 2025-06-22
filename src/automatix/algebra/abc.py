@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Generic, Mapping, Self, TypeVar
+from typing import Generic, Mapping, TypeVar
 
-from typing_extensions import ClassVar
+from typing_extensions import ClassVar, Self
 
 S = TypeVar("S")
 

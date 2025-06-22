@@ -109,6 +109,15 @@ class AbstractSemiring(eqx.Module, strict=True):
         return c
 
 
+class AbstractNegation(eqx.Module, strict=True):
+    """A negation function on `S` is an involution on `S`"""
+
+    @classmethod
+    @abstractmethod
+    def negate(cls, x: Num[Array, "*size"]) -> Num[Array, "*size"]:
+        """An involution in the algebra"""
+
+
 class CountingSemiring(AbstractSemiring):
     r"""Implementation of the counting semiring $(\mathbb{R}, +, \times, 0, 1)$."""
 
@@ -277,3 +286,42 @@ class LogSemiring(AbstractSemiring):
     @classmethod
     def prod(cls, a: Num[Array, " ..."], axis: Axis = None) -> Num[Array, " ..."]:
         return jnp.sum(a, axis=axis)
+
+
+class LatticeAlgebra(AbstractSemiring, AbstractNegation):
+    """A simple lattice algebra on (1, 0, max, min, 1- x)"""
+
+    @override
+    @staticmethod
+    def zeros(shape: Shape) -> Num[Array, "..."]:
+        return jnp.zeros(shape)
+
+    @override
+    @staticmethod
+    def ones(shape: Shape) -> Num[Array, "..."]:
+        return jnp.ones(shape)
+
+    @override
+    @classmethod
+    def add(cls, x1: Num[Array, " n"], x2: Num[Array, " n"]) -> Num[Array, " n"]:
+        return jnp.maximum(x1, x2)
+
+    @override
+    @classmethod
+    def multiply(cls, x1: Num[Array, " n"], x2: Num[Array, " n"]) -> Num[Array, " n"]:
+        return jnp.minimum(x1, x2)
+
+    @override
+    @classmethod
+    def sum(cls, a: Num[Array, " ..."], axis: Axis = None) -> Num[Array, " ..."]:
+        return jnp.amax(a, axis=axis)
+
+    @override
+    @classmethod
+    def prod(cls, a: Num[Array, " ..."], axis: Axis = None) -> Num[Array, " ..."]:
+        return jnp.amin(a, axis=axis)
+
+    @override
+    @classmethod
+    def negate(cls, x: Num[Array, "*size"]) -> Num[Array, "*size"]:
+        return 1 - x
