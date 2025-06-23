@@ -27,10 +27,14 @@ jobs:
         with:
           version: "latest"
           python-version: ${{ matrix.python-version }}
+      - name: lint
+        run: uv run ruff check .
+      - name: format
+        run: uv run ruff format --check .
       - name: Test with Python ${{ matrix.python-version }}
         run: uv run --frozen --dev pytest
-        # - name: Run type checker with Python
-        #   run: uv run --frozen --dev mypy src tests
+      - name: Run type checker with Python
+        run: uv run --frozen --dev mypy src tests
 
   release-build:
     name: Build and release package
