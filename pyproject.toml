@@ -2,7 +2,7 @@
 name = "argus-automatix"
 authors = [{ name = "Anand Balakrishnan", email = "anandbala1597@gmail.com" }]
 description = "Symbolic (weighted) automata monitors"
-version = "0.3.4"
+version = "0.3.5"
 requires-python = ">=3.10"
 
 dependencies = [
