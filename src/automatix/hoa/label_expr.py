@@ -32,8 +32,8 @@ class LabelExpr(ABC):
                 return And(lhs + rhs)
             case (And(args), expr) | (expr, And(args)):
                 return And(args + [expr])
-            case (lhs, rhs):
-                return And([lhs, rhs])
+            case _:
+                return And([self, other])
 
     def __or__(self, other: "LabelExpr") -> "LabelExpr":
         match (self, other):
@@ -45,8 +45,8 @@ class LabelExpr(ABC):
                 return Or(lhs + rhs)
             case (Or(args), expr) | (expr, Or(args)):
                 return Or(args + [expr])
-            case (lhs, rhs):
-                return Or([lhs, rhs])
+            case _:
+                return Or([self, other])
 
 
 @dataclass(frozen=True, slots=True, eq=True)

@@ -96,7 +96,7 @@ def main(args: Args) -> None:
         map(lambda p: (Path(CURRENT_DIR, p[0]), Path(CURRENT_DIR, p[1])), EXPERIMENTS),
         [False, True],
     ):
-        experiment_script = [
+        experiment_script: list[str | Path] = [
             sys.executable,
             Path(CURRENT_DIR, "./monitoring_example.py"),
             "--timeit",

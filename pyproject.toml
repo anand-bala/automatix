@@ -41,6 +41,7 @@ examples = [
   "scienceplots",
   "scipy>=1.15.2",
   "argus-automatix[polynomials]",
+  "scipy-stubs>=1.15.3.0",
 ]
 
 [build-system]

@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from typing_extensions import override
@@ -47,8 +50,8 @@ class AccExpr(ABC):
                 return And(lhs + rhs)
             case (And(args), expr) | (expr, And(args)):
                 return And(args + [expr])
-            case (lhs, rhs):
-                return And([lhs, rhs])
+            case _:
+                return And([self, other])
 
     def __or__(self, other: "AccExpr") -> "AccExpr":
         match (self, other):
@@ -60,8 +63,8 @@ class AccExpr(ABC):
                 return Or(lhs + rhs)
             case (Or(args), expr) | (expr, Or(args)):
                 return Or(args + [expr])
-            case (lhs, rhs):
-                return Or([lhs, rhs])
+            case _:
+                return Or([self, other])
 
     @abstractmethod
     def dual(self) -> "AccExpr": ...
@@ -329,6 +332,7 @@ class Parity(AcceptanceCondition):
 
     @override
     def to_expr(self) -> AccExpr:
+        res: AccExpr
         if self.max:
             res = Literal((self.num_sets & 1) == self.odd)
         else:
@@ -341,6 +345,7 @@ class Parity(AcceptanceCondition):
         #    Acceptance: 5 Inf(0) | (Fin(1) & (Inf(2) | (Fin(3) & Inf(4))))
         # remember that we build it from right to left.
 
+        iterator: Iterable[int]
         iterator = range(0, self.num_sets)
         if not self.max:
             iterator = reversed(iterator)

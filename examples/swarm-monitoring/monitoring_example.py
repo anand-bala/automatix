@@ -152,10 +152,9 @@ def _get_distance_to_obstacle(
     from scipy.spatial.distance import cdist
 
     # Unpack obstacles
-    obstacle_centers, obstacle_ids = zip(*[((obs.x, obs.y), obs.id) for obs in map_info.buildings])
-    assert len(obstacle_centers) == len(obstacle_centers)
-    obstacle_centers = np.array(obstacle_centers)
-    obstacle_ids = list(obstacle_ids)
+    obstacle_info = tuple(zip(*[((obs.x, obs.y), obs.id) for obs in map_info.buildings]))
+    obstacle_centers = np.array(obstacle_info[0])
+    obstacle_ids = list(obstacle_info[1])
     assert obstacle_centers.shape == (len(obstacle_centers), 2)
     obstacle_radius = map_info.map_properties.building_width
 
@@ -258,12 +257,12 @@ def read_trace(trace_file: Path, map_info: Map) -> Sequence[tuple[float, nx.Grap
 
         # Connect a GCS to a drone if in radius
         new_edges = []
-        for gcs, drone in itertools.product(gcs_graph.nodes, g.nodes):
-            x1, y1 = gcs_graph.nodes[gcs]["pos_x"], gcs_graph.nodes[gcs]["pos_y"]
+        for gcs_node, drone in itertools.product(gcs_graph.nodes, g.nodes):
+            x1, y1 = gcs_graph.nodes[gcs_node]["pos_x"], gcs_graph.nodes[gcs_node]["pos_y"]
             x2, y2 = g.nodes[drone]["pos_x"], g.nodes[drone]["pos_y"]
             dist = math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
             if dist <= map_info.map_properties.radius_of_influence:
-                new_edges.append((gcs, drone, dict(hop=1, dist=dist)))
+                new_edges.append((gcs_node, drone, dict(hop=1, dist=dist)))
 
         # Merge the gcs graph and the drone graph
         g.update(gcs_graph)
@@ -312,7 +311,7 @@ Monitoring for ego locations: {list(ego_locs.keys())}
         )
         overall_results = []
         for ego, ego_loc in ego_locs.items():
-            timer = timeit.Timer(lambda ego=ego, ego_loc=ego_loc: forward_run(monitor, trace, {ego: ego_loc}), "gc.enable()")
+            timer = timeit.Timer(lambda ego=ego, ego_loc=ego_loc: forward_run(monitor, trace, {ego: ego_loc}), "gc.enable()")  # type: ignore[misc]
             results = timer.repeat(repeat=args.num_repeats, number=1)
             step_results = map(lambda res: res / len(trace), results)
             best_time = min(step_results)
@@ -422,7 +421,7 @@ def main(args: Args) -> None:
     print()
     with open(args.map_info, "r") as f:
         map_info = Map.model_validate(json.load(f))
-    trace = list(read_trace(args.trace, map_info))
+    trace: MutableSequence = list(read_trace(args.trace, map_info))
     print(f"Trace Length  = {len(trace)}")
     max_locs = max([g.number_of_nodes() for _, g in trace])
     print(f"Num Locations = {max_locs}")

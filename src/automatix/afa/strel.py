@@ -19,9 +19,10 @@ K = TypeVar("K")
 
 Location: TypeAlias = int
 
-Alph: TypeAlias = nx.Graph[Location]
-"""Input alphabet is a graph over location vertices, with distance edge weights and vertex labels corresponding to semiring
-values for each predicate"""
+if TYPE_CHECKING:
+    Alph: TypeAlias = nx.Graph[Location]
+else:
+    Alph: TypeAlias = nx.Graph
 
 Q: TypeAlias = tuple[strel.Expr, Location]
 """Each state in the automaton represents a subformula in the specification and an ego location.
