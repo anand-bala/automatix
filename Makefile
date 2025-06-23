@@ -5,12 +5,11 @@ SHELL := bash
 MAKEFLAGS += --warn-undefined-variables
 MAKEFLAGS += --no-builtin-rules
 
-USE_CUDA ?= $(shell type -p "nvidia-smi")
+EXTRA_UV_FLAGS =
+USE_CUDA ?=
 # If we want to use CUDA, the USE_CUDA variable should not be empty
 ifneq (,$(USE_CUDA))
-	EXTRA_UV_FLAGS = --extra cuda
-else
-	EXTRA_UV_FLAGS = 
+	EXTRA_UV_FLAGS += --extra cuda
 endif
 
 # Default: create the dev environment
@@ -18,13 +17,13 @@ dev: uv.lock | .venv
 .PHONY: dev
 
 lint:
-	uvx ruff format 
-	uvx ruff check --fix --exit-non-zero-on-fix .
-	uvx mypy src examples
+	uv run --frozen ruff format 
+	uv run --frozen ruff check --fix --exit-non-zero-on-fix .
+	uv run --frozen mypy src examples
 .PHONY: lint
 
 test:
-	uv run --dev pytest
+	uv run --dev --frozen pytest
 .PHONY: test
 
 docs:
