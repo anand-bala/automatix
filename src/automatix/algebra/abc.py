@@ -44,6 +44,15 @@ class AbstractNegation(ABC, Generic[S]):
         """An involution in the algebra"""
 
 
+class DeMorganAlgebra(AbstractSemiring[S], AbstractNegation[S]):
+    """A De Morgan algebra"""
+
+    is_additively_idempotent: ClassVar[bool] = True
+    is_multiplicatively_idempotent: ClassVar[bool] = True
+    is_commutative: ClassVar[bool] = True
+    is_simple: ClassVar[bool] = True
+
+
 class AbstractPolynomial(ABC, Generic[S]):
     """A polynomial with coefficients and the value of variables in `S`, where `S` is a semiring."""
 

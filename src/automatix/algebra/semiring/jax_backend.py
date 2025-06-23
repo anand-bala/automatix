@@ -1,7 +1,6 @@
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from typing import Union
 
-import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Num
@@ -15,7 +14,7 @@ Shape: TypeAlias = Union[int, tuple[int, ...]]
 # pyright: reportIncompatibleMethodOverride=false
 
 
-class AbstractSemiring(eqx.Module, strict=True):
+class AbstractSemiring(ABC):
     """Base semiring class."""
 
     @staticmethod
@@ -109,13 +108,19 @@ class AbstractSemiring(eqx.Module, strict=True):
         return c
 
 
-class AbstractNegation(eqx.Module, strict=True):
+class AbstractNegation(ABC):
     """A negation function on `S` is an involution on `S`"""
 
     @classmethod
     @abstractmethod
     def negate(cls, x: Num[Array, "*size"]) -> Num[Array, "*size"]:
         """An involution in the algebra"""
+
+
+class AbstractDeMorganAlgebra(AbstractSemiring, AbstractNegation):
+    """A De Morgan algebra"""
+
+    pass
 
 
 class CountingSemiring(AbstractSemiring):
@@ -153,7 +158,7 @@ class CountingSemiring(AbstractSemiring):
 
 
 class MaxMinSemiring(AbstractSemiring):
-    r"""Implementation of the min-max semiring $(\mathbb{R}_{\leq 0} \cup \{-\infty, \infty\}, \max, \min, -\infty, 0)$."""
+    r"""Implementation of the min-max semiring on reals $(\mathbb{R} \cup \{-\infty, \infty\}, \max, \min, -\infty, \infty)$."""
 
     @override
     @staticmethod
@@ -163,7 +168,7 @@ class MaxMinSemiring(AbstractSemiring):
     @override
     @staticmethod
     def ones(shape: Shape) -> Num[Array, "..."]:
-        return jnp.full(shape, fill_value=-0.0)
+        return jnp.full(shape, fill_value=jnp.inf)
 
     @override
     @classmethod
@@ -186,8 +191,8 @@ class MaxMinSemiring(AbstractSemiring):
         return jnp.amin(a, axis=axis)
 
 
-class LSEMaxMinSemiring(AbstractSemiring):
-    r"""Implementation of the smooth min-max semiring using `logsumexp` $(\mathbb{R}_{\leq 0} \cup \{-\infty, \infty\}, logsumexp, -logsumexp, -\infty, 0)$."""
+class LeftMaxMinSemiring(MaxMinSemiring):
+    r"""Implementation of the min-max semiring on negative reals $(\mathbb{R}_{\leq 0} \cup \{-\infty, \infty\}, \max, \min, -\infty, 0)$."""
 
     @override
     @staticmethod
@@ -198,6 +203,31 @@ class LSEMaxMinSemiring(AbstractSemiring):
     @staticmethod
     def ones(shape: Shape) -> Num[Array, "..."]:
         return jnp.full(shape, fill_value=-0.0)
+
+
+class MaxMinAlgebra(MaxMinSemiring, AbstractDeMorganAlgebra):
+    @override
+    @classmethod
+    def negate(cls, x: Num[Array, "*size"]) -> Num[Array, "*size"]:
+        return -x
+
+
+class RightMaxMinSemiring(MaxMinSemiring):
+    r"""Implementation of the min-max semiring on positive reals $(\mathbb{R}_{\geq 0} \cup \{-\infty, \infty\}, \max, \min, 0, \infty)$."""
+
+    @override
+    @staticmethod
+    def zeros(shape: Shape) -> Num[Array, "..."]:
+        return jnp.zeros(shape)
+
+    @override
+    @staticmethod
+    def ones(shape: Shape) -> Num[Array, "..."]:
+        return jnp.full(shape, fill_value=jnp.inf)
+
+
+class LSEMaxMinSemiring(MaxMinSemiring):
+    r"""Implementation of the smooth min-max semiring using `logsumexp` $(\mathbb{R} \cup \{-\infty, \infty\}, logsumexp, -logsumexp, -\infty, \infty)$."""
 
     @override
     @classmethod
@@ -218,6 +248,30 @@ class LSEMaxMinSemiring(AbstractSemiring):
     @classmethod
     def prod(cls, a: Num[Array, " ..."], axis: Axis = None) -> Num[Array, " ..."]:
         return -logsumexp(-a, axis=axis)
+
+
+class LeftLSEMaxMinSemiring(MaxMinSemiring):
+    @override
+    @staticmethod
+    def zeros(shape: Shape) -> Num[Array, "..."]:
+        return jnp.full(shape, fill_value=-jnp.inf)
+
+    @override
+    @staticmethod
+    def ones(shape: Shape) -> Num[Array, "..."]:
+        return jnp.full(shape, fill_value=-0.0)
+
+
+class RightLSEMaxMinSemiring(MaxMinSemiring):
+    @override
+    @staticmethod
+    def zeros(shape: Shape) -> Num[Array, "..."]:
+        return jnp.zeros(shape)
+
+    @override
+    @staticmethod
+    def ones(shape: Shape) -> Num[Array, "..."]:
+        return jnp.full(shape, fill_value=jnp.inf)
 
 
 class MaxPlusSemiring(AbstractSemiring):
@@ -288,7 +342,7 @@ class LogSemiring(AbstractSemiring):
         return jnp.sum(a, axis=axis)
 
 
-class LatticeAlgebra(AbstractSemiring, AbstractNegation):
+class LatticeAlgebra(AbstractDeMorganAlgebra):
     """A simple lattice algebra on (1, 0, max, min, 1- x)"""
 
     @override

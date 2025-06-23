@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Callable, Optional, Type
 
 import equinox as eqx
@@ -11,7 +13,7 @@ from automatix.nfa.predicate import AbstractPredicate
 
 class NFA:
     def __init__(self) -> None:
-        self._graph = nx.DiGraph()
+        self._graph: nx.DiGraph[int] = nx.DiGraph()
         self._initial_location: set[int] = set()
         self._final_locations: set[int] = set()
 
