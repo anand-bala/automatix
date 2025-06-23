@@ -8,12 +8,12 @@ requires-python = ">=3.10"
 dependencies = [
   "typing-extensions",
   "types-networkx",
-  "jax~=0.4",
-  "jaxtyping~=0.2",
+  "jax>=0.4",
+  "jaxtyping>=0.2",
   "numpy~=1.26",
-  "equinox~=0.11",
-  "networkx~=3.2",
-  "lark~=1.2",
+  "equinox>=0.11",
+  "networkx",
+  "lark",
   "logic-asts>=0.3.3",
 ]
 
@@ -35,7 +35,13 @@ dev = [
   "pytest",
   "ruff",
 ]
-examples = ["matplotlib", "pydantic>=2.10.6", "scienceplots", "scipy>=1.15.2"]
+examples = [
+  "matplotlib",
+  "pydantic>=2.10.6",
+  "scienceplots",
+  "scipy>=1.15.2",
+  "argus-automatix[polynomials]",
+]
 
 [build-system]
 requires = ["hatchling"]
