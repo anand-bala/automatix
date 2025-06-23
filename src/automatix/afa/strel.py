@@ -1,14 +1,16 @@
 """Transform STREL parse tree to an AFA."""
 
+from __future__ import annotations
+
 import functools
 import math
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Callable, Collection, Iterable, Iterator, Mapping, TypeAlias, TypeVar
+from typing import TYPE_CHECKING, Callable, Collection, Iterable, Iterator, Mapping, TypeAlias, TypeVar
 
+import logic_asts.strel as strel
 import networkx as nx
 
-import automatix.logic.strel as strel
 from automatix.afa.automaton import AFA, AbstractTransition
 from automatix.algebra.abc import AbstractPolynomial, PolynomialManager
 from automatix.algebra.polynomials.boolean import BooleanPolyCtx
@@ -17,7 +19,7 @@ K = TypeVar("K")
 
 Location: TypeAlias = int
 
-Alph: TypeAlias = "nx.Graph[Location]"
+Alph: TypeAlias = nx.Graph[Location]
 """Input alphabet is a graph over location vertices, with distance edge weights and vertex labels corresponding to semiring
 values for each predicate"""
 
@@ -45,47 +47,47 @@ class Transitions(AbstractTransition[Alph, Q, K]):
         expr, loc = state
         # If expr is temporal, the visitor should add the argument variables to the const_mapping dict
         match expr:
-            case strel.Constant(value):
+            case strel.Literal(value):
                 if value:
                     return self.manager.top
                 else:
                     return self.manager.bottom
-            case strel.Identifier(name):
+            case strel.Variable(name):
                 return self.manager.const(self.label_fn(input, loc, name))
-            case strel.NotOp(arg):
+            case strel.Not(arg):
                 return self(input, (arg, loc)).negate()
-            case strel.AndOp(lhs, rhs):
+            case strel.And(lhs, rhs):
                 return self(input, (lhs, loc)) * self(input, (rhs, loc))
-            case strel.OrOp(lhs, rhs):
+            case strel.Or(lhs, rhs):
                 return self(input, (lhs, loc)) + self(input, (rhs, loc))
-            case strel.EverywhereOp(interval, arg):
-                alias = ~strel.SomewhereOp(interval, ~arg)
+            case strel.Everywhere(arg, interval):
+                alias = ~strel.Somewhere(~arg, interval)
                 self._add_expr_alias(expr, alias)
                 return self(input, (alias, loc))
-            case strel.SomewhereOp(interval, arg):
-                alias = strel.ReachOp(strel.true, interval, arg)
+            case strel.Somewhere(arg, interval):
+                alias = strel.Reach(strel.Literal(True), arg, interval)
                 self._add_expr_alias(expr, alias)
                 return self(input, (alias, loc))
-            case strel.EscapeOp():
+            case strel.Escape():
                 return self._expand_escape(input, expr, loc)
-            case strel.ReachOp():
+            case strel.Reach():
                 return self._expand_reach(input, expr, loc)
-            case strel.NextOp(steps, arg):
+            case strel.Next(arg, steps):
                 if steps is not None and steps > 1:
                     # If steps > 1, we return the variable for X[steps - 1] arg
-                    return self.var((strel.NextOp(steps - 1, arg), loc))
+                    return self.var((strel.Next(arg, steps - 1), loc))
                 else:
                     assert steps is None or steps == 1
                     # Otherwise, return the variable for arg
                     return self.var((arg, loc))
-            case strel.GloballyOp(interval, arg):
-                # Create an alias to ~F[a,b] ~arg
-                alias = ~strel.EventuallyOp(interval, ~arg)
+            case strel.Always(arg, interval):
+                # Create an alias to ~F[a, b] ~arg
+                alias = ~strel.Eventually(~arg, interval)
                 self._add_expr_alias(expr, alias)
                 return self(input, (alias, loc))
-            case strel.EventuallyOp():
+            case strel.Eventually():
                 return self._expand_eventually(input, expr, loc)
-            case strel.UntilOp():
+            case strel.Until():
                 return self._expand_until(input, expr, loc)
             case e:
                 raise TypeError(f"Unknown expression type {type(e)}")
@@ -104,8 +106,8 @@ class Transitions(AbstractTransition[Alph, Q, K]):
     def get_var(self, state: Q) -> Poly[K]:
         if state[0] in self.aliases:
             state = (self.aliases[state[0]], state[1])
-        if isinstance(state[0], strel.Constant):
-            if state[0].value:
+        if isinstance(state[0], strel.Variable):
+            if state[0].name:
                 return self.manager.top
             else:
                 return self.manager.bottom
@@ -114,7 +116,7 @@ class Transitions(AbstractTransition[Alph, Q, K]):
     def _add_expr_alias(self, phi: strel.Expr, alias: strel.Expr) -> None:
         self.aliases.setdefault(phi, alias)
 
-    def _expand_reach(self, input: Alph, phi: strel.ReachOp, loc: Location) -> Poly[K]:
+    def _expand_reach(self, input: Alph, phi: strel.Reach, loc: Location) -> Poly[K]:
         d1 = phi.interval.start or 0.0
         d2 = phi.interval.end or math.inf
         # use a modified version of networkx's all_simple_paths algorithm to generate all simple paths
@@ -134,7 +136,7 @@ class Transitions(AbstractTransition[Alph, Q, K]):
                 return expr
         return expr
 
-    def _expand_escape(self, input: Alph, phi: strel.EscapeOp, loc: Location) -> Poly[K]:
+    def _expand_escape(self, input: Alph, phi: strel.Escape, loc: Location) -> Poly[K]:
         def delta(expr: strel.Expr, loc: Location) -> Poly[K]:
             return self(input, (expr, loc))
 
@@ -157,8 +159,8 @@ class Transitions(AbstractTransition[Alph, Q, K]):
                 return expr
         return expr
 
-    def _expand_eventually(self, input: Alph, phi: strel.EventuallyOp, loc: Location) -> Poly[K]:
-        # F[a,b] phi = X X ... X (phi | X (phi | X( ... | X f)))
+    def _expand_eventually(self, input: Alph, phi: strel.Eventually, loc: Location) -> Poly[K]:
+        # F[a, b] phi = X X ... X (phi | X (phi | X( ... | X f)))
         #              ^^^^^^^^^        ^^^^^^^^^^^^^^^^^^^^^^^
         #               a times                 b-a times
         #            = X[a] (phi | X (phi | X( ... | X f)))
@@ -183,32 +185,35 @@ class Transitions(AbstractTransition[Alph, Q, K]):
                 # Expand as F[0, t2] arg = arg | X F[0, t2-1] arg
                 next_step: strel.Expr
                 if t2 > 1:
-                    next_step = strel.EventuallyOp(strel.TimeInterval(0, t2 - 1), phi.arg)
+                    next_step = strel.Eventually(
+                        phi.arg,
+                        strel.TimeInterval(0, t2 - 1),
+                    )
                 else:
                     next_step = phi.arg
                 return delta(phi.arg) + self.var((next_step, loc))
 
             case (int(t1), None):
                 # phi = F[t1,] arg = X[t1] F arg
-                expr = strel.NextOp(t1, strel.EventuallyOp(None, phi.arg))
+                expr = strel.Next(strel.Eventually(phi.arg), t1)
                 self._add_expr_alias(phi, expr)
                 return delta(expr)
 
             case (int(t1), int(t2)):
                 # phi = F[t1, t2] arg = X[t1] F[0, t2 - t1] arg
-                expr = strel.NextOp(
-                    t1,
-                    strel.EventuallyOp(
-                        strel.TimeInterval(0, t2 - t1),
+                expr = strel.Next(
+                    strel.Eventually(
                         phi.arg,
+                        strel.TimeInterval(0, t2 - t1),
                     ),
+                    t1,
                 )
                 self._add_expr_alias(phi, expr)
                 return delta(expr)
         raise RuntimeError(f"Unknown [start, end] interval {(start, end)}")
 
-    def _expand_until(self, input: Alph, phi: strel.UntilOp, loc: Location) -> Poly[K]:
-        # lhs U[t1,t2] rhs = (F[t1,t2] rhs) & (lhs U[t1,] rhs)
+    def _expand_until(self, input: Alph, phi: strel.Until, loc: Location) -> Poly[K]:
+        # lhs U[t1, t2] rhs = (F[t1,t2] rhs) & (lhs U[t1,] rhs)
         # lhs U[t1,  ] rhs = ~F[0,t1] ~(lhs U rhs)
         def delta(expr: strel.Expr) -> Poly[K]:
             return self(input, (expr, loc))
@@ -226,17 +231,17 @@ class Transitions(AbstractTransition[Alph, Q, K]):
                 return delta(phi.rhs) + (delta(phi.lhs) * self.var((phi, loc)))
             case (t1, None):
                 # phi = lhs U[t1,] rhs = ~F[0,t1] ~(lhs U rhs)
-                expr = ~strel.EventuallyOp(
+                expr = ~strel.Eventually(
+                    ~strel.Until(phi.lhs, phi.rhs),
                     strel.TimeInterval(0, t1),
-                    ~strel.UntilOp(phi.lhs, None, phi.rhs),
                 )
                 self._add_expr_alias(phi, expr)
             case (t1, int()):
                 # phi = lhs U[t1,t2] rhs = (F[t1,t2] rhs) & (lhs U[t1,] rhs)
-                expr = strel.EventuallyOp(phi.interval, phi.rhs) & strel.UntilOp(
-                    interval=strel.TimeInterval(t1, None),
-                    lhs=phi.lhs,
-                    rhs=phi.rhs,
+                expr = strel.Eventually(phi.rhs, phi.interval) & strel.Until(
+                    phi.lhs,
+                    phi.rhs,
+                    strel.TimeInterval(t1, None),
                 )
         self._add_expr_alias(phi, expr)
         return delta(expr)
@@ -272,15 +277,15 @@ class StrelAutomaton(AFA[Alph, Q, K]):
     ) -> None:
         super().__init__(transitions)
 
-        self._transitions = transitions
+        self._transitions: Transitions = transitions
         self.initial_expr = initial_expr
         self.var_node_map = self._transitions.var_node_map
         self._manager = self._transitions.manager
 
     def _is_accepting(self, expr: strel.Expr) -> bool:
         return (
-            isinstance(expr, strel.NotOp)
-            and isinstance(expr.arg, (strel.UntilOp, strel.EventuallyOp))
+            isinstance(expr, strel.Not)
+            and isinstance(expr.arg, (strel.Until, strel.Eventually))
             and (expr.arg.interval is None or expr.arg.interval.is_untimed())
         ) or expr == self.initial_expr
 

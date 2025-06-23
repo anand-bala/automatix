@@ -8,14 +8,16 @@ import timeit
 from collections import deque
 from pathlib import Path
 from time import perf_counter_ns
-from typing import Mapping, MutableSequence, Self, Sequence, TypeAlias
+from typing import Mapping, MutableSequence, Sequence, TypeAlias
 
+import logic_asts
 import networkx as nx
 import numpy as np
+from logic_asts import strel
 from pydantic import BaseModel, Field, model_validator
+from typing_extensions import Self
 
 from automatix.afa.strel import StrelAutomaton, make_bool_automaton
-from automatix.logic import strel
 
 DRONE_COMMS_RADIUS: float = 40
 GCS_COMMS_RADIUS: float = 60
@@ -137,7 +139,7 @@ def read_spec_file(spec_file: Path) -> tuple[strel.Expr, str]:
     assert specification_module_spec.loader is not None
     specification_module_spec.loader.exec_module(specification_module)
 
-    expr = strel.parse(specification_module.SPECIFICATION)
+    expr = logic_asts.parse_expr(specification_module.SPECIFICATION, syntax="strel")
     dist_attr: str = specification_module.DIST_ATTR
 
     return expr, dist_attr
