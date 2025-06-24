@@ -1,9 +1,14 @@
+from __future__ import annotations
+
 from abc import abstractmethod
+from collections.abc import Callable
+from typing import Type
 
 import equinox as eqx
-import jax
 import jax.numpy as jnp
+import logic_asts.base as exprs
 from jaxtyping import Array, Num, Scalar
+from logic_asts import Expr
 
 from automatix.algebra.semiring.jax_backend import AbstractSemiring
 
@@ -12,45 +17,50 @@ class AbstractPredicate(eqx.Module, strict=True):
     """A predicate is an *effective Boolean alphabet* over some domain, e.g., real valued vectors, etc."""
 
     @abstractmethod
-    def is_true(self, x: Num[Array, "..."]) -> bool:
-        """Given a domain vector, return `True` if the predicate evaluates to true, and `False` otherwise."""
-        ...
+    def __call__(self, x: Num[Array, "..."]) -> Scalar: ...
 
-    @abstractmethod
-    def weight(self, x: Num[Array, "..."], negate: bool = False) -> Scalar:
-        """Scalar function that outputs the weight of an input domain vector with respect to the predicate.
+    @classmethod
+    def from_expr(
+        cls,
+        expr: Expr,
+        *,
+        atoms: dict[str, Predicate],
+        neg_atoms: dict[str, Predicate],
+        algebra: Type[AbstractSemiring],
+    ) -> AbstractPredicate:
+        """Convert a `logic_asts.Expr` to a callable predicate"""
+        expr = expr.to_nnf()
 
-        If `negate` is `True`, the predicate is logically negated. This is useful when the predicate is in NNF form.
+        cache: dict[int, AbstractPredicate] = dict()
+        for subexpr in expr.iter_subtree():
+            ex_id = hash(subexpr)
+            match subexpr:
+                case exprs.Literal(value):
+                    cache[ex_id] = (
+                        # Broadcastable ONE for True
+                        Predicate(lambda _: algebra.ones(()))
+                        if value
+                        # Broadcastable ZERO for False
+                        else Predicate(lambda _: algebra.zeros(()))
+                    )
+                case exprs.Variable(name):
+                    cache[ex_id] = atoms[name]
+                case exprs.Not(arg):
+                    cache[ex_id] = neg_atoms[str(arg)]
+                case exprs.Or(lhs, rhs):
+                    cache[ex_id] = Or([cache[hash(lhs)], cache[hash(rhs)]], algebra)
+                case exprs.And(lhs, rhs):
+                    cache[ex_id] = And([cache[hash(lhs)], cache[hash(rhs)]], algebra)
 
-        !!! note
-
-            To use this function with `jax.jit`, use the `static_argnums` or `static_argnames` argument as follows:
-
-            ```python
-            from functools import partialmethod
-            import jax
-
-            p = Predicate(...)
-            p_weight = jax.jit(p.weight, static_argnames=['negate'])
-            ```
-        """
-        ...
+        return cache[hash(expr)]
 
 
-class Not(AbstractPredicate):
-    r"""Logical negation of a predicate.
+class Predicate(AbstractPredicate):
+    fn: Callable[[Num[Array, "..."]], Scalar]
 
-    Simplified wrapper around the `weight` with `negate=True`.
-    """
-
-    arg: AbstractPredicate
-
-    def is_true(self, x: Num[Array, "..."]) -> bool:
-        return not self.arg.is_true(x)
-
-    def weight(self, x: Num[Array, "..."], negate: bool = False) -> Scalar:
-        negate = not negate  # Invert again if negate is provided
-        return jax.jit(self.arg.weight)(static_argnames=["negate"])(x, negate=negate)
+    @eqx.filter_jit
+    def __call__(self, x: Num[Array, "..."]) -> Scalar:
+        return self.fn(x)
 
 
 class And(AbstractPredicate):
@@ -59,17 +69,12 @@ class And(AbstractPredicate):
     Given a semiring, the weights for two predicates \(a\) and \(b\) are computed as \(a \otimes b\).
     """
 
-    semiring: AbstractSemiring
     args: list[AbstractPredicate]
+    semiring: Type[AbstractSemiring]
 
-    def is_true(self, x: Num[Array, "..."]) -> bool:
-        args = [arg.is_true(x) for arg in self.args]
-        return all(args)
-
-    def weight(self, x: Num[Array, "..."], negate: bool = False) -> Scalar:
-        if negate:
-            raise RuntimeError("Using And/Or expressions requires negation normal form")
-        weights: list[Scalar] = [jax.jit(arg.weight, static_argnames=["negate"])(x) for arg in self.args]
+    @eqx.filter_jit
+    def __call__(self, x: Num[Array, "..."]) -> Scalar:
+        weights: list[Scalar] = [arg(x) for arg in self.args]
         return self.semiring.prod(jnp.asarray(weights))
 
 
@@ -79,15 +84,10 @@ class Or(AbstractPredicate):
     Given a semiring, the weights for two predicates \(a\) and \(b\) are computed as \(a \oplus b\).
     """
 
-    semiring: AbstractSemiring
     args: list[AbstractPredicate]
+    semiring: Type[AbstractSemiring]
 
-    def is_true(self, x: Num[Array, "..."]) -> bool:
-        args = [arg.is_true(x) for arg in self.args]
-        return any(args)
-
-    def weight(self, x: Num[Array, "..."], negate: bool = False) -> Scalar:
-        if negate:
-            raise RuntimeError("Using And/Or expressions requires negation normal form")
-        weights: list[Scalar] = [jax.jit(arg.weight, static_argnames=["negate"])(x, negate) for arg in self.args]
+    @eqx.filter_jit
+    def __call__(self, x: Num[Array, "..."]) -> Scalar:
+        weights: list[Scalar] = [arg(x) for arg in self.args]
         return self.semiring.sum(jnp.asarray(weights))

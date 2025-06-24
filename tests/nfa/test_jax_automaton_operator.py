@@ -1,12 +1,11 @@
-from typing import final
-
 import jax.nn
 import jax.numpy as jnp
+import logic_asts.base as logic
 from jaxtyping import Array, Num, Scalar
 from typing_extensions import TypeAlias
 
 from automatix.algebra.semiring.jax_backend import MaxPlusSemiring
-from automatix.nfa import AbstractPredicate
+from automatix.nfa import Predicate
 from automatix.nfa.automaton import NFA, make_automaton_operator
 
 Box: TypeAlias = Num[Array, " 4"]
@@ -60,47 +59,40 @@ def test_signed_dist_to_box() -> None:
     print(dists)
 
 
-def _no_op(x):  # noqa: ANN001, ANN202
-    return x
+def make_box_predicate(box: Box) -> tuple[Predicate, Predicate]:
+    """Make the predicate for being inside and outside a box."""
 
-
-@final
-class Red(AbstractPredicate):
-    def is_true(self, x: Num[Array, " n"]) -> bool:
-        return jnp.all(signed_dist_box(x, RED_BOX) <= 0.0).item()
-
-    def weight(self, x: Num[Array, " n"], negate: bool = False) -> Scalar:
-        dist = jax.lax.cond(negate, jax.lax.neg, _no_op, signed_dist_box(x, RED_BOX))
+    @jax.jit
+    def inside(x: Num[Array, " n"]) -> Scalar:
+        dist = signed_dist_box(x, box)
         return -jax.nn.relu(dist)
 
+    @jax.jit
+    def outside(x: Num[Array, " n"]) -> Scalar:
+        dist = signed_dist_box(x, box)
+        return -jax.nn.relu(-dist)
 
-@final
-class Orange(AbstractPredicate):
-    def is_true(self, x: Num[Array, " n"]) -> bool:
-        return jnp.all(signed_dist_box(x, ORANGE_BOX) <= 0.0).item()
-
-    def weight(self, x: Num[Array, " n"], negate: bool = False) -> Scalar:
-        dist = jax.lax.cond(negate, jax.lax.neg, _no_op, signed_dist_box(x, ORANGE_BOX))
-        return -jax.nn.relu(dist)
+    return Predicate(inside), Predicate(outside)
 
 
-@final
-class Green(AbstractPredicate):
-    def is_true(self, x: Num[Array, " n"]) -> bool:
-        return jnp.all(signed_dist_box(x, GREEN_BOX) <= 0.0).item()
+def make_circle_predicate(circle: Circle) -> tuple[Predicate, Predicate]:
+    """Make the predicates for being inside and outside a circle"""
 
-    def weight(self, x: Num[Array, " n"], negate: bool = False) -> Scalar:
-        dist = jax.lax.cond(negate, jax.lax.neg, _no_op, signed_dist_box(x, GREEN_BOX))
-        return -jax.nn.relu(dist)
+    @jax.jit
+    def inside(x: Num[Array, " n"]) -> Scalar:
+        center = circle[:-1]
+        radius = circle[-1]
+        signed_dist = jnp.linalg.norm(x - center) - radius
+        return -jax.nn.relu(signed_dist)
 
+    @jax.jit
+    def outside(x: Num[Array, " n"]) -> Scalar:
+        center = circle[:-1]
+        radius = circle[-1]
+        signed_dist = jnp.linalg.norm(x - center) - radius
+        return -jax.nn.relu(-signed_dist)
 
-@final
-class Tautology(AbstractPredicate):
-    def is_true(self, x: Num[Array, " n"]) -> bool:
-        return True
-
-    def weight(self, x: Num[Array, " n"], negate: bool = False) -> Scalar:
-        return jax.lax.select(jnp.array(negate), MaxPlusSemiring.zeros(()), MaxPlusSemiring.ones(()))
+    return Predicate(inside), Predicate(outside)
 
 
 def test_weight_fn() -> None:
@@ -110,19 +102,27 @@ def test_weight_fn() -> None:
     sequential_aut.add_location(2)
     sequential_aut.add_location(3, final=True)
 
-    red = Red()
-    green = Green()
-    orange = Orange()
+    sequential_aut.add_transition(0, 0, guard="~red")
+    sequential_aut.add_transition(0, 1, guard="red")
+    sequential_aut.add_transition(1, 1, guard="~green")
+    sequential_aut.add_transition(1, 2, guard="green")
+    sequential_aut.add_transition(2, 2, guard="~orange")
+    sequential_aut.add_transition(2, 3, guard="orange")
+    sequential_aut.add_transition(3, 3, guard=logic.Literal(True))
 
-    sequential_aut.add_transition(0, 0, guard=red, negate=True)
-    sequential_aut.add_transition(0, 1, guard=red, negate=False)
-    sequential_aut.add_transition(1, 1, guard=green, negate=True)
-    sequential_aut.add_transition(1, 2, guard=green, negate=False)
-    sequential_aut.add_transition(2, 2, guard=orange, negate=True)
-    sequential_aut.add_transition(2, 3, guard=orange, negate=False)
-    sequential_aut.add_transition(3, 3, guard=Tautology())
+    in_red, out_red = make_box_predicate(RED_BOX)
+    in_green, out_green = make_box_predicate(GREEN_BOX)
+    in_orange, out_orange = make_box_predicate(ORANGE_BOX)
 
-    operator = make_automaton_operator(sequential_aut, MaxPlusSemiring)
+    atoms = dict(red=in_red, green=in_green, orange=in_orange)
+    neg_atoms = dict(red=out_red, green=out_green, orange=out_orange)
+
+    operator = make_automaton_operator(
+        sequential_aut,
+        MaxPlusSemiring,
+        atoms=atoms,
+        neg_atoms=neg_atoms,
+    )
 
     assert operator.initial_weights.shape == (4,)
     assert operator.initial_weights[0] == MaxPlusSemiring.ones(1).item()
