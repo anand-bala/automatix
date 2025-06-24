@@ -19,7 +19,7 @@ dev: uv.lock | .venv
 lint:
 	uv run --frozen ruff format 
 	uv run --frozen ruff check --fix --exit-non-zero-on-fix .
-	uv run --frozen mypy src examples
+	uv run --frozen --all-groups --extra polynomials  mypy src examples
 .PHONY: lint
 
 test:
