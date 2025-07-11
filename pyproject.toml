@@ -34,6 +34,8 @@ dev = [
   "mypy",
   "pytest",
   "ruff",
+  "ty",
+  "zuban>=0.0.24",
 ]
 examples = [
   "matplotlib",
@@ -58,6 +60,10 @@ testpaths = ["tests"]
 [tool.mypy]
 # ignore_missing_imports = true
 show_error_codes = true
+warn_unreachable = true
+
+[tool.zuban]
+strict = true
 
 [tool.ruff]
 line-length = 127
