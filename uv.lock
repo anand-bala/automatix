@@ -90,7 +90,7 @@ requires-dist = [
     { name = "jax", extras = ["cuda"], marker = "extra == 'cuda'", specifier = "~=0.4" },
     { name = "jaxtyping", specifier = ">=0.2" },
     { name = "lark" },
-    { name = "logic-asts", specifier = ">=0.3.3" },
+    { name = "logic-asts", specifier = ">=1.0.0" },
     { name = "networkx" },
     { name = "numpy", specifier = "~=1.26" },
     { name = "types-networkx" },
@@ -112,7 +112,7 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
     { name = "ty" },
-    { name = "zuban", specifier = ">=0.0.24" },
+    { name = "zuban" },
 ]
 examples = [
     { name = "argus-automatix", extras = ["polynomials"] },
@@ -1236,16 +1236,16 @@ wheels = [
 
 [[package]]
 name = "logic-asts"
-version = "0.3.3"
+version = "1.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "lark" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e8/73/8736be43d6b2c784e77086628642e64ea1094aa067680624d33f358e2e1b/logic_asts-0.3.3.tar.gz", hash = "sha256:1f2e5cd527a70cb9a6e18c86a06b3d0e2d3003f7011611a2909e3f7eba7fda4c", size = 26882, upload-time = "2025-06-23T21:04:30.888Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0d/f6/034302a6748bff4678d97cdc6dd94998a02b8560a063e8b813e2c75e5f64/logic_asts-1.0.0.tar.gz", hash = "sha256:fb5c4f99fd4d8968831e16db46dc61e6b0e052fa84a13cee9a8fe2f43673a9ef", size = 32564, upload-time = "2025-11-05T20:52:12.377Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/75/5d/9d601ae83c7224bb32d9d8491004eedae08e618fca7f708062cafe879bc5/logic_asts-0.3.3-py3-none-any.whl", hash = "sha256:4d2edbf2868c2c4ae791414702a1d0786d4e23a35141b991a6d07bcfe23d6e70", size = 9870, upload-time = "2025-06-23T21:04:28.078Z" },
+    { url = "https://files.pythonhosted.org/packages/d2/e4/6abcf3ce81915779c78270445615611f1e7630105b1444163d0fafebbe3d/logic_asts-1.0.0-py3-none-any.whl", hash = "sha256:e391c006236e75b4e5ca35b0e6365df4d3c27b8b6e0e7cec3c17429840653851", size = 13385, upload-time = "2025-11-05T20:52:10.951Z" },
 ]
 
 [[package]]
