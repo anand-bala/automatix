@@ -1,0 +1,366 @@
+"""Pure interface definitions for semiring operations and related abstractions.
+
+This module defines the abstract base classes that all semiring implementations
+must follow. These are pure interfaces with no implementation.
+"""
+
+from abc import ABC, abstractmethod
+from typing import Generic, Mapping, TypeVar, Union
+
+import jax
+from jaxtyping import Array, Num
+from typing_extensions import ClassVar, Self, TypeAlias
+
+# Type variables for semiring elements
+S = TypeVar("S")
+
+# Type aliases for JAX arrays
+Axis: TypeAlias = Union[None, int, tuple[int, ...]]
+Shape: TypeAlias = Union[int, tuple[int, ...]]
+
+
+class AbstractSemiring(ABC):
+    """Base semiring interface for array-based operations.
+
+    A semiring is an algebraic structure (S, +, *, 0, 1) where:
+    - + (add) is associative and commutative with identity 0
+    - * (multiply) is associative with identity 1
+    - * distributes over +
+    - 0 * x = 0 for all x
+
+    All operations work on arrays and are designed to be JIT-compilable.
+    """
+
+    @staticmethod
+    @abstractmethod
+    def zeros(shape: Shape) -> Num[Array, "..."]:
+        """Return an array of given shape filled with the additive identity (zero).
+
+        Parameters
+        ----------
+        shape : Shape
+            Shape of the new array, e.g., `(2, 3)` or `2`.
+
+        Returns
+        -------
+        Num[Array, "..."]
+            Array filled with the semiring's zero element.
+        """
+
+    @staticmethod
+    @abstractmethod
+    def ones(shape: Shape) -> Num[Array, "..."]:
+        """Return an array of given shape filled with the multiplicative identity (one).
+
+        Parameters
+        ----------
+        shape : Shape
+            Shape of the new array, e.g., `(2, 3)` or `2`.
+
+        Returns
+        -------
+        Num[Array, "..."]
+            Array filled with the semiring's one element.
+        """
+
+    @classmethod
+    @abstractmethod
+    def add(cls, x1: Num[Array, " n"], x2: Num[Array, " n"]) -> Num[Array, " n"]:
+        """Element-wise semiring addition (+).
+
+        Parameters
+        ----------
+        x1 : Num[Array, " n"]
+            First input array.
+        x2 : Num[Array, " n"]
+            Second input array.
+
+        Returns
+        -------
+        Num[Array, " n"]
+            Result of semiring addition.
+        """
+
+    @classmethod
+    @abstractmethod
+    def multiply(cls, x1: Num[Array, " n"], x2: Num[Array, " n"]) -> Num[Array, " n"]:
+        """Element-wise semiring multiplication (*).
+
+        Parameters
+        ----------
+        x1 : Num[Array, " n"]
+            First input array.
+        x2 : Num[Array, " n"]
+            Second input array.
+
+        Returns
+        -------
+        Num[Array, " n"]
+            Result of semiring multiplication.
+        """
+
+    @classmethod
+    @abstractmethod
+    def sum(cls, a: Num[Array, " ..."], axis: Axis = None) -> Num[Array, " ..."]:
+        """Sum reduction using semiring addition (+).
+
+        Parameters
+        ----------
+        a : Num[Array, " ..."]
+            Input array.
+        axis : Axis, optional
+            Axis or axes along which to sum. Default is None (sum all).
+
+        Returns
+        -------
+        Num[Array, " ..."]
+            Result of semiring sum.
+        """
+
+    @classmethod
+    @abstractmethod
+    def prod(cls, a: Num[Array, " ..."], axis: Axis = None) -> Num[Array, " ..."]:
+        """Product reduction using semiring multiplication (*).
+
+        Parameters
+        ----------
+        a : Num[Array, " ..."]
+            Input array.
+        axis : Axis, optional
+            Axis or axes along which to multiply. Default is None (product all).
+
+        Returns
+        -------
+        Num[Array, " ..."]
+            Result of semiring product.
+        """
+
+    @classmethod
+    def vdot(cls, a: Num[Array, " n"], b: Num[Array, " n"]) -> Num[Array, ""]:
+        """Compute the dot product of two 1D arrays using the semiring.
+
+        Computes: sum_i (a_i * b_i) using semiring operations.
+
+        Parameters
+        ----------
+        a : Num[Array, " n"]
+            First input array.
+        b : Num[Array, " n"]
+            Second input array.
+
+        Returns
+        -------
+        Num[Array, ""]
+            Scalar result of the semiring dot product.
+        """
+        return cls.sum(cls.multiply(a, b))
+
+    @classmethod
+    def matmul(cls, a: Num[Array, "n k"], b: Num[Array, "k m"]) -> Num[Array, "n m"]:
+        """Compute matrix-semiring product of two arrays.
+
+        This uses vdot (which uses semiring operations) for each row-column pair.
+
+        Parameters
+        ----------
+        a : Num[Array, "n k"]
+            First matrix.
+        b : Num[Array, "k m"]
+            Second matrix.
+
+        Returns
+        -------
+        Num[Array, "n m"]
+            Result of semiring matrix multiplication.
+        """
+        mv = jax.vmap(cls.vdot, (0, None), 0)
+        mm = jax.vmap(mv, (None, 1), 1)
+        c: Num[Array, "n m"] = jax.jit(mm)(a, b)
+        return c
+
+    # Class variables for semiring properties
+    is_additively_idempotent: ClassVar[bool] = False
+    is_multiplicatively_idempotent: ClassVar[bool] = False
+    is_commutative: ClassVar[bool] = False
+    is_simple: ClassVar[bool] = False
+
+
+class AbstractNegation(ABC):
+    """Interface for negation operation (~).
+
+    A negation is an involution on the semiring: ~(~x) = x.
+    """
+
+    @classmethod
+    @abstractmethod
+    def negate(cls, x: Num[Array, "*size"]) -> Num[Array, "*size"]:
+        """Apply negation (~) to an array element-wise.
+
+        Parameters
+        ----------
+        x : Num[Array, "*size"]
+            Input array.
+
+        Returns
+        -------
+        Num[Array, "*size"]
+            Negated array.
+        """
+
+
+class AbstractDeMorganAlgebra(AbstractSemiring, AbstractNegation):
+    """Interface for De Morgan algebras.
+
+    A De Morgan algebra is a semiring with negation where the semiring operations
+    are idempotent and commutative.
+
+    Properties:
+    - Additive idempotence: x + x = x
+    - Multiplicative idempotence: x * x = x
+    - Commutativity: x + y = y + x, x * y = y * x
+    """
+
+    is_additively_idempotent: ClassVar[bool] = True
+    is_multiplicatively_idempotent: ClassVar[bool] = True
+    is_commutative: ClassVar[bool] = True
+    is_simple: ClassVar[bool] = True
+
+
+# Polynomial abstractions (unchanged from abc.py)
+
+
+class AbstractPolynomial(ABC, Generic[S]):
+    """A polynomial with coefficients and the value of variables in `S`, where `S` is a semiring."""
+
+    @property
+    @abstractmethod
+    def support(self) -> set[str]:
+        """Return the list of variables with non-zero coefficients in the polynomial"""
+        ...
+
+    @property
+    @abstractmethod
+    def context(self) -> "PolynomialManager[Self, S]":
+        """Return the reference to the current polynomial context manager"""
+
+    @abstractmethod
+    def declare(self, var: str) -> Self:
+        """Declare a variable for the polynomial."""
+
+    @abstractmethod
+    def top(self) -> Self:
+        """Return the multiplicative identity of the polynomial ring"""
+
+    @abstractmethod
+    def bottom(self) -> Self:
+        """Return the additive identity of the polynomial ring"""
+
+    @abstractmethod
+    def is_bottom(self) -> bool:
+        """Returns `True` if the Polynomial is just the additive identity in the ring."""
+
+    @abstractmethod
+    def is_top(self) -> bool:
+        """Returns `True` if the Polynomial is just the multiplicative identity in the ring."""
+
+    @abstractmethod
+    def const(self, value: S) -> Self:
+        """Return a new constant polynomial with value"""
+
+    @abstractmethod
+    def let(self, mapping: Mapping[str, S | Self]) -> Self:
+        """Substitute variables with constants or other polynomials."""
+
+    @abstractmethod
+    def eval(self, mapping: Mapping[str, S]) -> S:
+        """Evaluate the polynomial with the given variable values.
+
+        !!! note
+
+            Asserts that all variables that form the support of the polynomial are used.
+        """
+
+    @abstractmethod
+    def negate(self) -> Self:
+        """return the negation of the polynomial"""
+
+    @abstractmethod
+    def add(self, other: S | Self) -> Self:
+        """Return the addition (with appropriate ring) of two polynomials."""
+
+    @abstractmethod
+    def multiply(self, other: S | Self) -> Self:
+        """Return the multiplication (with appropriate ring) of two polynomials."""
+
+    def __add__(self, other: S | Self) -> Self:
+        return self.add(other)
+
+    def __radd__(self, other: S | Self) -> Self:
+        return self.add(other)
+
+    def __mul__(self, other: S | Self) -> Self:
+        return self.multiply(other)
+
+    def __rmul__(self, other: S | Self) -> Self:
+        return self.multiply(other)
+
+    def __call__(self, mapping: Mapping[str, S | Self]) -> S | Self:
+        return self.let(mapping)
+
+
+_Poly = TypeVar("_Poly")
+
+
+class PolynomialManager(ABC, Generic[_Poly, S]):
+    """Context manager for polynomials.
+
+    This context allows polynomials represented as decision diagrams to share
+    their structure and, thus, minimize the memory footprint of all the polynomials
+    used in the system.
+    """
+
+    @property
+    @abstractmethod
+    def top(self) -> _Poly:
+        """Return the multiplicative identity of the polynomial ring"""
+
+    @property
+    @abstractmethod
+    def bottom(self) -> _Poly:
+        """Return the additive identity of the polynomial ring"""
+
+    @abstractmethod
+    def is_bottom(self, poly: _Poly) -> bool:
+        """Returns `True` if the Polynomial is just the additive identity in the ring."""
+
+    @abstractmethod
+    def is_top(self, poly: _Poly) -> bool:
+        """Returns `True` if the Polynomial is just the multiplicative identity in the ring."""
+
+    @abstractmethod
+    def const(self, value: S) -> _Poly:
+        """Return a constant in the polynomial"""
+
+    @abstractmethod
+    def var(self, name: str) -> _Poly:
+        """Get the monomial for the variable with the given name"""
+
+    @abstractmethod
+    def declare(self, var: str) -> _Poly:
+        """Declare a variable with the given name"""
+
+    @abstractmethod
+    def let(self, poly: _Poly, mapping: Mapping[str, S | _Poly]) -> _Poly:
+        """Substitute variables with constants or other polynomials."""
+
+    @abstractmethod
+    def negate(self, poly: _Poly) -> _Poly:
+        """return the negation of the polynomial"""
+
+    @abstractmethod
+    def add(self, lhs: _Poly, rhs: _Poly) -> _Poly:
+        """Return the addition (with appropriate ring) of two polynomials."""
+
+    @abstractmethod
+    def multiply(self, lhs: _Poly, rhs: _Poly) -> _Poly:
+        """Return the multiplication (with appropriate ring) of two polynomials."""

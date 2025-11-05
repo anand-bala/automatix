@@ -8,9 +8,9 @@ import equinox as eqx
 import jax.numpy as jnp
 import logic_asts.base as exprs
 from jaxtyping import Array, Num, Scalar
-from logic_asts import Expr
+from logic_asts.base import Expr
 
-from automatix.algebra.semiring.jax_backend import AbstractSemiring
+from automatix.algebra.spec import AbstractSemiring
 
 
 class AbstractPredicate(eqx.Module, strict=True):
@@ -47,10 +47,10 @@ class AbstractPredicate(eqx.Module, strict=True):
                     cache[ex_id] = atoms[name]
                 case exprs.Not(arg):
                     cache[ex_id] = neg_atoms[str(arg)]
-                case exprs.Or(lhs, rhs):
-                    cache[ex_id] = Or([cache[hash(lhs)], cache[hash(rhs)]], algebra)
-                case exprs.And(lhs, rhs):
-                    cache[ex_id] = And([cache[hash(lhs)], cache[hash(rhs)]], algebra)
+                case exprs.Or(args):
+                    cache[ex_id] = Or([cache[hash(arg)] for arg in args], algebra)
+                case exprs.And(args):
+                    cache[ex_id] = And([cache[hash(arg)] for arg in args], algebra)
 
         return cache[hash(expr)]
 

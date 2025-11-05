@@ -1,4 +1,6 @@
 # pyright: reportMissingParameterType=false
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -13,7 +15,7 @@ class LabelExpr(ABC):
     """
 
     @abstractmethod
-    def __init__(self, *args, **kwargs) -> None: ...  # noqa: ANN002, ANN003
+    def __init__(self, *args, **kwargs) -> None: ...  # type: ignore[no-untyped-def] # noqa: ANN002, ANN003
 
     def __invert__(self) -> "LabelExpr":
         match self:

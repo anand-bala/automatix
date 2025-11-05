@@ -5,7 +5,7 @@ SHELL := bash
 MAKEFLAGS += --warn-undefined-variables
 MAKEFLAGS += --no-builtin-rules
 
-EXTRA_UV_FLAGS =
+EXTRA_UV_FLAGS = --extra polynomials
 USE_CUDA ?=
 # If we want to use CUDA, the USE_CUDA variable should not be empty
 ifneq (,$(USE_CUDA))

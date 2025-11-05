@@ -1,17 +1,16 @@
-from typing import Mapping, Self, TypeAlias, final
+from typing import TYPE_CHECKING, Mapping, Self, TypeAlias, final
 
-import dd.autoref as bddlib
 from typing_extensions import override
 
-from automatix.algebra.abc import AbstractPolynomial, PolynomialManager
+from automatix.algebra.spec import AbstractPolynomial, PolynomialManager
 
-# if TYPE_CHECKING:
-#     import dd.autoref as bddlib
-# else:
-#     try:
-#         import dd.cudd as bddlib  # pyright: ignore[reportMissingImports]
-#     except ImportError:
-#         import dd.autoref as bddlib
+if TYPE_CHECKING:
+    import dd.autoref as bddlib
+else:
+    try:
+        import dd.cudd as bddlib  # pyright: ignore[reportMissingImports]
+    except ImportError:
+        import dd.autoref as bddlib
 
 _Poly: TypeAlias = "BooleanPolynomial"
 
@@ -43,11 +42,11 @@ class BooleanPolyCtx(PolynomialManager[_Poly, bool]):
 
     @override
     def is_top(self, poly: _Poly) -> bool:
-        return poly._expr == self._bdd.true
+        return bool(poly._expr == self._bdd.true)
 
     @override
     def is_bottom(self, poly: _Poly) -> bool:
-        return poly._expr == self._bdd.false
+        return bool(poly._expr == self._bdd.false)
 
     @override
     def const(self, value: bool) -> _Poly:
@@ -65,7 +64,7 @@ class BooleanPolyCtx(PolynomialManager[_Poly, bool]):
     @override
     def let(self, poly: _Poly, mapping: Mapping[str, "bool | BooleanPolynomial"]) -> _Poly:
         new_mapping = {name: val if isinstance(val, bool) else val._expr for name, val in mapping.items()}
-        new_func: bddlib.Function = self._bdd.let(new_mapping, poly._expr)  # type: ignore
+        new_func: bddlib.Function = self._bdd.let(new_mapping, poly._expr)  # type: ignore[arg-type]
         return self._wrap(new_func)
 
     @override
@@ -104,7 +103,7 @@ class BooleanPolynomial(AbstractPolynomial[bool]):
     @property
     @override
     def support(self) -> set[str]:
-        return self._bdd.support(self._expr)
+        return set(self._bdd.support(self._expr))
 
     @override
     def declare(self, var: str) -> "BooleanPolynomial":
@@ -120,11 +119,11 @@ class BooleanPolynomial(AbstractPolynomial[bool]):
 
     @override
     def is_top(self) -> bool:
-        return self._expr == self._bdd.true
+        return bool(self._expr == self._bdd.true)
 
     @override
     def is_bottom(self) -> bool:
-        return self._expr == self._bdd.false
+        return bool(self._expr == self._bdd.false)
 
     @override
     def const(self, value: bool) -> "BooleanPolynomial":

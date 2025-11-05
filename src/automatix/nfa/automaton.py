@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import typing
 from collections.abc import Iterable
 from typing import Callable, Optional, Type
 
@@ -12,7 +13,7 @@ from lark.exceptions import LarkError
 from logic_asts.base import Expr
 from typing_extensions import overload
 
-from automatix.algebra.semiring.jax_backend import AbstractSemiring
+from automatix.algebra.spec import AbstractSemiring
 from automatix.nfa.predicate import AbstractPredicate, Predicate
 
 
@@ -68,7 +69,7 @@ class NFA:
         """Get a transition guard or the set of transition guards for each successor state"""
         if dst is None:
             return {succ: guard for _, succ, guard in self._graph.edges(src, "guard")}  # type: ignore[var-annotated]
-        return self._graph.edges[src, dst]["guard"]
+        return typing.cast(Expr, self._graph.edges[src, dst]["guard"])
 
     @property
     def transitions(self) -> Iterable[tuple[int, int, Expr]]:

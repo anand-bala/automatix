@@ -132,7 +132,7 @@ class AbstractPolynomial(ABC, Generic[S]):
         return self.let(mapping)
 
 
-_Poly = TypeVar("_Poly", bound=AbstractPolynomial)
+_Poly = TypeVar("_Poly")
 
 
 class PolynomialManager(ABC, Generic[_Poly, S]):

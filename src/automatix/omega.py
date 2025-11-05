@@ -165,9 +165,8 @@ class AcceptanceCondition(ABC):
     def __len__(self) -> int: ...
 
     @staticmethod
-    def from_name(name: str, props: list[bool | int | str] | None = None) -> "AcceptanceCondition":
-        if props is None:
-            props = []
+    def from_name(name: str, *args: bool | int | str) -> "AcceptanceCondition":
+        props = args
         match name:
             case "Buchi":
                 return Buchi()
@@ -356,3 +355,11 @@ class Parity(AcceptanceCondition):
                 res = res & Fin(i)
 
         return res
+
+
+class OmegaAutomaton(ABC):
+    """Abstract omega automaton that can be combined with `WordAutomaton` to create an omega word automaton"""
+
+    @abstractmethod
+    def acceptance_condition(self) -> AcceptanceCondition:
+        """Return the acceptance condition of the omega automaton"""

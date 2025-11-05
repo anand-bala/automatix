@@ -1,5 +1,6 @@
 # pyright: reportExplicitAny=false
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -90,7 +91,7 @@ class ParsedAutomaton:
     body: dict[State, list[Transition]]
 
 
-class AstTransformer(Transformer):  # pyright: ignore[reportMissingTypeArgument]
+class AstTransformer(Transformer[Token, ParseTree]):
     def __init__(self, visit_tokens: bool = True) -> None:
         super().__init__(visit_tokens)
         self._aliases: dict[str, LabelExpr] = dict()
@@ -114,8 +115,10 @@ class AstTransformer(Transformer):  # pyright: ignore[reportMissingTypeArgument]
         if not hasattr(self, "_acc") or not hasattr(self, "_num_accept_sets"):
             raise MissingHeaderError("Acceptance")
         if self._acc_name is not None:
+            acc_name: str
+            acc_props: Iterable[bool | int | str] | None
             acc_name, acc_props = self._acc_name
-            acc = AcceptanceCondition.from_name(acc_name, acc_props)
+            acc = AcceptanceCondition.from_name(acc_name, *(acc_props or ()))
             assert acc.to_expr() == self._acc
         else:
             acc = GenericCondition(self._num_accept_sets, self._acc)

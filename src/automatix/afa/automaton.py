@@ -1,6 +1,6 @@
 from typing import Generic, Protocol, TypeVar, runtime_checkable
 
-from automatix.algebra.abc import AbstractPolynomial
+from automatix.algebra.spec import AbstractPolynomial
 
 Alph = TypeVar("Alph", contravariant=True)
 Q = TypeVar("Q", contravariant=True)

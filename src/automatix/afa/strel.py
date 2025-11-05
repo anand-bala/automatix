@@ -12,8 +12,8 @@ import logic_asts.strel as strel
 import networkx as nx
 
 from automatix.afa.automaton import AFA, AbstractTransition
-from automatix.algebra.abc import AbstractPolynomial, PolynomialManager
 from automatix.algebra.polynomials.boolean import BooleanPolyCtx
+from automatix.algebra.spec import AbstractPolynomial, PolynomialManager
 
 K = TypeVar("K")
 
@@ -49,26 +49,27 @@ class Transitions(AbstractTransition[Alph, Q, K]):
         # If expr is temporal, the visitor should add the argument variables to the const_mapping dict
         match expr:
             case strel.Literal(value):
-                if value:
-                    return self.manager.top
-                else:
-                    return self.manager.bottom
+                return self.manager.top if value else self.manager.bottom
             case strel.Variable(name):
                 return self.manager.const(self.label_fn(input, loc, name))
             case strel.Not(arg):
-                return self(input, (arg, loc)).negate()
-            case strel.And(lhs, rhs):
-                return self(input, (lhs, loc)) * self(input, (rhs, loc))
-            case strel.Or(lhs, rhs):
-                return self(input, (lhs, loc)) + self(input, (rhs, loc))
+                return self.__call__(input, (arg, loc)).negate()
+            case strel.And(args):
+                ret = self.manager.top
+                [ret := ret * self.__call__(input, (arg, loc)) for arg in args]
+                return ret
+            case strel.Or(args):
+                ret = self.manager.bottom
+                [ret := ret + self.__call__(input, (arg, loc)) for arg in args]
+                return ret
             case strel.Everywhere(arg, interval):
                 alias = ~strel.Somewhere(~arg, interval)
                 self._add_expr_alias(expr, alias)
-                return self(input, (alias, loc))
+                return self.__call__(input, (alias, loc))
             case strel.Somewhere(arg, interval):
                 alias = strel.Reach(strel.Literal(True), arg, interval)
                 self._add_expr_alias(expr, alias)
-                return self(input, (alias, loc))
+                return self.__call__(input, (alias, loc))
             case strel.Escape():
                 return self._expand_escape(input, expr, loc)
             case strel.Reach():
@@ -85,13 +86,14 @@ class Transitions(AbstractTransition[Alph, Q, K]):
                 # Create an alias to ~F[a, b] ~arg
                 alias = ~strel.Eventually(~arg, interval)
                 self._add_expr_alias(expr, alias)
-                return self(input, (alias, loc))
+                return self.__call__(input, (alias, loc))
             case strel.Eventually():
                 return self._expand_eventually(input, expr, loc)
             case strel.Until():
                 return self._expand_until(input, expr, loc)
-            case e:
-                raise TypeError(f"Unknown expression type {type(e)}")
+            case _:
+                raise TypeError(f"Unknown expression type {type(expr)}")
+        raise TypeError(f"Unknown expression type {type(expr)}")
 
     def var(self, state: Q) -> Poly[K]:
         """Get polynomial variable for the given state, adding a new one if needed"""
@@ -128,9 +130,9 @@ class Transitions(AbstractTransition[Alph, Q, K]):
             path = [loc] + [e[1] for e in edge_path]
             # print(f"{path=}")
             # Path expr checks if last node satisfies rhs and all others satisfy lhs
-            path_expr = self(input, (phi.rhs, path[-1]))
+            path_expr = self.__call__(input, (phi.rhs, path[-1]))
             for l_p in reversed(path[:-1]):
-                path_expr *= self(input, (phi.lhs, l_p))
+                path_expr *= self.__call__(input, (phi.lhs, l_p))
             expr += path_expr
             # Break early if TOP/True
             if expr.is_top():
@@ -139,7 +141,7 @@ class Transitions(AbstractTransition[Alph, Q, K]):
 
     def _expand_escape(self, input: Alph, phi: strel.Escape, loc: Location) -> Poly[K]:
         def delta(expr: strel.Expr, loc: Location) -> Poly[K]:
-            return self(input, (expr, loc))
+            return self.__call__(input, (expr, loc))
 
         d1 = phi.interval.start or 0.0
         d2 = phi.interval.end or math.inf
@@ -150,7 +152,7 @@ class Transitions(AbstractTransition[Alph, Q, K]):
         targets = {d for d, dist in shortest_lengths.items() if d1 <= dist <= d2}
         # Make the symbolic expressions for each path, with the terminal one being for the rhs
         expr = self.manager.bottom
-        for path in nx.all_simple_paths(input, source=loc, target=targets):  # type: ignore
+        for path in nx.all_simple_paths(input, source=loc, target=targets):
             # print(f"{path=}")
             # Path expr checks if all locations satisfy arg
             init = delta(phi.arg, path[0])
@@ -168,10 +170,10 @@ class Transitions(AbstractTransition[Alph, Q, K]):
         #                          ^^^^^^^^^^^^^^^^^^^^^^^
         #                                  b-a times
         def delta(expr: strel.Expr) -> Poly[K]:
-            return self(input, (expr, loc))
+            return self.__call__(input, (expr, loc))
 
         if phi.interval is None:
-            start, end = 0, None
+            start, end = 0, None  # type: ignore[unreachable]
         else:
             start, end = phi.interval.start or 0, phi.interval.end
 
@@ -217,10 +219,10 @@ class Transitions(AbstractTransition[Alph, Q, K]):
         # lhs U[t1, t2] rhs = (F[t1,t2] rhs) & (lhs U[t1,] rhs)
         # lhs U[t1,  ] rhs = ~F[0,t1] ~(lhs U rhs)
         def delta(expr: strel.Expr) -> Poly[K]:
-            return self(input, (expr, loc))
+            return self.__call__(input, (expr, loc))
 
         if phi.interval is None:
-            start, end = 0, None
+            start, end = 0, None  # type: ignore[unreachable]
         else:
             start, end = phi.interval.start or 0, phi.interval.end
 
@@ -278,7 +280,7 @@ class StrelAutomaton(AFA[Alph, Q, K]):
     ) -> None:
         super().__init__(transitions)
 
-        self._transitions: Transitions = transitions
+        self._transitions: Transitions[K] = transitions
         self.initial_expr = initial_expr
         self.var_node_map = self._transitions.var_node_map
         self._manager = self._transitions.manager
@@ -325,7 +327,7 @@ class StrelAutomaton(AFA[Alph, Q, K]):
         label_fn: LabellingFn[K],
         manager: Manager[K],
         dist_attr: str = "hop",
-    ) -> "StrelAutomaton":
+    ) -> "StrelAutomaton[K]":
         """Convert a STREL expression to an AFA with the given alphabet"""
 
         aut = cls(
