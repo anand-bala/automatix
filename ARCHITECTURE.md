@@ -25,20 +25,27 @@ src/automatix/algebra/
 │   ├── _base.py               Shared utilities
 │   ├── jax_.py                JAX semirings (production)
 │   ├── torch_.py              PyTorch semirings (v0.6.0)
-│   └── numpy_.py              NumPy semirings (v0.6.0)
+│   ├── numpy_.py              NumPy semirings (v0.6.0)
+│   └── jax_kernels/           JAX-specific optimizations
+│       ├── __init__.py
+│       ├── logsumexp.py       Custom logsumexp with proper gradients
+│       ├── logsumexp.pyi
+│       ├── utils.py           Shared kernel utilities
+│       ├── maxplus.py         MaxPlus kernels (planned v0.6.0+)
+│       └── log_semiring.py    LogSemiring kernels (planned v0.6.0+)
 │
 ├── abstract/                   Non-backend-specific abstractions
 │   ├── __init__.py
 │   └── polynomial.py          Polynomial abstractions
 │
-├── semiring/                   Legacy module (backward compat)
-│   ├── __init__.py
-│   ├── jax_backend.py         Deprecated (re-exports from backends/)
+├── semiring/                   Legacy module (deprecated - will be removed)
+│   ├── __init__.py            Re-exports from backends/jax_.py
+│   ├── jax_backend.py         Re-exports from backends/jax_.py
 │   ├── numpy_backend.py       Deprecated (empty)
 │   ├── torch_backend.py       Deprecated (empty)
-│   └── utils/
+│   └── utils/                 Moved to backends/jax_kernels/
 │       ├── __init__.py
-│       ├── logsumexp.py       Custom JAX logsumexp with proper gradients
+│       ├── logsumexp.py       (MOVED - kept for backward compat reference only)
 │       └── logsumexp.pyi
 │
 └── polynomials/               Polynomial implementations
@@ -145,6 +152,34 @@ Stub for NumPy-based semirings. Will include:
 - CPU-only operations
 - Efficient einsum-based matrix operations
 - Lower memory footprint for large automata
+
+### JAX Kernels (jax_kernels/) - EXTENSIBLE
+
+Dedicated package for custom forward/backward pass implementations:
+
+Current implementations:
+- **logsumexp.py** - Custom logsumexp with proper gradient handling using jax.custom_vjp
+- **utils.py** - Shared kernel utilities (decorator, helpers for gradient computation)
+
+Planned optimizations (v0.6.0+):
+- **maxplus.py** - MaxPlus-specific forward/backward kernels
+- **log_semiring.py** - LogSemiring numerical stability optimizations
+
+This structure scales for adding specialized kernels:
+
+```python
+from automatix.algebra.backends.jax_kernels import kernel, logsumexp
+
+@kernel
+def forward_maxplus_custom(x, y):
+    # Custom optimized implementation
+    return jnp.maximum(x, y)
+
+@kernel
+def backward_maxplus_custom(grad_out, x, y):
+    # Efficient gradient computation
+    ...
+```
 
 ## Semiring Registry (registry.py)
 

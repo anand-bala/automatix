@@ -1,3 +1,5 @@
+# generated type stubs
+/typings/
 # pixi environments
 .pixi
 
