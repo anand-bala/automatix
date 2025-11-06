@@ -80,6 +80,7 @@ extend-ignore = ["F722"]
 [tool.ruff.lint.extend-per-file-ignores]
 "*.py" = ["B905", "E203", "E501", "W291", "W293"]
 "*.pyi" = ["B", "E501", "E701"]
+"examples/**.py" = ["N806"]
 
 [tool.pyright]
 include = ["src", "examples"]

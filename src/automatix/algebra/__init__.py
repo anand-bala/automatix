@@ -18,15 +18,6 @@ Quick start:
     result = MaxPlus.matmul(weights, weights)
 """
 
-# Core abstractions
-from automatix.algebra.abstract import (
-    AbstractDeMorganAlgebra,
-    AbstractNegation,
-    AbstractPolynomial,
-    AbstractSemiring,
-    PolynomialManager,
-)
-
 # JAX semirings (currently the primary backend)
 from automatix.algebra.backends.jax_ import (
     CountingSemiring,
@@ -55,6 +46,15 @@ from automatix.algebra.registry import (
     list_semirings,
     register,
     unregister,
+)
+
+# Core abstractions
+from automatix.algebra.spec import (
+    AbstractDeMorganAlgebra,
+    AbstractNegation,
+    AbstractPolynomial,
+    AbstractSemiring,
+    PolynomialManager,
 )
 
 __all__ = [

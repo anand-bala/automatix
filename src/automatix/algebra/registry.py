@@ -154,7 +154,7 @@ def get_available_backends() -> list[str]:
 def _register_jax_semirings() -> None:
     """Register all built-in JAX semirings."""
     # Import here to avoid circular imports
-    from automatix.algebra.semiring.jax_backend import (
+    from automatix.algebra.backends.jax_ import (
         CountingSemiring,
         LatticeAlgebra,
         LeftLSEMaxMinSemiring,
@@ -164,6 +164,7 @@ def _register_jax_semirings() -> None:
         MaxMinAlgebra,
         MaxMinSemiring,
         MaxPlusSemiring,
+        MinPlusSemiring,
         RightLSEMaxMinSemiring,
         RightMaxMinSemiring,
     )
@@ -177,6 +178,7 @@ def _register_jax_semirings() -> None:
     register("LeftLSEMaxMin", "jax")(LeftLSEMaxMinSemiring)
     register("RightLSEMaxMin", "jax")(RightLSEMaxMinSemiring)
     register("MaxPlus", "jax")(MaxPlusSemiring)
+    register("MinPlus", "jax")(MinPlusSemiring)
     register("Log", "jax")(LogSemiring)
     register("Lattice", "jax")(LatticeAlgebra)
 

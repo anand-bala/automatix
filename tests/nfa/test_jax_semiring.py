@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from automatix.algebra.semiring.jax_backend import CountingSemiring
+from automatix.algebra.backends.jax_ import CountingSemiring
 
 
 @pytest.mark.parametrize(

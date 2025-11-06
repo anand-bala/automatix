@@ -1,12 +1,23 @@
+from typing import Type
+
+import jax
 import jax.nn
 import jax.numpy as jnp
 import logic_asts.base as logic
+import pytest
 from jaxtyping import Array, Num, Scalar
 from typing_extensions import TypeAlias
 
-from automatix.algebra.semiring.jax_backend import MaxPlusSemiring
-from automatix.nfa import Predicate
-from automatix.nfa.automaton import NFA, make_automaton_operator
+from automatix.algebra.backends.jax_ import (
+    CountingSemiring,
+    LogSemiring,
+    MaxMinSemiring,
+    MaxPlusSemiring,
+    MinPlusSemiring,
+)
+from automatix.algebra.spec import AbstractSemiring
+from automatix.nfa import NFA, make_automaton_operator
+from automatix.predicates import ExprWeightFn, Predicate
 
 Box: TypeAlias = Num[Array, " 4"]
 Circle: TypeAlias = Num[Array, " 3"]
@@ -95,20 +106,21 @@ def make_circle_predicate(circle: Circle) -> tuple[Predicate, Predicate]:
     return Predicate(inside), Predicate(outside)
 
 
-def test_weight_fn() -> None:
-    sequential_aut = NFA()
-    sequential_aut.add_location(0, initial=True)
-    sequential_aut.add_location(1)
-    sequential_aut.add_location(2)
-    sequential_aut.add_location(3, final=True)
+@pytest.fixture
+def sequential_aut() -> tuple[NFA, dict[str, Predicate], dict[str, Predicate]]:
+    aut = NFA()
+    aut.add_location(0, initial=True)
+    aut.add_location(1)
+    aut.add_location(2)
+    aut.add_location(3, final=True)
 
-    sequential_aut.add_transition(0, 0, guard="~red")
-    sequential_aut.add_transition(0, 1, guard="red")
-    sequential_aut.add_transition(1, 1, guard="~green")
-    sequential_aut.add_transition(1, 2, guard="green")
-    sequential_aut.add_transition(2, 2, guard="~orange")
-    sequential_aut.add_transition(2, 3, guard="orange")
-    sequential_aut.add_transition(3, 3, guard=logic.Literal(True))
+    aut.add_transition(0, 0, guard="~red")
+    aut.add_transition(0, 1, guard="red")
+    aut.add_transition(1, 1, guard="~green")
+    aut.add_transition(1, 2, guard="green")
+    aut.add_transition(2, 2, guard="~orange")
+    aut.add_transition(2, 3, guard="orange")
+    aut.add_transition(3, 3, guard=logic.Literal(True))
 
     in_red, out_red = make_box_predicate(RED_BOX)
     in_green, out_green = make_box_predicate(GREEN_BOX)
@@ -116,25 +128,40 @@ def test_weight_fn() -> None:
 
     atoms = dict(red=in_red, green=in_green, orange=in_orange)
     neg_atoms = dict(red=out_red, green=out_green, orange=out_orange)
+    return aut, atoms, neg_atoms
 
-    operator = make_automaton_operator(
-        sequential_aut,
-        MaxPlusSemiring,
+
+@pytest.mark.parametrize(
+    "semiring",
+    [CountingSemiring, MaxPlusSemiring, LogSemiring, MaxMinSemiring, MinPlusSemiring],
+    ids=["CountingSemiring", "MaxPlusSemiring", "LogSemiring", "MaxMinSemiring", "MinPlusSemiring"],
+)
+def test_expr_weight_fn(
+    semiring: Type[AbstractSemiring],
+    sequential_aut: tuple[NFA, dict[str, Predicate], dict[str, Predicate]],
+) -> None:
+    aut, atoms, neg_atoms = sequential_aut
+    weight_fn = ExprWeightFn(
         atoms=atoms,
         neg_atoms=neg_atoms,
+        semiring=semiring,
+    )
+    operator = make_automaton_operator(
+        aut,
+        semiring,
+        weight_function=weight_fn,
     )
 
     assert operator.initial_weights.shape == (4,)
-    assert operator.initial_weights[0] == MaxPlusSemiring.ones(1).item()
+    assert operator.initial_weights[0] == semiring.ones(1).item()
     assert operator.final_weights.shape == (4,)
-    assert operator.final_weights[3] == MaxPlusSemiring.ones(1).item()
+    assert operator.final_weights[3] == semiring.ones(1).item()
 
     transitions = jax.jit(operator.cost_transitions)
-    # transitions = operator.cost_transitions
 
     n_timesteps = 1500
 
-    # We will generate a trajectory of a circle of radius 0.75 starting at theta = -pi/2 to pi
+    # Generate a trajectory of a circle of radius 0.75 starting at theta = -pi/2 to pi
     angles = jnp.linspace(-jnp.pi / 2, jnp.pi * 3 / 2, n_timesteps)
     xs = jnp.cos(angles)
     ys = jnp.sin(angles)
@@ -146,12 +173,6 @@ def test_weight_fn() -> None:
     deltas = jax.vmap(transitions)(trajectory)
     assert deltas.shape == (n_timesteps, 4, 4)
 
-    weights, _ = jax.lax.scan(
-        lambda x, y: (MaxPlusSemiring.matmul(x, y), None), operator.initial_weights.reshape(1, -1), deltas
-    )
-    weight = MaxPlusSemiring.vdot(weights.squeeze(), operator.final_weights)
+    weights, _ = jax.lax.scan(lambda x, y: (semiring.matmul(x, y), None), operator.initial_weights.reshape(1, -1), deltas)
+    weight = semiring.vdot(weights.squeeze(), operator.final_weights)
     assert weight.size == 1
-
-
-if __name__ == "__main__":
-    test_weight_fn()

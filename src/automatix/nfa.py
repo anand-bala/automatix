@@ -14,7 +14,7 @@ from logic_asts.base import Expr
 from typing_extensions import overload
 
 from automatix.algebra.spec import AbstractSemiring
-from automatix.nfa.predicate import AbstractPredicate, Predicate
+from automatix.weights import WeightFunction
 
 
 class NFA:
@@ -86,11 +86,31 @@ def make_automaton_operator(
     aut: NFA,
     semiring: Type[AbstractSemiring],
     *,
-    atoms: dict[str, Predicate],
-    neg_atoms: dict[str, Predicate],
+    weight_function: WeightFunction,
     initial_weights: Optional[Num[Array, " {len(aut)}"]] = None,
     final_weights: Optional[Num[Array, " {len(aut)}"]] = None,
 ) -> AutomatonOperator:
+    """Create an automaton operator from an NFA and weight function.
+
+    Parameters
+    ----------
+    aut : NFA
+        The nondeterministic finite automaton defining guards and transitions.
+    semiring : Type[AbstractSemiring]
+        The semiring for output values.
+    weight_function : WeightFunction
+        A function mapping (input_symbol, guard) to semiring values.
+        Implements lambda(x, Delta) from weighted automata theory.
+    initial_weights : Optional[Array], optional
+        Initial state weights. If None, set to 1 at initial locations.
+    final_weights : Optional[Array], optional
+        Final state weights. If None, set to 1 at final locations.
+
+    Returns
+    -------
+    AutomatonOperator
+        An operator that computes weighted transitions for inputs.
+    """
     n_q = aut.num_locations
 
     if initial_weights is None:
@@ -103,22 +123,28 @@ def make_automaton_operator(
     assert initial_weights.shape == (n_q,)
     assert final_weights.shape == (n_q,)
 
-    weight_fns: dict[tuple[int, int], AbstractPredicate] = dict()
-    for src, dst, guard in aut.transitions:
-        weight_fns[(src, dst)] = AbstractPredicate.from_expr(
-            guard,
-            atoms=atoms,
-            neg_atoms=neg_atoms,
-            algebra=semiring,
-        )
+    # Build list of transitions for use in cost_transitions
+    transitions_list = list(aut.transitions)
 
     def cost_transitions(x: Num[Array, "..."]) -> Num[Array, " {n_q} {n_q}"]:
-        src: int
-        dst: int
-        weight: AbstractPredicate
+        """Compute transition matrix for input x using weight_function.
+
+        Parameters
+        ----------
+        x : Array
+            Input symbol (vector in state space).
+
+        Returns
+        -------
+        Array
+            q x q weighted transition matrix where element [i,j] is
+            weight_function(x, guard_{i,j}).
+        """
         matrix = semiring.zeros((n_q, n_q))
-        for (src, dst), weight in weight_fns.items():
-            matrix = matrix.at[src, dst].set(weight(x))
+        for src, dst, guard in transitions_list:
+            # Apply weight function: lambda(x, guard)
+            weight = weight_function(x, guard)
+            matrix = matrix.at[src, dst].set(weight)
 
         return matrix
 

@@ -218,6 +218,44 @@ class MaxPlusSemiring(AbstractSemiring):
     is_simple = True
 
 
+class MinPlusSemiring(AbstractSemiring):
+    r"""Implementation of the min-plus tropical semiring (R_>=0 cup {-inf, inf}, min, +, inf, 0)."""
+
+    @override
+    @staticmethod
+    def zeros(shape: Shape) -> Num[Array, "..."]:
+        return jnp.full(shape, fill_value=jnp.inf)
+
+    @override
+    @staticmethod
+    def ones(shape: Shape) -> Num[Array, "..."]:
+        return jnp.full(shape, fill_value=0.0)
+
+    @override
+    @classmethod
+    def add(cls, x1: Num[Array, " n"], x2: Num[Array, " n"]) -> Num[Array, " n"]:
+        return jnp.minimum(x1, x2)
+
+    @override
+    @classmethod
+    def multiply(cls, x1: Num[Array, " n"], x2: Num[Array, " n"]) -> Num[Array, " n"]:
+        return jnp.add(x1, x2)
+
+    @override
+    @classmethod
+    def sum(cls, a: Num[Array, " ..."], axis: Axis = None) -> Num[Array, " ..."]:
+        return jnp.amin(a, axis=axis)
+
+    @override
+    @classmethod
+    def prod(cls, a: Num[Array, " ..."], axis: Axis = None) -> Num[Array, " ..."]:
+        return jnp.sum(a, axis=axis)
+
+    is_additively_idempotent = True
+    is_commutative = True
+    is_simple = True
+
+
 class LogSemiring(AbstractSemiring):
     r"""Implementation of the log semiring (R_<=0 cup {-inf, inf}, logsumexp, +, -inf, 0)."""
 
