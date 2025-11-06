@@ -1,15 +1,39 @@
-# Automatix Algebra Module Architecture
+# Automatix Architecture Documentation
 
 ## Overview
 
-The `automatix.algebra` module has been refactored (v0.5.0) to provide:
+The `automatix` library (v0.5.0) provides:
 
-1. **Pure interface definitions** (spec.py)
-2. **Centralized semiring registry** (registry.py)
-3. **Modular backend implementations** (backends/)
-4. **Clear separation of concerns**
+1. **Top-level abstractions** (weights.py) - WeightFunction definitions
+2. **Algebra module** (algebra/) - Pure interface definitions and semiring registry
+3. **NFA module** (nfa/) - Finite automaton implementations
+4. **Clear separation of concerns** - Guards, weights, and semirings are decoupled
 
-This architecture enables pluggable backend support (JAX, PyTorch, NumPy) while maintaining a clean public API.
+This architecture enables:
+- Pluggable backend support (JAX, PyTorch, NumPy)
+- Flexible weight function patterns
+- Clean public API
+
+---
+
+## Weight Functions Architecture (Phase 2)
+
+**Location**: `src/automatix/weights.py` (top-level module)
+
+**Key Types**:
+- `InputSymbol` - Concrete input data (vector in state space)
+- `Guard` - Guard expression (str or logic_asts.Expr)
+- `SemiringValue` - Weight value in target semiring
+- `WeightFunction = Callable[[InputSymbol, Guard], SemiringValue]`
+
+**Rationale for Top-Level Placement**:
+- Weight functions bridge both NFA and AFA modules
+- They explicitly reason about guards (fundamental to automata)
+- Provides natural import: `from automatix import WeightFunction`
+
+---
+
+## Automatix Algebra Module Architecture
 
 ## Directory Structure
 
@@ -428,3 +452,57 @@ def vdot(a: Num[Array, " n"], b: Num[Array, " n"]) -> Num[Array, ""]:
 - **Gradient tests** - Autodiff correctness
 
 See `tests/algebra/` for detailed test organization.
+
+---
+
+## Polynomial Representations (Future Work - v0.8.0)
+
+### Current State (v0.5.0)
+
+The AFA module uses polynomial representations via the `dd` package:
+- **Current**: Boolean Decision Diagrams (BDDs) for Boolean polynomials
+- **Limitation**: BDD properties (canonicity, efficiency) don't hold for arbitrary semirings
+- **Scope**: AFA module is STREL-specific and Boolean-only
+
+### Design Blockers for Generalization
+
+To support AFA with arbitrary semirings, we need:
+
+1. **Custom Polynomial Representations**
+   - BDDs require properties: idempotence, commutativity, specific absorption laws
+   - Not all semirings satisfy these properties
+   - Example: Min-Max (tropical) semiring needs different representation
+
+2. **Algebra Class Implementations**
+   - De Morgan algebras (min-max, soft min-max)
+   - Boolean algebra specializations
+   - Ring algebra support
+   - Each requires custom polynomial encoding
+
+3. **Operations**
+   - Polynomial operations over semiring operations
+   - Negation handling (De Morgan's laws)
+   - Simplification/canonicalization strategies
+
+### Path to v0.8.0
+
+1. **Design Phase**
+   - Research polynomial representations for different algebra classes
+   - Document requirements per semiring family
+   - Define abstract polynomial interface
+
+2. **Implementation Phase**
+   - Implement custom polynomial classes for key semiring families
+   - Create De Morgan algebra support
+   - Add Boolean algebra specializations
+
+3. **Integration Phase**
+   - Generalize AFA beyond STREL
+   - Connect with weight function abstraction (if applicable)
+   - Create comprehensive test suite
+
+### References
+
+- STREL-AFA paper: `.cache/strel-afa/` (archived)
+- Current AFA implementation: `src/automatix/afa/strel.py` (Boolean-only)
+- Polynomial theory: Golan, Kuich references in paper bibliography
