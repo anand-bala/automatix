@@ -136,8 +136,12 @@ class AstTransformer(Transformer[Token, ParseTree]):
         if version != "v1":
             raise IncorrectVersionError
 
-    def num_states(self, value: int) -> None:
-        assert isinstance(value, int) and value > 0
+    def num_states(self, value: int | Iterable[int]) -> None:
+        if isinstance(value, Iterable):
+            value = list(value)
+            assert len(value) == 1
+            value = value[0]
+        assert isinstance(value, int) and value > 0, f"{value=}"
         if self._num_states is not None:
             raise DuplicateHeaderError("States")
         else:
