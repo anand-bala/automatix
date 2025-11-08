@@ -16,7 +16,7 @@ from automatix.algebra.backends.jax_ import (
     MinPlusSemiring,
 )
 from automatix.algebra.spec import AbstractSemiring
-from automatix.nfa import NFA, make_automaton_operator
+from automatix.automata.finite_word import NFA, make_automaton_operator
 from automatix.predicates import ExprWeightFn, Predicate
 
 Box: TypeAlias = Num[Array, " 4"]

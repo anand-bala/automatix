@@ -147,7 +147,7 @@ class Transitions(AbstractTransition[Alph, Q, K]):
         d2 = phi.interval.end or math.inf
 
         # get a list of target locations that meet the distance constraint
-        shortest_lengths: Mapping[Location, int] = nx.shortest_path_length(input, source=loc, weight=None)
+        shortest_lengths: Mapping[Location, int] = nx.shortest_path_length(input, source=loc, weight=None)  # type: ignore
         assert isinstance(shortest_lengths, Mapping)
         targets = {d for d, dist in shortest_lengths.items() if d1 <= dist <= d2}
         # Make the symbolic expressions for each path, with the terminal one being for the rhs

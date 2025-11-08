@@ -1,4 +1,4 @@
-"""Weight function demonstrations for Phase 2.
+"""
 
 This example demonstrates the correct weight function design where:
 - Weight functions map (input_symbol, guard) to semiring values
@@ -17,7 +17,7 @@ import jax.numpy as jnp
 import logic_asts.base as logic
 
 from automatix.algebra.backends.jax_ import MaxPlusSemiring
-from automatix.nfa import NFA, make_automaton_operator
+from automatix.automata.finite_word import NFA, make_automaton_operator
 from automatix.weights import Guard, InputSymbol, SemiringValue, WeightFunction
 
 

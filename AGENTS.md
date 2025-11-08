@@ -235,23 +235,29 @@ Run examples:
 ## Next Steps (v0.6.0 and Beyond)
 
 1. **Phase 3 (v0.6.0)**:
-   Multi-backend support
-   - PyTorch backend implementation
-   - NumPy backend implementation
-   - Cross-backend testing
+   AFA Implementation - Multilinear Polynomials
+   - Optimized JAX kernels for semiring operations (prerequisite)
+   - MultilinearPolynomial data structure and monomial basis indexing
+   - Evaluation algorithms (Algorithms 1 and 4 from Gillespie 2023)
+   - Polynomial substitution and like-term collection
+   - PolynomialAutomatonOperator and AFA integration
+   - STREL to AFA translation (basic, Boolean only)
+   - **Constraint**: Only distributive lattice semirings (idempotent oplus/otimes)
+   - **Reference**: `.cache/AFA_POLYNOMIAL_ARCHITECTURE.md`
 
 2. **Phase 4 (v0.7.0)**:
-   Polish and Release
-   - Final testing and documentation
-   - Migration guide for v0.5.0 -> v0.6.0
-   - Release preparation
+   Multi-backend support (PyTorch)
+   - Port optimized JAX kernels to PyTorch
+   - Cross-backend semiring testing
+   - Performance benchmarking
+   - **Note**: NumPy backend deferred (JAX on CPU is effective)
 
 3. **Phase 5 (v0.8.0)**:
-   AFA Generalization
-   - Custom polynomial representations
-   - De Morgan algebra implementations
-   - AFA extension beyond STREL
-   - Weight function integration (if applicable)
+   Omega-Regular Automata
+   - BuchiNFA and co-Büchi support
+   - Limit-based weight semantics
+   - OmegaAutomatonOperator
+   - Tree automata exploration (if scoped)
 
 ## References
 

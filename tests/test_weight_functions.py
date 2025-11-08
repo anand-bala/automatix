@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import logic_asts.base as logic
 
 from automatix.algebra.backends.jax_ import MaxPlusSemiring
-from automatix.nfa import NFA, make_automaton_operator
+from automatix.automata.finite_word import NFA, make_automaton_operator
 from automatix.weights import Guard, InputSymbol, SemiringValue
 
 
