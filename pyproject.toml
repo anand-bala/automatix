@@ -3,7 +3,7 @@ name = "argus-automatix"
 authors = [{ name = "Anand Balakrishnan", email = "anandbala1597@gmail.com" }]
 description = "Symbolic (weighted) automata monitors"
 version = "0.4.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 dependencies = [
   "typing-extensions",
@@ -14,7 +14,7 @@ dependencies = [
   "equinox>=0.11",
   "networkx",
   "lark",
-  "logic-asts>=1.0.0",
+  "logic-asts>=1.1.0",
 ]
 
 [project.optional-dependencies]
@@ -84,7 +84,7 @@ extend-ignore = ["F722"]
 
 [tool.pyright]
 include = ["src", "examples"]
-pythonVersion = "3.10"
+pythonVersion = "3.11"
 pythonPlatform = "All"
 reportUnknownMemberType = false
 reportUnknownParameterType = false
