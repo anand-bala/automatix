@@ -30,6 +30,7 @@ name = "argus-automatix"
 version = "0.4.0"
 source = { editable = "." }
 dependencies = [
+    { name = "attrs" },
     { name = "equinox" },
     { name = "jax", version = "0.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13'" },
     { name = "jax", version = "0.6.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13'" },
@@ -78,6 +79,7 @@ examples = [
 
 [package.metadata]
 requires-dist = [
+    { name = "attrs", specifier = ">=25.4.0" },
     { name = "dd", marker = "extra == 'polynomials'" },
     { name = "equinox", specifier = ">=0.11" },
     { name = "jax", specifier = ">=0.4" },
