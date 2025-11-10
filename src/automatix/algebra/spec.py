@@ -5,19 +5,24 @@ must follow. These are pure interfaces with no implementation.
 """
 # ruff: noqa: ANN401
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any, Generic, Mapping, Protocol, TypeVar, Union, runtime_checkable
+from typing import TYPE_CHECKING, Any, Generic, Mapping, Protocol, TypeVar, runtime_checkable
 
 import jax
 from jaxtyping import Array, Num
 from typing_extensions import ClassVar, Self, TypeAlias
 
+if TYPE_CHECKING:
+    from automatix.algebra.kernels import AlgebraicStructure
+
 # Type variables for semiring elements
 S = TypeVar("S")
 
 # Type aliases for JAX arrays
-Axis: TypeAlias = Union[None, int, tuple[int, ...]]
-Shape: TypeAlias = Union[int, tuple[int, ...]]
+Axis: TypeAlias = None | int | tuple[int, ...]
+Shape: TypeAlias = int | tuple[int, ...]
 
 
 class AbstractSemiring(ABC):
@@ -178,6 +183,58 @@ class AbstractSemiring(ABC):
         mm = jax.vmap(mv, (None, 1), 1)
         c: Num[Array, "n m"] = jax.jit(mm)(a, b)
         return c
+
+    @classmethod
+    def to_kernel(cls) -> AlgebraicStructure:
+        """Convert this semiring class to a GPU-optimized kernel.
+
+        Returns an AlgebraicStructure instance that encodes the semiring's
+        operations in a form suitable for JAX/GPU computation.
+
+        The default implementation creates a kernel from the class's methods.
+        Subclasses can override to provide custom kernels.
+
+        Returns
+        -------
+        AlgebraicStructure
+            Kernel representation of this semiring.
+
+        """
+        from automatix.algebra.kernels import AlgebraicStructure
+
+        # Create kernel from class methods
+        kernel = AlgebraicStructure(
+            add=cls.add,
+            mul=cls.multiply,
+            zero=cls.zeros(()),  # Scalar
+            one=cls.ones(()),  # Scalar
+            sum=cls.sum,  # type: ignore[arg-type]
+            prod=cls.prod,  # type: ignore[arg-type]
+            negate=cls.negate if hasattr(cls, "negate") else None,
+            properties=frozenset(cls._get_properties()),
+        )
+
+        return kernel
+
+    @classmethod
+    def _get_properties(cls) -> set[str]:
+        """Get the set of algebraic properties for this semiring.
+
+        Returns
+        -------
+        set[str]
+            Set of property names (e.g., {"idempotent_add", "commutative"}).
+        """
+        props = set()
+        if cls.is_additively_idempotent:
+            props.add("idempotent_add")
+        if cls.is_multiplicatively_idempotent:
+            props.add("idempotent_mul")
+        if cls.is_commutative:
+            props.add("commutative")
+        if cls.is_simple:
+            props.add("simple")
+        return props
 
     # Class variables for semiring properties
     is_additively_idempotent: ClassVar[bool] = False

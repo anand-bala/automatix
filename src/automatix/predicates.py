@@ -40,14 +40,17 @@ import dataclasses
 from abc import abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Type
+from typing import Type, cast
 
 import equinox as eqx
+import jax
 import jax.numpy as jnp
 import logic_asts.base as exprs
 from jaxtyping import Array, Num, Scalar
 from logic_asts.base import Expr
 
+from automatix.algebra._compat import normalize_semiring
+from automatix.algebra.kernels import AlgebraicStructure
 from automatix.algebra.spec import AbstractSemiring
 from automatix.weights import Guard, InputSymbol, SemiringValue
 
@@ -121,22 +124,26 @@ class And(AbstractPredicate):
     ----------
     args : list[AbstractPredicate]
         The predicates to combine.
-    semiring : Type[AbstractSemiring]
+    semiring : Type[AbstractSemiring] | AlgebraicStructure
         The semiring defining multiplication (otimes).
+        Can be either a class (MinPlusSemiring) or a kernel instance.
     """
 
     args: list[AbstractPredicate]
-    semiring: Type[AbstractSemiring]
+    semiring: Type[AbstractSemiring] | AlgebraicStructure
+
+    def __post_init__(self) -> None:
+        """Normalize semiring on construction."""
+        object.__setattr__(self, "semiring", normalize_semiring(self.semiring))
 
     @eqx.filter_jit
     def __call__(self, x: Num[Array, "..."]) -> Scalar:
         weights: list[Scalar] = [arg(x) for arg in self.args]
-        return self.semiring.prod(jnp.asarray(weights))
-
-
-# class ExprWeightFn(eqx.Module):
-
-#     cache: dict[Expr, ]
+        weights_array = jnp.asarray(weights)
+        if self.semiring.prod is not None:
+            return self.semiring.prod(weights_array, axis=None)
+        else:
+            return cast(Scalar, jax.lax.reduce(weights_array, self.semiring.one, self.semiring.mul, (0,)))
 
 
 class Or(AbstractPredicate):
@@ -154,17 +161,26 @@ class Or(AbstractPredicate):
     ----------
     args : list[AbstractPredicate]
         The predicates to combine.
-    semiring : Type[AbstractSemiring]
+    semiring : Type[AbstractSemiring] | AlgebraicStructure
         The semiring defining addition (oplus).
+        Can be either a class (MinPlusSemiring) or a kernel instance.
     """
 
     args: list[AbstractPredicate]
-    semiring: Type[AbstractSemiring]
+    semiring: Type[AbstractSemiring] | AlgebraicStructure
+
+    def __post_init__(self) -> None:
+        """Normalize semiring on construction."""
+        object.__setattr__(self, "semiring", normalize_semiring(self.semiring))
 
     @eqx.filter_jit
     def __call__(self, x: Num[Array, "..."]) -> Scalar:
         weights: list[Scalar] = [arg(x) for arg in self.args]
-        return self.semiring.sum(jnp.asarray(weights))
+        weights_array = jnp.asarray(weights)
+        if self.semiring.sum is not None:
+            return self.semiring.sum(weights_array, axis=None)
+        else:
+            return cast(Scalar, jax.lax.reduce(weights_array, self.semiring.zero, self.semiring.add, (0,)))
 
 
 @dataclass(kw_only=True)
@@ -183,8 +199,9 @@ class ExprWeightFn:
         Predicates for positive atoms.
     neg_atoms : dict[str, Predicate]
         Predicates for negated atoms.
-    algebra : Type[AbstractSemiring]
+    semiring : Type[AbstractSemiring] | AlgebraicStructure
         The semiring for composing predicates.
+        Can be either a class (MinPlusSemiring) or a kernel instance.
 
     Examples
     --------
@@ -203,11 +220,14 @@ class ExprWeightFn:
 
     atoms: dict[str, Predicate]
     neg_atoms: dict[str, Predicate]
-    semiring: Type[AbstractSemiring]
+    semiring: Type[AbstractSemiring] | AlgebraicStructure
 
     cache: dict[str | Expr, AbstractPredicate] = dataclasses.field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        # Normalize semiring
+        object.__setattr__(self, "semiring", normalize_semiring(self.semiring))
+
         # Populate the cache with the atoms and the neg atoms, and literal True and literal False
         self.cache.update(self.atoms.items())
         self.cache.update((exprs.Variable(atom), pred) for atom, pred in self.atoms.items())
@@ -255,6 +275,7 @@ class ExprWeightFn:
                         else Predicate(lambda _: self.semiring.zeros(()))
                     )
                 case exprs.Variable(name):
+                    assert isinstance(name, str)
                     self.cache[subexpr] = self.atoms[name]
                 case exprs.Not(arg):
                     self.cache[subexpr] = self.neg_atoms[str(arg)]

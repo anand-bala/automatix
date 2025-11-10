@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import typing
 from collections.abc import Iterable
-from typing import Callable, Optional, Type
+from typing import Callable, Optional, Type, Union
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -19,6 +19,8 @@ from lark.exceptions import LarkError
 from logic_asts.base import Expr
 from typing_extensions import overload
 
+from automatix.algebra._compat import normalize_semiring
+from automatix.algebra.kernels import AlgebraicStructure
 from automatix.algebra.spec import AbstractSemiring
 from automatix.weights import WeightFunction
 
@@ -145,7 +147,7 @@ class AutomatonOperator(eqx.Module):
 
 def make_automaton_operator(
     aut: NFA,
-    semiring: Type[AbstractSemiring],
+    semiring: Union[Type[AbstractSemiring], AlgebraicStructure],
     *,
     weight_function: WeightFunction,
     initial_weights: Optional[Num[Array, " {len(aut)}"]] = None,
@@ -163,8 +165,9 @@ def make_automaton_operator(
     ----------
     aut : NFA
         The nondeterministic finite automaton defining guards and transitions.
-    semiring : Type[AbstractSemiring]
+    semiring : Type[AbstractSemiring] | AlgebraicStructure
         The semiring for output values (e.g., Boolean, Tropical, MaxMin).
+        Can be either a class (MinPlusSemiring) or a kernel instance.
     weight_function : WeightFunction
         A function mapping (input_symbol, guard) to semiring values.
         Implements lambda(x, Delta) from weighted automata theory.
@@ -178,14 +181,15 @@ def make_automaton_operator(
     AutomatonOperator
         An operator that computes weighted transitions for inputs.
     """
+    # Normalize semiring to kernel
+    kernel = normalize_semiring(semiring)
+
     n_q = aut.num_locations
 
     if initial_weights is None:
-        initial_weights = (
-            semiring.zeros(aut.num_locations).at[jnp.array(list(aut.initial_locations))].set(semiring.ones(1).item())
-        )
+        initial_weights = kernel.zeros(aut.num_locations).at[jnp.array(list(aut.initial_locations))].set(kernel.ones(1).item())
     if final_weights is None:
-        final_weights = semiring.zeros(aut.num_locations).at[jnp.array(list(aut.final_locations))].set(semiring.ones(1).item())
+        final_weights = kernel.zeros(aut.num_locations).at[jnp.array(list(aut.final_locations))].set(kernel.ones(1).item())
 
     assert initial_weights.shape == (n_q,)
     assert final_weights.shape == (n_q,)

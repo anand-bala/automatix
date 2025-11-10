@@ -56,7 +56,9 @@ class TestWeightFunctionBasics:
 
     def test_lambda_weight_function(self) -> None:
         """Weight functions can be defined as lambdas."""
-        wf = lambda x, g: 1.5  # noqa: E731
+
+        def wf(x: InputSymbol, guard: Guard) -> SemiringValue:
+            return 1.5
 
         assert wf(jnp.array([1.0]), "any_guard") == 1.5
 

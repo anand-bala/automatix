@@ -19,9 +19,9 @@ from automatix.algebra.spec import AbstractSemiring
 from automatix.automata.finite_word import NFA, make_automaton_operator
 from automatix.predicates import ExprWeightFn, Predicate
 
-Box: TypeAlias = Num[Array, " 4"]
-Circle: TypeAlias = Num[Array, " 3"]
-Point: TypeAlias = Num[Array, " 2"]
+Box: TypeAlias = Num[Array, "4"]
+Circle: TypeAlias = Num[Array, "3"]
+Point: TypeAlias = Num[Array, "2"]
 
 
 # Obstacle locations

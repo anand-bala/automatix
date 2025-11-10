@@ -19,6 +19,11 @@ Quick start:
 """
 
 # JAX semirings (currently the primary backend)
+# Compatibility layer
+from automatix.algebra._compat import normalize_semiring
+
+# Boolean kernels
+from automatix.algebra.backends.boolean_kernels import create_boolean_kernel
 from automatix.algebra.backends.jax_ import (
     CountingSemiring,
     LatticeAlgebra,
@@ -29,9 +34,13 @@ from automatix.algebra.backends.jax_ import (
     MaxMinAlgebra,
     MaxMinSemiring,
     MaxPlusSemiring,
+    MinPlusSemiring,
     RightLSEMaxMinSemiring,
     RightMaxMinSemiring,
 )
+
+# GPU-optimized kernels
+from automatix.algebra.kernels import AlgebraicStructure
 
 # Polynomial implementations
 from automatix.algebra.polynomials.boolean import (
@@ -42,10 +51,14 @@ from automatix.algebra.polynomials.boolean import (
 # Registry and factory
 from automatix.algebra.registry import (
     get_available_backends,
+    get_kernel,
     get_semiring,
+    list_kernels,
     list_semirings,
     register,
+    register_kernel,
     unregister,
+    unregister_kernel,
 )
 
 # Core abstractions
@@ -64,12 +77,20 @@ __all__ = [
     "AbstractDeMorganAlgebra",
     "AbstractPolynomial",
     "PolynomialManager",
+    # GPU kernels
+    "AlgebraicStructure",
+    "normalize_semiring",
+    "create_boolean_kernel",
     # Registry
     "get_semiring",
     "register",
     "unregister",
     "list_semirings",
     "get_available_backends",
+    "get_kernel",
+    "register_kernel",
+    "unregister_kernel",
+    "list_kernels",
     # JAX semirings
     "CountingSemiring",
     "MaxMinSemiring",
@@ -80,6 +101,7 @@ __all__ = [
     "LeftLSEMaxMinSemiring",
     "RightLSEMaxMinSemiring",
     "MaxPlusSemiring",
+    "MinPlusSemiring",
     "LogSemiring",
     "LatticeAlgebra",
     # Polynomials

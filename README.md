@@ -5,16 +5,43 @@ nondeterministic weighted automata and alternating weighted automata.
 
 ### Differentiable Automata in [JAX](https://github.com/google/jax)
 
-The `automatix.nfa` module implements differentiable automata in JAX, along with
-`automatix.algebra.semiring.jax_backend`.
-Specifically, it does so by defining _matrix operators_ on the automata transitions,
-which can then be interpreted over a semiring to yield various acceptance and weighted
-semantics.
+The `automatix.nfa` module implements differentiable automata in JAX. The `automatix.algebra`
+module provides GPU-optimized semiring kernels using frozen dataclasses as JAX pytrees,
+enabling dynamic algebra selection in jitted functions.
+
+Semirings can be used either as classes or as kernels:
+
+```python
+from automatix.algebra import get_semiring, normalize_semiring
+
+# Class-based API (backward compatible)
+MaxPlus = get_semiring("MaxPlus", backend="jax")
+weights = MaxPlus.zeros((3, 3))
+
+# Kernel-based API (GPU optimized)
+kernel = get_kernel("MaxPlus", "jax")
+weights = kernel.zeros((3, 3))
+
+# Both work with predicates and automata
+from automatix.predicates import And, Predicate
+pred = Predicate(lambda x: x > 0)
+and_pred = And(args=[pred, pred], semiring=MaxPlus)  # Normalizes to kernel
+```
+
+Differentiable Boolean kernels are available for learning:
+
+```python
+from automatix.algebra import create_boolean_kernel
+
+soft = create_boolean_kernel(mode="soft")        # Multiplicative relaxation
+smooth = create_boolean_kernel(mode="smooth")    # Sigmoid-based
+ste = create_boolean_kernel(mode="ste")          # Straight-through estimator
+```
 
 ### Alternating Automata as Ring Polynomials
 
 The `automatix.afa` module implements weighted alternating finite automata over
-algebra defined in `automatix.algebra.semiring`.
+algebra defined in `automatix.algebra`.
 
 ## Using the project
 

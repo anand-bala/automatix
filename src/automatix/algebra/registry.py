@@ -4,15 +4,23 @@ This module provides a centralized registry for managing semiring implementation
 across different backends (JAX, PyTorch, NumPy).
 """
 
-from typing import Callable, Type
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Callable, Type
 
 from automatix.algebra.spec import AbstractSemiring
+
+if TYPE_CHECKING:
+    from automatix.algebra.kernels import AlgebraicStructure
 
 # Type for semiring classes
 SemiringType = Type[AbstractSemiring]
 
 # Registry mapping: (name, backend) -> semiring_class
 _REGISTRY: dict[tuple[str, str], SemiringType] = {}
+
+# Kernel registry for GPU-optimized implementations
+_KERNEL_REGISTRY: dict[tuple[str, str], "AlgebraicStructure"] = {}
 
 
 def register(name: str, backend: str = "jax") -> Callable[[SemiringType], SemiringType]:
@@ -150,9 +158,81 @@ def get_available_backends() -> list[str]:
     return sorted(backends)
 
 
+def register_kernel(
+    name: str,
+    kernel: "AlgebraicStructure",
+    backend: str = "jax",
+) -> None:
+    """Register a GPU-optimized kernel for a semiring.
+
+    Parameters
+    ----------
+    name : str
+        Canonical name for the kernel (should match semiring name).
+    kernel : AlgebraicStructure
+        The kernel to register.
+    backend : str, optional
+        Backend identifier (default: "jax").
+
+    Raises
+    ------
+    ValueError
+        If kernel is already registered.
+    """
+    key = (name, backend)
+    if key in _KERNEL_REGISTRY:
+        raise ValueError(
+            f"Kernel '{name}' with backend '{backend}' is already registered. Use a different name or unregister first."
+        )
+    _KERNEL_REGISTRY[key] = kernel
+
+
+def unregister_kernel(name: str, backend: str = "jax") -> None:
+    """Unregister a kernel from the registry."""
+    key = (name, backend)
+    if key not in _KERNEL_REGISTRY:
+        raise KeyError(f"Kernel '{name}' with backend '{backend}' not found.")
+    del _KERNEL_REGISTRY[key]
+
+
+def get_kernel(name: str, backend: str = "jax") -> "AlgebraicStructure":
+    """Get a kernel from the registry.
+
+    Parameters
+    ----------
+    name : str
+        Canonical name for the kernel.
+    backend : str, optional
+        Backend identifier (default: "jax").
+
+    Returns
+    -------
+    AlgebraicStructure
+        The kernel.
+
+    Raises
+    ------
+    KeyError
+        If kernel is not found.
+    """
+    key = (name, backend)
+    if key not in _KERNEL_REGISTRY:
+        available = list_kernels(backend)
+        raise KeyError(f"Kernel '{name}' with backend '{backend}' not found. Available: {available}")
+    return _KERNEL_REGISTRY[key]
+
+
+def list_kernels(backend: str | None = None) -> list[str]:
+    """List all registered kernels, optionally filtered by backend."""
+    if backend is None:
+        return sorted([f"{name} ({b})" for name, b in _KERNEL_REGISTRY.keys()])
+    else:
+        return sorted([name for name, b in _KERNEL_REGISTRY.keys() if b == backend])
+
+
 # Auto-register JAX semirings on import
 def _register_jax_semirings() -> None:
-    """Register all built-in JAX semirings."""
+    """Register all built-in JAX semirings and their kernels."""
     # Import here to avoid circular imports
     from automatix.algebra.backends.jax_ import (
         CountingSemiring,
@@ -169,22 +249,52 @@ def _register_jax_semirings() -> None:
         RightMaxMinSemiring,
     )
 
-    register("Counting", "jax")(CountingSemiring)
-    register("MaxMin", "jax")(MaxMinSemiring)
-    register("LeftMaxMin", "jax")(LeftMaxMinSemiring)
-    register("RightMaxMin", "jax")(RightMaxMinSemiring)
-    register("MaxMinAlgebra", "jax")(MaxMinAlgebra)
-    register("LSEMaxMin", "jax")(LSEMaxMinSemiring)
-    register("LeftLSEMaxMin", "jax")(LeftLSEMaxMinSemiring)
-    register("RightLSEMaxMin", "jax")(RightLSEMaxMinSemiring)
-    register("MaxPlus", "jax")(MaxPlusSemiring)
-    register("MinPlus", "jax")(MinPlusSemiring)
-    register("Log", "jax")(LogSemiring)
-    register("Lattice", "jax")(LatticeAlgebra)
+    semirings = {
+        "Counting": CountingSemiring,
+        "MaxMin": MaxMinSemiring,
+        "LeftMaxMin": LeftMaxMinSemiring,
+        "RightMaxMin": RightMaxMinSemiring,
+        "MaxMinAlgebra": MaxMinAlgebra,
+        "LSEMaxMin": LSEMaxMinSemiring,
+        "LeftLSEMaxMin": LeftLSEMaxMinSemiring,
+        "RightLSEMaxMin": RightLSEMaxMinSemiring,
+        "MaxPlus": MaxPlusSemiring,
+        "MinPlus": MinPlusSemiring,
+        "Log": LogSemiring,
+        "Lattice": LatticeAlgebra,
+    }
+
+    for name, semiring_class in semirings.items():
+        # Register semiring classes
+        register(name, "jax")(semiring_class)  # type: ignore[type-abstract]
+        # Register kernels
+        kernel = semiring_class.to_kernel()
+        register_kernel(name, kernel, "jax")
+
+
+def _register_boolean_kernels() -> None:
+    """Register differentiable Boolean kernels."""
+    from automatix.algebra.backends.boolean_kernels import create_boolean_kernel
+
+    # Register soft Boolean (default for learning)
+    soft_kernel = create_boolean_kernel(mode="soft")
+    register_kernel("BooleanSoft", soft_kernel, "jax")
+
+    # Register smooth Boolean with different temperatures
+    smooth_kernel_t1 = create_boolean_kernel(mode="smooth", temperature=1.0)
+    register_kernel("BooleanSmooth", smooth_kernel_t1, "jax")
+
+    smooth_kernel_t10 = create_boolean_kernel(mode="smooth", temperature=10.0)
+    register_kernel("BooleanSmoothSharp", smooth_kernel_t10, "jax")
+
+    # Register straight-through estimator
+    ste_kernel = create_boolean_kernel(mode="ste")
+    register_kernel("BooleanSTE", ste_kernel, "jax")
 
 
 # Register on import
 _register_jax_semirings()
+_register_boolean_kernels()
 
 # Export public API
 __all__ = [
@@ -193,4 +303,8 @@ __all__ = [
     "get_semiring",
     "list_semirings",
     "get_available_backends",
+    "register_kernel",
+    "unregister_kernel",
+    "get_kernel",
+    "list_kernels",
 ]
