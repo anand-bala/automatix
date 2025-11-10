@@ -25,7 +25,7 @@ class TestEvalAlgorithm1Basic:
         poly = MultilinearPolynomial.ones(LatticeAlgebra, num_states=2)
         values = {0: jnp.array(0.5), 1: jnp.array(0.3)}
 
-        result = eval_algorithm_1(poly, LatticeAlgebra, values)
+        result = eval_algorithm_1(poly, values)
 
         # Constant polynomial: 1 (coefficient at index 0 only)
         # Result should be 1 * 1 = 1 (identity for multiplication)
@@ -37,7 +37,7 @@ class TestEvalAlgorithm1Basic:
         poly = MultilinearPolynomial.from_monomial(LatticeAlgebra, 2, (1, 0), jnp.asarray(1.0))
         values = {0: jnp.array(0.5), 1: jnp.array(0.3)}
 
-        result = eval_algorithm_1(poly, LatticeAlgebra, values)
+        result = eval_algorithm_1(poly, values)
 
         # x_0 = 0.5 (for MaxMin semiring, result is just the value)
         assert jnp.allclose(result, 0.5)
@@ -48,7 +48,7 @@ class TestEvalAlgorithm1Basic:
         poly = MultilinearPolynomial.from_monomial(LatticeAlgebra, 2, (1, 1), jnp.asarray(1.0))
         values = {0: jnp.array(0.5), 1: jnp.array(0.3)}
 
-        result = eval_algorithm_1(poly, LatticeAlgebra, values)
+        result = eval_algorithm_1(poly, values)
 
         # x_0 * x_1 = min(0.5, 0.3) = 0.3 (for MaxMin, multiply is min)
         assert jnp.allclose(result, 0.3)
@@ -62,7 +62,7 @@ class TestEvalAlgorithm1Basic:
 
         values = {0: jnp.array(0.5), 1: jnp.array(0.3)}
 
-        result = eval_algorithm_1(poly, LatticeAlgebra, values)
+        result = eval_algorithm_1(poly, values)
 
         # x_0 + x_1 = max(0.5, 0.3) = 0.5 (for MaxMin, add is max)
         assert jnp.allclose(result, 0.5)
@@ -76,7 +76,7 @@ class TestEvalAlgorithm1Basic:
         # Evaluate at x_0=0.4, x_1=0.6, x_2=0.8
         values = {0: jnp.array(0.4), 1: jnp.array(0.6), 2: jnp.array(0.8)}
 
-        result = eval_algorithm_1(poly, LatticeAlgebra, values)
+        result = eval_algorithm_1(poly, values)
 
         # Result: max(0.4, min(0.6, 0.8)) = max(0.4, 0.6) = 0.6
         assert jnp.allclose(result, 0.6)
@@ -89,7 +89,7 @@ class TestEvalAlgorithm1Basic:
 
         values = {0: jnp.array(0.5), 1: jnp.array(0.4)}
 
-        result = eval_algorithm_1(poly, LatticeAlgebra, values)
+        result = eval_algorithm_1(poly, values)
         # For MaxMin: max(min(2,0.5), min(3,0.4)) = max(0.5, 0.4) = 0.5
         assert result.item() == 0.5
 
@@ -103,7 +103,7 @@ class TestEvalAlgorithm1Validation:
         values = {0: jnp.array(0.5), 1: jnp.array(0.3)}  # Missing state 2
 
         with pytest.raises(ValueError, match="Missing value for state"):
-            eval_algorithm_1(poly, LatticeAlgebra, values)
+            eval_algorithm_1(poly, values)
 
     def test_extra_values_ignored(self) -> None:
         """Test that extra values in dictionary are ignored."""
@@ -115,7 +115,7 @@ class TestEvalAlgorithm1Validation:
         }
 
         # Should not raise
-        result = eval_algorithm_1(poly, LatticeAlgebra, values)
+        result = eval_algorithm_1(poly, values)
         assert jnp.allclose(result, 1.0)
 
 
@@ -127,7 +127,7 @@ class TestEvalAlgorithm1Batch:
         poly = MultilinearPolynomial.from_monomial(LatticeAlgebra, 2, (1, 0), jnp.asarray(1.0))
         evaluation_points = jnp.array([[0.5, 0.3]])  # Shape (1, 2)
 
-        results = eval_algorithm_1_batch(poly, LatticeAlgebra, evaluation_points)
+        results = eval_algorithm_1_batch(poly, evaluation_points)
 
         assert results.shape == (1,)
         assert jnp.allclose(results[0], 0.5)
@@ -143,7 +143,7 @@ class TestEvalAlgorithm1Batch:
             ]
         )
 
-        results = eval_algorithm_1_batch(poly, LatticeAlgebra, evaluation_points)
+        results = eval_algorithm_1_batch(poly, evaluation_points)
 
         assert results.shape == (3,)
         assert jnp.allclose(results[0], 0.5)  # x_0 at [0.5, 0.3]
@@ -164,13 +164,13 @@ class TestEvalAlgorithm1Batch:
         )
 
         # Batch evaluation
-        batch_results = eval_algorithm_1_batch(poly, LatticeAlgebra, evaluation_points)
+        batch_results = eval_algorithm_1_batch(poly, evaluation_points)
 
         # Sequential evaluation
         sequential_results = []
         for point in evaluation_points:
             values = {i: point[i] for i in range(3)}
-            result = eval_algorithm_1(poly, LatticeAlgebra, values)
+            result = eval_algorithm_1(poly, values)
             sequential_results.append(result)
 
         # Results should match
@@ -186,7 +186,7 @@ class TestEvalAlgorithm1EdgeCases:
         poly = MultilinearPolynomial.from_monomial(LatticeAlgebra, 1, (1,), jnp.asarray(1.0))
         values = {0: jnp.array(0.7)}
 
-        result = eval_algorithm_1(poly, LatticeAlgebra, values)
+        result = eval_algorithm_1(poly, values)
 
         assert jnp.allclose(result, 0.7)
 
@@ -195,7 +195,7 @@ class TestEvalAlgorithm1EdgeCases:
         poly = MultilinearPolynomial.from_monomial(LatticeAlgebra, 4, (1, 1, 1, 1), jnp.asarray(1.0))
         values = {0: jnp.array(0.2), 1: jnp.array(0.3), 2: jnp.array(0.4), 3: jnp.array(0.5)}
 
-        result = eval_algorithm_1(poly, LatticeAlgebra, values)
+        result = eval_algorithm_1(poly, values)
 
         # Result: min(0.2, 0.3, 0.4, 0.5) = 0.2 (for MaxMin multiply is min)
         assert jnp.allclose(result, 0.2)
@@ -208,7 +208,7 @@ class TestEvalAlgorithm1EdgeCases:
 
         values = {0: jnp.array(0.9), 1: jnp.array(0.1)}
 
-        result = eval_algorithm_1(poly, LatticeAlgebra, values)
+        result = eval_algorithm_1(poly, values)
 
         # Zero from first term: 0*0.9 = 0
         # Second term: 1*0.1 = 0.1
@@ -220,7 +220,7 @@ class TestEvalAlgorithm1EdgeCases:
         poly = MultilinearPolynomial.from_monomial(LatticeAlgebra, 2, (0, 0), jnp.asarray(1.0))  # Constant 1
         values = {0: jnp.array(0.5), 1: jnp.array(0.3)}
 
-        result = eval_algorithm_1(poly, LatticeAlgebra, values)
+        result = eval_algorithm_1(poly, values)
 
         # Constant term: 1 * 1 = 1
         assert jnp.allclose(result, 1.0)
@@ -231,12 +231,12 @@ class TestEvalAlgorithm1Semirings:
 
     def test_maxmin_semiring(self) -> None:
         """Test evaluation with explicit MaxMin semiring."""
-        poly = MultilinearPolynomial.zeros(LatticeAlgebra, num_states=2)
+        poly = MultilinearPolynomial.zeros(MaxMinSemiring, num_states=2)
         poly = poly.set_monomial((1, 0), jnp.asarray(1.0))
 
         values = {0: jnp.array(0.7), 1: jnp.array(0.4)}
 
-        result = eval_algorithm_1(poly, MaxMinSemiring, values)
+        result = eval_algorithm_1(poly, values)
 
         # MaxMin: multiply is min, so 1 * 0.7 = min(1, 0.7) = 0.7
         assert jnp.allclose(result, 0.7)

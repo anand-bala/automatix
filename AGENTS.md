@@ -1,9 +1,9 @@
 # Automatix: Agent Context and Refactoring Roadmap
 
 **Version**:
-v0.5.0 (Phase 2 Complete) **Last Updated**:
-2025-11-07 **Status**:
-Core NFA weight functions complete; AFA deferred to v0.8.0
+v0.6.0 (Phase 2.5 Complete, Kernel Architecture Implemented) **Last Updated**:
+2025-11-10 **Status**:
+Kernel refactoring complete with backward compatibility; Boolean differentiation kernels ready; All tests passing (129/129)
 
 ## Quick Start for Agents
 
@@ -45,11 +45,16 @@ src/automatix/
 │   ├── automaton.py        # Generic AFA[Alph, Q, K] (abstract, deferred)
 │   └── strel.py            # STREL->AFA translation (Boolean only, v0.8.0+)
 └── algebra/
-    ├── spec.py             # AbstractSemiring interface
+    ├── spec.py             # AbstractSemiring interface with to_kernel() method
+    ├── kernels.py          # AlgebraicStructure kernel dataclass (NEW)
+    ├── _compat.py          # normalize_semiring adapter (NEW)
+    ├── registry.py         # Semiring + kernel registry with _register_boolean_kernels()
     ├── backends/
     │   ├── jax_.py         # 11 JAX semirings + kernels
-    │   ├── torch_.py       # v0.6.0 stub
-    │   └── numpy_.py       # v0.6.0 stub
+    │   ├── boolean_kernels.py  # Differentiable Boolean kernels (soft/smooth/STE) (NEW)
+    │   ├── torch_.py       # v0.7.0 stub
+    │   ├── numpy_.py       # v0.7.0 stub
+    │   └── jax_kernels/    # Custom JAX kernel implementations
     └── polynomials/        # Polynomial implementations (Boolean only currently)
 ```
 
@@ -126,6 +131,22 @@ algebra/ (semiring implementations)
   100% mypy strict
 - Tests:
   36/36 passing
+
+### Phase 2.75: GPU-Optimized Kernel Architecture (COMPLETE - Nov 10, 2025)
+- AlgebraicStructure kernel abstraction (kernels.py)
+- Backward-compatible adapter layer (_compat.py)
+- normalize_semiring() for class/kernel conversion
+- Extended registry with kernel support (register_kernel, get_kernel, list_kernels)
+- AbstractSemiring.to_kernel() method for all 11 JAX semirings
+- Differentiable Boolean kernels:
+  * Soft Boolean (soft_and, soft_or, soft_negate)
+  * Smooth Boolean with temperature control (smooth_and, smooth_or, smooth_negate)
+  * Straight-Through Estimator (STE) variants
+- Updated predicates.py: And, Or, ExprWeightFn accept both class and kernel
+- Updated finite_word.py: make_automaton_operator supports both class and kernel
+- Full backward compatibility: existing code continues to work unchanged
+- Type safety: 100% mypy strict on new modules
+- Tests: 39 new tests for kernels + 90 existing = 129/129 passing
 
 ## Known Blockers and Deferments
 
@@ -232,23 +253,23 @@ Run examples:
 7. **Commit Message Format**:
    Use present tense, reference papers/issues when relevant
 
-## Next Steps (v0.6.0 and Beyond)
+## Next Steps (v0.6.0+)
 
 1. **Phase 3 (v0.6.0)**:
-   AFA Implementation - Multilinear Polynomials
-   - Optimized JAX kernels for semiring operations (prerequisite)
-   - MultilinearPolynomial data structure and monomial basis indexing
-   - Evaluation algorithms (Algorithms 1 and 4 from Gillespie 2023)
-   - Polynomial substitution and like-term collection
-   - PolynomialAutomatonOperator and AFA integration
-   - STREL to AFA translation (basic, Boolean only)
+   AFA Implementation - Multilinear Polynomials (IN PROGRESS)
+   - MultilinearPolynomial data structure (Week 1 complete)
+   - Evaluation algorithms (Algorithms 1 and 4 from Gillespie 2023) (Week 1 complete)
+   - Polynomial substitution and like-term collection (Week 2 TODO)
+   - PolynomialAutomatonOperator and AFA integration (Week 2 TODO)
+   - STREL to AFA translation (basic, Boolean only) (Week 2 TODO)
    - **Constraint**: Only distributive lattice semirings (idempotent oplus/otimes)
    - **Reference**: `.cache/AFA_POLYNOMIAL_ARCHITECTURE.md`
+   - **Note**: Kernel architecture is now foundation for AFA operations
 
 2. **Phase 4 (v0.7.0)**:
-   Multi-backend support (PyTorch)
+   Multi-backend support (PyTorch) - DEFERRED
    - Port optimized JAX kernels to PyTorch
-   - Cross-backend semiring testing
+   - Cross-backend semiring testing with AlgebraicStructure
    - Performance benchmarking
    - **Note**: NumPy backend deferred (JAX on CPU is effective)
 

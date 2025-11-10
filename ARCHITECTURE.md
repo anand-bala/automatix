@@ -35,26 +35,30 @@ This architecture enables:
 
 ## Automatix Algebra Module Architecture
 
-## Directory Structure
+## Directory Structure (Updated Nov 10, 2025)
 
 ```
 src/automatix/algebra/
-├── __init__.py                 Public API exports
-├── spec.py                     Pure interface definitions
-├── registry.py                 Semiring registry and factory
+├── __init__.py                 Public API exports (updated)
+├── spec.py                     Pure interface definitions + to_kernel() method
+├── kernels.py                  AlgebraicStructure kernel dataclass (NEW)
+├── _compat.py                  normalize_semiring adapter (NEW)
+├── registry.py                 Semiring + kernel registry (extended)
 ├── abc.py                      Deprecated (kept for reference)
 │
 ├── backends/                   Backend implementations
 │   ├── __init__.py
 │   ├── _base.py               Shared utilities
 │   ├── jax_.py                JAX semirings (production)
-│   ├── torch_.py              PyTorch semirings (v0.6.0)
-│   ├── numpy_.py              NumPy semirings (v0.6.0)
+│   ├── boolean_kernels.py     Differentiable Boolean kernels (NEW)
+│   ├── torch_.py              PyTorch semirings (v0.7.0 stub)
+│   ├── numpy_.py              NumPy semirings (v0.7.0 stub)
 │   └── jax_kernels/           JAX-specific optimizations
 │       ├── __init__.py
 │       ├── logsumexp.py       Custom logsumexp with proper gradients
 │       ├── logsumexp.pyi
 │       ├── utils.py           Shared kernel utilities
+│       ├── batch_operations.py Batch operations for polynomials (NEW)
 │       ├── maxplus.py         MaxPlus kernels (planned v0.6.0+)
 │       └── log_semiring.py    LogSemiring kernels (planned v0.6.0+)
 │
@@ -75,6 +79,9 @@ src/automatix/algebra/
 └── polynomials/               Polynomial implementations
     ├── __init__.py
     ├── boolean.py             BooleanPolynomial with BDD backend
+    ├── ring_polynomials.py    MultilinearPolynomial base (NEW)
+    ├── tensor_encoding.py     Algorithm 4 for polynomial evaluation (NEW)
+    ├── substitution.py        Polynomial substitution operations (NEW)
     └── demorgan.py            Deprecated (empty)
 ```
 
@@ -205,9 +212,78 @@ def backward_maxplus_custom(grad_out, x, y):
     ...
 ```
 
-## Semiring Registry (registry.py)
+## GPU-Optimized Kernel Architecture (NEW - Nov 10, 2025)
 
-Centralized factory for discovering and instantiating semirings.
+### Overview
+
+The kernel architecture provides a GPU-friendly representation of algebraic structures designed for efficient JAX computation and dynamic algebra selection. This complements the class-based AbstractSemiring interface with a dataclass-based approach optimized for functional programming.
+
+### Key Components
+
+**AlgebraicStructure (kernels.py)**
+- Frozen dataclass representing a semiring as a set of operations
+- Operations are functions (lambda or methods) not class methods
+- Includes properties metadata (idempotent_add, idempotent_mul, commutative, simple, has_negation)
+- Provides methods: zeros, ones, vdot, matmul
+- Designed to be a JAX pytree for vmapping over algebras
+
+**normalize_semiring (_compat.py)**
+- Adapter function for seamless class/kernel polymorphism
+- Converts Type[AbstractSemiring] to AlgebraicStructure via .to_kernel()
+- Duck-types existing AlgebraicStructure instances
+- Single normalization point for all semiring-taking functions
+
+**Kernel Registry (registry.py extensions)**
+- _KERNEL_REGISTRY: dict mapping (name, backend) to AlgebraicStructure
+- register_kernel(), unregister_kernel(), get_kernel(), list_kernels()
+- Auto-registration of kernels when semirings are registered
+- Boolean kernels registered separately via _register_boolean_kernels()
+
+**Differentiable Boolean Kernels (boolean_kernels.py)**
+- Soft Boolean: soft_and (x*y), soft_or (x+y-xy), soft_negate (1-x)
+- Smooth Boolean: Temperature-controlled sigmoid approximations
+- Straight-Through Estimator: Discrete operations with identity gradients
+- create_boolean_kernel() factory for dynamic kernel selection
+- All modes support vmap and jit compilation
+
+### Integration Pattern
+
+**Before (Class-based only)**
+```python
+class MyPredicate:
+    def __call__(self, x):
+        return And([pred1(x), pred2(x)], semiring=MaxPlusSemiring)
+```
+
+**After (Both class and kernel supported)**
+```python
+# Still works: class-based API
+result = And([pred1(x), pred2(x)], semiring=MaxPlusSemiring)
+
+# Now also works: kernel-based API
+kernel = get_kernel("MaxPlus", backend="jax")
+result = And([pred1(x), pred2(x)], semiring=kernel)
+
+# Internally: normalize_semiring handles both transparently
+```
+
+### Backward Compatibility
+
+- All existing Type[AbstractSemiring] code continues unchanged
+- AlgebraicStructure is opt-in, not required
+- Classes converted to kernels on-demand via to_kernel()
+- No performance penalty for continued use of class-based API
+
+### Performance Benefits
+
+- Dynamic algebra selection in jitted functions (vmap over algebras)
+- Kernel operations are pure functions (better JIT compilation)
+- Enables batch operations across different algebras
+- Foundation for future GPU-specific optimizations
+
+## Semiring Registry (registry.py - Extended)
+
+Centralized factory for discovering and instantiating semirings and kernels.
 
 ### Getting Semirings
 
@@ -256,13 +332,28 @@ from automatix.algebra import (
     PolynomialManager,
 )
 
-# Registry
+# Registry (semirings)
 from automatix.algebra import (
     get_semiring,
     register,
     unregister,
     list_semirings,
     get_available_backends,
+)
+
+# Registry (kernels - NEW)
+from automatix.algebra import (
+    get_kernel,
+    register_kernel,
+    unregister_kernel,
+    list_kernels,
+)
+
+# Kernel abstractions
+from automatix.algebra import (
+    AlgebraicStructure,
+    normalize_semiring,
+    create_boolean_kernel,
 )
 
 # JAX semirings (convenience imports)

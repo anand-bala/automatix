@@ -195,9 +195,6 @@ class MultilinearPolynomial:
         """
         max_degree = 0
         for idx in range(len(self.coefficients)):
-            # REVIEW NEEDED: Coefficient zero-check assumes numeric equality.
-            # This may not work correctly for all custom semiring types.
-            # Consider adding semiring parameter for proper zero comparison.
             if not jnp.isclose(self.coefficients[idx], self.algebra.zero):
                 alpha = self.int_to_alpha(idx, self.num_states)
                 monomial_degree = sum(alpha)
