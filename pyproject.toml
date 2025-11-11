@@ -16,6 +16,8 @@ dependencies = [
   "lark",
   "logic-asts>=1.1.0",
   "attrs>=25.4.0",
+  "bitarray>=3.8.0",
+  "optree>=0.17.0",
 ]
 
 [project.optional-dependencies]
