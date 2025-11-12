@@ -43,21 +43,23 @@ examples = [
 ]
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["uv_build>=0.9.9,<0.10.0"]
+build-backend = "uv_build"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/automatix"]
+[tool.uv.build-backend]
+module-name = "automatix"
 
-[tool.pytest.ini_options]
-addopts = "--import-mode=importlib"
-testpaths = ["tests"]
+[tool.uv.workspace]
+members = ["packages/algebraic"]
+
+[tool.uv.sources]
+algebraic = { workspace = true }
 
 [tool.mypy]
-# mypy_path = "$MYPY_CONFIG_FILE_DIR/typings"
-# ignore_missing_imports = true
+strict = true
 show_error_codes = true
 warn_unreachable = true
+packages = ["automatix", "algebraic"]
 
 [[tool.mypy.overrides]]
 module = ["dd", "dd.*"]
@@ -79,8 +81,8 @@ extend-ignore = ["F722"]
 "examples/**.py" = ["N806"]
 
 [tool.pyright]
-include = ["src", "examples"]
-pythonVersion = "3.11"
+include = ["src", "examples", "tests", "packages"]
+pythonVersion = "3.12"
 pythonPlatform = "All"
 reportUnknownMemberType = false
 reportUnknownParameterType = false

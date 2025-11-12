@@ -38,7 +38,7 @@ hscc25experiments: ./examples/swarm-monitoring/run_hscc_experiments.py
 	uv run --group examples --script $<
 
 uv.lock .venv &: pyproject.toml
-	uv sync --frozen --dev ${EXTRA_UV_FLAGS}
+	uv sync --all-packages --frozen --dev ${EXTRA_UV_FLAGS}
 
 # Automatic make target for scripts with locking
 %.py.lock: %.py
