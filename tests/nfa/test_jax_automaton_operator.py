@@ -5,9 +5,6 @@ import jax.nn
 import jax.numpy as jnp
 import logic_asts.base as logic
 import pytest
-from jaxtyping import Array, Num, Scalar
-from typing_extensions import TypeAlias
-
 from automatix.algebra.backends.jax_ import (
     CountingSemiring,
     LogSemiring,
@@ -16,6 +13,9 @@ from automatix.algebra.backends.jax_ import (
     MinPlusSemiring,
 )
 from automatix.algebra.spec import AbstractSemiring
+from jaxtyping import Array, Num, Scalar
+from typing_extensions import TypeAlias
+
 from automatix.automata.finite_word import NFA, make_automaton_operator
 from automatix.predicates import ExprWeightFn, Predicate
 

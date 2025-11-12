@@ -2,5 +2,6 @@
 minversion = "9.0"
 addopts = [
   "--import-mode=importlib",
+  "--jaxtyping-packages=algebraic,beartype.beartype",
 ]
 testpaths = ["tests"]

@@ -2,7 +2,6 @@
 
 import jax.numpy as jnp
 import pytest
-
 from automatix.algebra._compat import normalize_semiring
 from automatix.algebra.backends.jax_ import (
     CountingSemiring,

@@ -3,18 +3,20 @@ name = "argus-automatix"
 authors = [{ name = "Anand Balakrishnan", email = "anandbala1597@gmail.com" }]
 description = "Symbolic (weighted) automata monitors"
 version = "0.4.0"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 
 dependencies = [
   "typing-extensions",
   "types-networkx",
-  "jax>=0.4",
+  "jax>=0.5",
   "jaxtyping>=0.2",
-  "numpy~=1.26",
-  "equinox>=0.11",
+  "equinox>=0.12",
+  "numpy",
   "networkx",
   "lark",
   "logic-asts>=1.1.0",
+  "optree>=0.17.0",
+  "bitarray>=3.8.0",
 ]
 
 [project.optional-dependencies]
@@ -23,12 +25,13 @@ polynomials = ["dd"]
 
 [dependency-groups]
 dev = [
+  "beartype>=0.22.5",
   "black",
   "graphviz",
   "ipython",
   "isort",
   "mypy",
-  "pytest",
+  "pytest>=9.0.0",
   "ruff",
   "ty",
   "zuban",

@@ -2,7 +2,6 @@
 
 import jax.numpy as jnp
 import pytest
-
 from automatix.algebra.backends.boolean_kernels import (
     create_boolean_kernel,
     smooth_and,

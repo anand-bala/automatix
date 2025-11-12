@@ -3,8 +3,7 @@ from typing import Optional, Tuple
 import jax
 import jax.numpy as jnp
 import pytest
-
-from automatix.algebra.backends.jax_ import CountingSemiring
+from algebraic.backends.jax import counting_semiring
 
 
 @pytest.mark.parametrize(
@@ -40,9 +39,11 @@ def test_real_semiring(batch: Optional[int], n: Optional[int], m: int, l: int) -
     expected = mat1 @ mat2
     assert expected.shape == expected_shape, f"{expected.shape} != {expected_shape}"
 
+    semiring = counting_semiring()
+
     if batch:
-        ours = jax.vmap(CountingSemiring.matmul, (0, 0), 0)(mat1, mat2)
+        ours = jax.vmap(semiring.matmul, (0, 0), 0)(mat1, mat2)
     else:
-        ours = CountingSemiring.matmul(mat1, mat2)
+        ours = semiring.matmul(mat1, mat2)
     assert ours.shape == expected.shape, f"{ours.shape} != {expected.shape}"
     assert jnp.allclose(ours, expected, rtol=1e-4, atol=1e-4).item()

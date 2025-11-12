@@ -1,0 +1,18 @@
+[project]
+name = "algebraic"
+version = "0.1.0"
+description = "Abstract algebric structures for GPU-efficient computation"
+readme = "README.md"
+authors = [{ name = "Anand Balakrishnan", email = "anandbala1597@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = [
+    "jax>=0.5",
+    "jaxtyping>=0.2",
+    "equinox>=0.12",
+    "attrs>=25.4.0",
+    "opt-einsum>=3.4.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.8"]
+build-backend = "uv_build"
