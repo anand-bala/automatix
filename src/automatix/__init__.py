@@ -8,12 +8,22 @@ Core exports:
 - AFA: Alternating finite automaton
 """
 
-from automatix.predicates import ExprWeightFn, Predicate
-from automatix.weights import (
+import automatix.automata as automata
+import automatix.weights as weights
+from automatix.spec import (
+    AbstractAutomaton,
+    AcceptanceCondition,
     Guard,
-    InputSymbol,
-    SemiringValue,
+    SizedAutomaton,
     WeightFunction,
 )
 
-__all__ = ["WeightFunction", "InputSymbol", "Guard", "SemiringValue", "Predicate", "ExprWeightFn"]
+__all__ = [
+    "AbstractAutomaton",
+    "SizedAutomaton",
+    "AcceptanceCondition",
+    "Guard",
+    "WeightFunction",
+    "automata",
+    "weights",
+]

@@ -50,7 +50,7 @@ class AccPair[Q: Hashable](NamedTuple):
 class Streett[Q: Hashable]:
     """Streett condition: a run, r, is accpting iff _for all_ `i`, we have that inf(r) does not intersect with `pairs[i].rejecting` and does intersect with `pairs[i].accepting`"""
 
-    pairs: tuple[AccPair, ...]
+    pairs: tuple[AccPair[Q], ...]
 
     @property
     def index(self) -> int:
@@ -61,7 +61,7 @@ class Streett[Q: Hashable]:
 class Rabin[Q: Hashable]:
     """Rabin condition: a run, r, is accpting iff _for some_ `i`, we have that inf(r) does not intersect with `pairs[i].rejecting` and does intersect with `pairs[i].accepting`"""
 
-    pairs: tuple[AccPair, ...]
+    pairs: tuple[AccPair[Q], ...]
 
     @property
     def index(self) -> int:

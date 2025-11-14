@@ -1,23 +1,20 @@
-from typing import Type
+# mypy: disable-error-code="no-untyped-call, no-any-return"
 
 import jax
 import jax.nn
 import jax.numpy as jnp
-import logic_asts.base as logic
+import logic_asts as logic
 import pytest
-from automatix.algebra.backends.jax_ import (
-    CountingSemiring,
-    LogSemiring,
-    MaxMinSemiring,
-    MaxPlusSemiring,
-    MinPlusSemiring,
-)
-from automatix.algebra.spec import AbstractSemiring
+from algebraic import Semiring
+from algebraic.backends import jax as absalg
+from algebraic.backends.jax import JaxBiModule as BiModule
 from jaxtyping import Array, Num, Scalar
 from typing_extensions import TypeAlias
 
-from automatix.automata.finite_word import NFA, make_automaton_operator
-from automatix.predicates import ExprWeightFn, Predicate
+from automatix import Guard, WeightFunction
+from automatix.automata.nfa import NFA
+from automatix.operators import MatrixOperator
+from automatix.weights.guard_weights import ExprWeightFn, Predicate
 
 Box: TypeAlias = Num[Array, "4"]
 Circle: TypeAlias = Num[Array, "3"]
@@ -70,7 +67,7 @@ def test_signed_dist_to_box() -> None:
     print(dists)
 
 
-def make_box_predicate(box: Box) -> tuple[Predicate, Predicate]:
+def make_box_predicate[S: Semiring](algebra: BiModule[S], box: Box) -> tuple[Predicate, Predicate]:
     """Make the predicate for being inside and outside a box."""
 
     @jax.jit
@@ -83,10 +80,10 @@ def make_box_predicate(box: Box) -> tuple[Predicate, Predicate]:
         dist = signed_dist_box(x, box)
         return -jax.nn.relu(-dist)
 
-    return Predicate(inside), Predicate(outside)
+    return Predicate(algebra, inside), Predicate(algebra, outside)
 
 
-def make_circle_predicate(circle: Circle) -> tuple[Predicate, Predicate]:
+def make_circle_predicate[S: Semiring](algebra: BiModule[S], circle: Circle) -> tuple[Predicate, Predicate]:
     """Make the predicates for being inside and outside a circle"""
 
     @jax.jit
@@ -103,59 +100,71 @@ def make_circle_predicate(circle: Circle) -> tuple[Predicate, Predicate]:
         signed_dist = jnp.linalg.norm(x - center) - radius
         return -jax.nn.relu(-signed_dist)
 
-    return Predicate(inside), Predicate(outside)
+    return Predicate(algebra, inside), Predicate(algebra, outside)
 
 
-@pytest.fixture
-def sequential_aut() -> tuple[NFA, dict[str, Predicate], dict[str, Predicate]]:
-    aut = NFA()
+def parse_guard(expr: str) -> Guard[str]:
+    return logic.parse_expr(expr)  # type: ignore[call-overload]
+
+
+@pytest.fixture(
+    params=[
+        absalg.counting_semiring(),
+        absalg.tropical_semiring(minplus=False),
+        absalg.max_min_algebra(),
+        absalg.tropical_semiring(minplus=True),
+    ],
+    ids=["CountingSemiring", "MaxPlusSemiring", "MaxMinSemiring", "MinPlusSemiring"],
+)
+def sequential_aut[S: Semiring](
+    request: pytest.FixtureRequest,
+) -> tuple[NFA[str], dict[str, Predicate], dict[str, Predicate], BiModule[S]]:
+    aut: NFA[str] = NFA()
     aut.add_location(0, initial=True)
     aut.add_location(1)
     aut.add_location(2)
     aut.add_location(3, final=True)
 
-    aut.add_transition(0, 0, guard="~red")
-    aut.add_transition(0, 1, guard="red")
-    aut.add_transition(1, 1, guard="~green")
-    aut.add_transition(1, 2, guard="green")
-    aut.add_transition(2, 2, guard="~orange")
-    aut.add_transition(2, 3, guard="orange")
+    aut.add_transition(0, 0, guard=parse_guard("~red"))
+    aut.add_transition(0, 1, guard=parse_guard("red"))
+    aut.add_transition(1, 1, guard=parse_guard("~green"))
+    aut.add_transition(1, 2, guard=parse_guard("green"))
+    aut.add_transition(2, 2, guard=parse_guard("~orange"))
+    aut.add_transition(2, 3, guard=parse_guard("orange"))
     aut.add_transition(3, 3, guard=logic.Literal(True))
 
-    in_red, out_red = make_box_predicate(RED_BOX)
-    in_green, out_green = make_box_predicate(GREEN_BOX)
-    in_orange, out_orange = make_box_predicate(ORANGE_BOX)
+    algebra: BiModule[S] = request.param
+    assert isinstance(algebra, BiModule)
+
+    in_red, out_red = make_box_predicate(algebra, RED_BOX)
+    in_green, out_green = make_box_predicate(algebra, GREEN_BOX)
+    in_orange, out_orange = make_box_predicate(algebra, ORANGE_BOX)
 
     atoms = dict(red=in_red, green=in_green, orange=in_orange)
     neg_atoms = dict(red=out_red, green=out_green, orange=out_orange)
-    return aut, atoms, neg_atoms
+    return aut, atoms, neg_atoms, algebra
 
 
-@pytest.mark.parametrize(
-    "semiring",
-    [CountingSemiring, MaxPlusSemiring, LogSemiring, MaxMinSemiring, MinPlusSemiring],
-    ids=["CountingSemiring", "MaxPlusSemiring", "LogSemiring", "MaxMinSemiring", "MinPlusSemiring"],
-)
-def test_expr_weight_fn(
-    semiring: Type[AbstractSemiring],
-    sequential_aut: tuple[NFA, dict[str, Predicate], dict[str, Predicate]],
+def test_expr_weight_fn[S: Semiring](
+    sequential_aut: tuple[NFA[str], dict[str, Predicate], dict[str, Predicate], BiModule[S]],
 ) -> None:
-    aut, atoms, neg_atoms = sequential_aut
-    weight_fn = ExprWeightFn(
+    aut, atoms, neg_atoms, algebra = sequential_aut
+    weight_fn = ExprWeightFn[S, str](
+        algebra=algebra,
         atoms=atoms,
         neg_atoms=neg_atoms,
-        semiring=semiring,
     )
-    operator = make_automaton_operator(
+    assert isinstance(weight_fn, WeightFunction)
+    operator = MatrixOperator.make(
         aut,
-        semiring,
+        algebra,
         weight_function=weight_fn,
     )
 
     assert operator.initial_weights.shape == (4,)
-    assert operator.initial_weights[0] == semiring.ones(1).item()
+    assert operator.initial_weights[0] == algebra.ones(()).item()
     assert operator.final_weights.shape == (4,)
-    assert operator.final_weights[3] == semiring.ones(1).item()
+    assert operator.final_weights[3] == algebra.ones(()).item()
 
     transitions = jax.jit(operator.cost_transitions)
 
@@ -173,6 +182,6 @@ def test_expr_weight_fn(
     deltas = jax.vmap(transitions)(trajectory)
     assert deltas.shape == (n_timesteps, 4, 4)
 
-    weights, _ = jax.lax.scan(lambda x, y: (semiring.matmul(x, y), None), operator.initial_weights.reshape(1, -1), deltas)
-    weight = semiring.vdot(weights.squeeze(), operator.final_weights)
+    weights, _ = jax.lax.scan(lambda x, y: (algebra.matmul(x, y), None), operator.initial_weights.reshape(1, -1), deltas)
+    weight = algebra.vdot(weights.squeeze(), operator.final_weights)
     assert weight.size == 1

@@ -60,7 +60,7 @@ class SizedAutomaton[In, Out, StateRep, Q: Hashable](AbstractAutomaton[In, Out, 
 
 
 @runtime_checkable
-class WeightFunction[In](Protocol):
+class WeightFunction[In, AP](Protocol):
     """Weight function mapping (input, guard) to semiring value.
 
     A weight function implements lambda(x, Delta) from weighted automata theory:
@@ -88,4 +88,4 @@ class WeightFunction[In](Protocol):
     ...     return evaluate_guard(x, guard)
     """
 
-    def __call__(self, x: In, guard: Guard) -> Array | ScalarLike: ...
+    def __call__(self, x: In, guard: Guard[AP]) -> Array | ScalarLike: ...

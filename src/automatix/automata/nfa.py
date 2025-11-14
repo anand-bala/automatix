@@ -9,7 +9,7 @@ from logic_asts.base import simple_eval
 from typing_extensions import overload, override
 
 from automatix.acc import Finite
-from automatix.spec import AcceptanceCondition, Guard, SizedAutomaton
+from automatix.spec import Guard, SizedAutomaton
 
 type NFAState = frozenset[int]
 
@@ -54,7 +54,7 @@ class NFA[In](SizedAutomaton[AbstractSet[In], bool, NFAState, int]):
 
     @property
     @override
-    def acceptance_condition(self) -> AcceptanceCondition:
+    def acceptance_condition(self) -> Finite[int]:
         return Finite(self.final_locations)
 
     @property

@@ -1,20 +1,19 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from typing import Any
+import functools
+from collections.abc import Callable
 
 import equinox as eqx
 import jax.numpy as jnp
 from algebraic import Semiring
 from algebraic.backends.jax import JaxBiModule
 from jaxtyping import Array, Num
-from logic_asts.base import BaseExpr as Expr
 
-from automatix.automata.finite_word import NFA
-from automatix.weights import WeightFunction
+from automatix.automata.nfa import NFA
+from automatix.spec import WeightFunction
 
 
-class MatrixOperator[S: Semiring](eqx.Module):
+class MatrixOperator[S: Semiring, In](eqx.Module):
     """JAX module representing a weighted finite-word automaton operator.
 
     This operator computes weighted transitions based on input symbols and guard
@@ -31,10 +30,10 @@ class MatrixOperator[S: Semiring](eqx.Module):
     @classmethod
     def make(
         cls,
-        aut: NFA[Any],
+        aut: NFA[In],
         algebra: JaxBiModule[S],
         *,
-        weight_function: WeightFunction,
+        weight_function: WeightFunction[Num[Array, "..."], In],
         initial_weights: None | Num[Array, " {len(aut)}"] = None,
         final_weights: None | Num[Array, " {len(aut)}"] = None,
     ) -> MatrixOperator:
@@ -85,13 +84,15 @@ class MatrixOperator[S: Semiring](eqx.Module):
         assert initial_weights.shape == (n_q,)
         assert final_weights.shape == (n_q,)
 
-        # Build list of transitions for use in cost_transitions
-        idx: Sequence[tuple[int, int]]
-        guards: Sequence[Expr[Any]]
+        transitions = {(src, dst): functools.partial(weight_function, guard=guard) for src, dst, guard in aut.transitions}
 
-        idx, guards = tuple(zip(*(((src, dst), guard) for src, dst, guard in aut.transitions)))
+        # # Build list of transitions for use in cost_transitions
+        # idx: Sequence[tuple[int, int]]
+        # guards: Sequence[Guard[In]]
 
-        def cost_transitions(x: Num[Array, "..."]) -> Num[Array, " {n_q} {n_q}"]:
+        # idx, guards = tuple(zip(*(((src, dst), guard) for src, dst, guard in aut.transitions)))
+
+        def cost_transitions(x: Num[Array, "..."]) -> Num[Array, "q q"]:
             """Compute transition matrix for input x using weight_function.
 
             Parameters
@@ -107,9 +108,9 @@ class MatrixOperator[S: Semiring](eqx.Module):
             """
 
             matrix = algebra.zeros((n_q, n_q))
-            for (src, dst), guard in zip(idx, guards):
+            for (src, dst), guard in transitions.items():
                 # Apply weight function: lambda(x, guard)
-                weight = weight_function(x, guard)
+                weight = guard(x)  # type: ignore[no-untyped-call]
                 matrix = matrix.at[src, dst].set(weight)
 
             return matrix
