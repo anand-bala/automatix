@@ -1,51 +1,53 @@
 from __future__ import annotations
 
+from collections.abc import Hashable
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from typing import NamedTuple
 
 
 @dataclass(frozen=True)
-class Finite:
+class Finite[Q: Hashable]:
     """Finite accepting condition: a finite run, r, is accepting iff it ends in an accepting state"""
 
-    accepting: frozenset[int]
+    accepting: AbstractSet[Q]
 
 
 @dataclass(frozen=True)
-class Buchi:
+class Buchi[Q: Hashable]:
     """Büchi condition: a run, r, is accepting iff inf(r) intersects with `accepting`"""
 
-    accepting: frozenset[int]
+    accepting: AbstractSet[Q]
 
 
 @dataclass(frozen=True)
-class GeneralizedBuchi:
+class GeneralizedBuchi[Q: Hashable]:
     """Generalized Büchi condition: a run, r, is accepting iff inf(r) intersects with `accepting[i]` for some i"""
 
-    accepting: tuple[frozenset[int], ...]
+    accepting: tuple[AbstractSet[Q], ...]
 
 
 @dataclass(frozen=True)
-class CoBuchi:
+class CoBuchi[Q: Hashable]:
     """co-Büchi condition: a run, r, is accepting iff inf(r) does not intersect with `rejecting`"""
 
-    rejecting: frozenset[int]
+    rejecting: AbstractSet[Q]
 
 
 @dataclass(frozen=True)
-class GeneralizedCoBuchi:
+class GeneralizedCoBuchi[Q: Hashable]:
     """Generalized co-Büchi condition: a run, r, is accepting iff inf(r) does not intersect with `rejecting[i]` for some i"""
 
-    rejecting: tuple[frozenset[int]]
+    rejecting: tuple[AbstractSet[Q]]
 
 
-class AccPair(NamedTuple):
-    rejecting: frozenset[int]
-    accepting: frozenset[int]
+class AccPair[Q: Hashable](NamedTuple):
+    rejecting: AbstractSet[Q]
+    accepting: AbstractSet[Q]
 
 
 @dataclass(frozen=True)
-class Streett:
+class Streett[Q: Hashable]:
     """Streett condition: a run, r, is accpting iff _for all_ `i`, we have that inf(r) does not intersect with `pairs[i].rejecting` and does intersect with `pairs[i].accepting`"""
 
     pairs: tuple[AccPair, ...]
@@ -56,7 +58,7 @@ class Streett:
 
 
 @dataclass(frozen=True)
-class Rabin:
+class Rabin[Q: Hashable]:
     """Rabin condition: a run, r, is accpting iff _for some_ `i`, we have that inf(r) does not intersect with `pairs[i].rejecting` and does intersect with `pairs[i].accepting`"""
 
     pairs: tuple[AccPair, ...]
@@ -67,7 +69,7 @@ class Rabin:
 
 
 @dataclass(frozen=True)
-class Muller:
+class Muller[Q: Hashable]:
     """Muller condition: a run, r, is accepting iff for some `i`, we have that inf(r) is exactly `sets[i]`"""
 
-    sets: tuple[frozenset[int]]
+    sets: tuple[AbstractSet[Q]]
