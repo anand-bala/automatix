@@ -1,3 +1,17 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#   "dd>=0.6.0",
+#   "matplotlib",
+#   "pydantic>=2.10.6",
+#   "scienceplots",
+#   "argus-automatix"
+# ]
+#
+# [tool.uv.sources]
+# argus-automatic = { workspace = true }
+# ///
+
 """Run all experiments for HSCC 2025."""
 
 import argparse
@@ -10,7 +24,6 @@ from types import ModuleType
 from typing import Mapping, Sequence, TypeAlias
 
 import networkx as nx
-
 from automatix.afa.strel import StrelAutomaton
 
 N_TRIALS = 7
