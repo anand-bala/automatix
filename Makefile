@@ -15,10 +15,16 @@ endif
 dev: uv.lock | .venv
 .PHONY: dev
 
-lint:
+ruff-check:
 	uv run --frozen ruff format
 	uv run --frozen ruff check --fix --exit-non-zero-on-fix .
+.PHONY: fmt
+
+type-check:
 	uv run --frozen zmypy
+.PHONY: type-check
+
+lint: ruff-check type-check
 .PHONY: lint
 
 test:
