@@ -355,11 +355,3 @@ class Parity(AcceptanceCondition):
                 res = res & Fin(i)
 
         return res
-
-
-class OmegaAutomaton(ABC):
-    """Abstract omega automaton that can be combined with `WordAutomaton` to create an omega word automaton"""
-
-    @abstractmethod
-    def acceptance_condition(self) -> AcceptanceCondition:
-        """Return the acceptance condition of the omega automaton"""

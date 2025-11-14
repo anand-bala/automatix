@@ -13,10 +13,10 @@ dependencies = [
   "equinox>=0.12",
   "numpy",
   "networkx",
-  "lark",
-  "logic-asts>=1.1.0",
   "optree>=0.17.0",
   "bitarray>=3.8.0",
+  "algebraic",
+  "hoaparser",
 ]
 
 [project.optional-dependencies]
@@ -53,10 +53,11 @@ build-backend = "uv_build"
 module-name = "automatix"
 
 [tool.uv.workspace]
-members = ["packages/algebraic"]
+members = ["packages/algebraic", "packages/hoaparser"]
 
 [tool.uv.sources]
 algebraic = { workspace = true }
+hoaparser = { workspace = true }
 
 [tool.mypy]
 strict = true

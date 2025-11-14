@@ -1,8 +1,7 @@
 from pathlib import Path
 
+import hoaparser as hoa
 import pytest
-
-import automatix.hoa as hoa
 
 EXAMPLES_DIR = Path(__file__).parent / "examples"
 

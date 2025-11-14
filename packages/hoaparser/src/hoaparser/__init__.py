@@ -1,16 +1,16 @@
 # pyright: reportExplicitAny=false
+from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from lark import Lark, ParseTree, Token, Transformer, v_args
+import logic_asts.base as guard
+from lark import Lark, Token, Transformer, v_args
 from typing_extensions import override
 
-import automatix.hoa.label_expr as guard
-from automatix.hoa.label_expr import LabelExpr
-from automatix.omega import (
+from hoaparser.omega import (
     AcceptanceCondition,
     AccExpr,
     Fin,
@@ -19,40 +19,7 @@ from automatix.omega import (
     Literal,
 )
 
-
-class HoaSyntaxError(Exception):
-    def __init__(self, label: str = "") -> None:
-        super().__init__()
-        self.label: str = label
-
-    @override
-    def __str__(self) -> str:
-        return f"{self.label}"
-
-
-@dataclass
-class IncorrectVersionError(HoaSyntaxError):
-    label: str = "automatix only supports v1"
-
-
-class DuplicateHeaderError(HoaSyntaxError):
-    def __init__(self, header: str) -> None:
-        super().__init__(f"Header field `{header}` already defined")
-
-
-class DuplicateAliasError(HoaSyntaxError):
-    def __init__(self, alias: str) -> None:
-        super().__init__(f"Duplicate alias definition: `{alias}`")
-
-
-class MissingHeaderError(HoaSyntaxError):
-    def __init__(self, header: str) -> None:
-        super().__init__(f"Missing mandatory field `{header}`")
-
-
-class UndefinedAliasError(HoaSyntaxError):
-    def __init__(self, alias: str) -> None:
-        super().__init__(f"Undefined alias present in expression: `{alias}`")
+type LabelExpr = guard.BaseExpr[int]
 
 
 @dataclass(frozen=True, eq=True, kw_only=True)
@@ -91,7 +58,42 @@ class ParsedAutomaton:
     body: dict[State, list[Transition]]
 
 
-class AstTransformer(Transformer[Token, ParseTree]):
+class HoaSyntaxError(Exception):
+    def __init__(self, label: str = "") -> None:
+        super().__init__()
+        self.label: str = label
+
+    @override
+    def __str__(self) -> str:
+        return f"{self.label}"
+
+
+@dataclass
+class IncorrectVersionError(HoaSyntaxError):
+    label: str = "hoaparser only supports v1"
+
+
+class DuplicateHeaderError(HoaSyntaxError):
+    def __init__(self, header: str) -> None:
+        super().__init__(f"Header field `{header}` already defined")
+
+
+class DuplicateAliasError(HoaSyntaxError):
+    def __init__(self, alias: str) -> None:
+        super().__init__(f"Duplicate alias definition: `{alias}`")
+
+
+class MissingHeaderError(HoaSyntaxError):
+    def __init__(self, header: str) -> None:
+        super().__init__(f"Missing mandatory field `{header}`")
+
+
+class UndefinedAliasError(HoaSyntaxError):
+    def __init__(self, alias: str) -> None:
+        super().__init__(f"Undefined alias present in expression: `{alias}`")
+
+
+class _AstTransformer(Transformer[Token, ParsedAutomaton]):
     def __init__(self, visit_tokens: bool = True) -> None:
         super().__init__(visit_tokens)
         self._aliases: dict[str, LabelExpr] = dict()
@@ -226,12 +228,12 @@ class AstTransformer(Transformer[Token, ParseTree]):
         return list(props)
 
     @v_args(inline=True)
-    def label_atom(self, val: bool | int | str) -> guard.LabelExpr:
+    def label_atom(self, val: bool | int | str) -> LabelExpr:
         match val:
             case bool(v):
                 return guard.Literal(v)
             case int(v):
-                return guard.Predicate(v)
+                return guard.Variable(v)
             case str(alias):
                 if alias not in self._aliases:
                     raise UndefinedAliasError(alias)
@@ -315,6 +317,8 @@ with open(HOA_GRAMMAR_FILE, "r") as grammar:
     )
 
 
-def parse(expr: str) -> ParseTree:
+def parse(expr: str) -> ParsedAutomaton:
     tree = HOA_GRAMMAR.parse(expr)
-    return AstTransformer().transform(tree)
+    ret = _AstTransformer().transform(tree)
+    assert isinstance(ret, ParsedAutomaton)
+    return ret
