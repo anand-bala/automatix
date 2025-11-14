@@ -1,3 +1,5 @@
+import typing
+
 import jax
 import jax.numpy as jnp
 import pytest
@@ -160,7 +162,7 @@ class TestBooleanSum:
         """Gradients have same shape as input."""
 
         def f(x: Num[Array, "..."]) -> Num[Array, ""]:
-            return soft_boolean_sum(x, axis=None)
+            return typing.cast(Array, soft_boolean_sum(x, axis=None))
 
         grads = jax.grad(f)(boolean_vector)
         assert grads.shape == boolean_vector.shape
@@ -169,7 +171,7 @@ class TestBooleanSum:
         """Gradients are nonzero for soft_or reduction."""
 
         def f(x: Num[Array, "..."]) -> Num[Array, ""]:
-            return soft_boolean_sum(x, axis=None)
+            return typing.cast(Array, soft_boolean_sum(x, axis=None))
 
         grads = jax.grad(f)(boolean_vector)
         # All gradients should be nonzero (soft_or is smooth)
@@ -212,7 +214,7 @@ class TestSmoothBooleanSum:
         """
 
         def f(x: Num[Array, " n"]) -> Num[Array, ""]:
-            return smooth_boolean_sum(x, axis=None, temperature=1.0)
+            return typing.cast(Array, smooth_boolean_sum(x, axis=None, temperature=1.0))
 
         grads = jax.grad(f)(boolean_vector)
         assert grads.shape == boolean_vector.shape
@@ -328,7 +330,7 @@ class TestKnownLimitations:
         """
 
         def f(x: Num[Array, " n"]) -> Num[Array, ""]:
-            return soft_boolean_sum(x, axis=None)
+            return typing.cast(Array, soft_boolean_sum(x, axis=None))
 
         grads = jax.grad(f)(boolean_vector)
 

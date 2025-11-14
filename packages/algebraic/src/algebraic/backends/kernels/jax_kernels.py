@@ -1,3 +1,5 @@
+# mypy: disable-error-code="no-untyped-call, no-any-return"
+
 import functools
 from typing import Union
 

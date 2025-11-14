@@ -12,10 +12,11 @@ from dataclasses import dataclass, field
 from typing import Literal, Protocol, runtime_checkable
 
 from jaxtyping import Array, Num
+from typing_extensions import overload
 
-type Axis = int | tuple[int, ...]
+type Axis = int | Sequence[int]
 type MaybeAxis = None | Axis
-type Shape = int | tuple[int, ...]
+type Shape = int | Sequence[int]
 
 type UnaryOp = Callable[[Array], Array]
 type BinaryOp = Callable[[Array, Array], Array]
@@ -36,7 +37,7 @@ type Property = Literal["idempotent_add", "idempotent_mul", "commutative", "simp
 
 @dataclass
 class AlgebraicStructure:
-    properties: set[Property] = field(default_factory=set, kw_only=True)
+    properties: set[Property] = field(default_factory=set, kw_only=True, metadata=dict(static=True))
     """Set of algebraic properties.
     Valid values: "idempotent_add", "idempotent_mul", "commutative", "simple", "has_negation" 
     """
@@ -200,13 +201,33 @@ class BiModule[S: Semiring](ABC):
     def mul(self, x: Array, y: Array) -> Array:
         return self.algebra.mul(x, y)
 
+    @overload
     @abstractmethod
-    def zeros(self, shape: Shape) -> Num[Array, " {shape}"]:
+    def zeros(self, shape: int) -> Num[Array, " {shape}"]:
         """Return an array of given shape filled with the additive identity (zero)"""
 
+    @overload
     @abstractmethod
-    def ones(self, shape: Shape) -> Num[Array, " {shape}"]:
+    def zeros(self, shape: Sequence[int]) -> Num[Array, " {*shape}"]:
+        """Return an array of given shape filled with the additive identity (zero)"""
+
+    # @abstractmethod
+    # def zeros(self, shape: Shape) -> Num[Array, " {shape}"]:
+    #     """Return an array of given shape filled with the additive identity (zero)"""
+
+    @overload
+    @abstractmethod
+    def ones(self, shape: int) -> Num[Array, " {shape}"]:
         """Return an array of given shape filled with the multiplicative identity (one)"""
+
+    @overload
+    @abstractmethod
+    def ones(self, shape: Sequence[int]) -> Num[Array, " {*shape}"]:
+        """Return an array of given shape filled with the multiplicative identity (one)"""
+
+    # @abstractmethod
+    # def ones(self, shape: Shape) -> Num[Array, " {shape}"]:
+    #     """Return an array of given shape filled with the multiplicative identity (one)"""
 
     @abstractmethod
     def vdot(self, a: Num[Array, " n"], b: Num[Array, " n"]) -> Num[Array, ""]:

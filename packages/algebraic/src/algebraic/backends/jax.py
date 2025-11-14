@@ -4,50 +4,80 @@ This module contains all semiring implementations using JAX arrays and operation
 All semirings here are designed to work with jax.jit, jax.vmap, and automatic
 differentiation.
 """
+# mypy: disable-error-code="no-any-return"
 
 import functools
 from collections.abc import Sequence
-from dataclasses import dataclass, field
 from typing import Literal
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
+import jax.tree_util as jtu
 from jaxtyping import Array, Num
 from typing_extensions import final, overload, override
 
 import algebraic.backends.kernels.jax_kernels as kernels
 from algebraic.spec import (
+    AlgebraicStructure,
     BiModule,
     BinaryOp,
     BooleanAlgebra,
+    BoundedDistributiveLattice,
     DeMorganAlgebra,
+    HeytingAlgebra,
     MatmulFn,
     MaybeAxis,
     ReductionOp,
+    Ring,
     Semiring,
     Shape,
+    StoneAlgebra,
     VdotFn,
 )
-from algebraic.spec import (
-    BoundedDistributiveLattice as Lattice,
-)
+from algebraic.spec import BoundedDistributiveLattice as Lattice
+
+# Register all spec dataclasses as PyTrees
+for dataclass_type in [
+    AlgebraicStructure,
+    Semiring,
+    BoundedDistributiveLattice,
+    Ring,
+    DeMorganAlgebra,
+    HeytingAlgebra,
+    StoneAlgebra,
+    BooleanAlgebra,
+    BiModule,
+]:
+    jtu.register_dataclass(dataclass_type)
 
 
 @final
-@dataclass
-class JaxBiModule[S: Semiring](BiModule[S]):
+class JaxBiModule[S: Semiring](eqx.Module, BiModule[S]):
     """JAX wrappers for the vector interface for algebraic structures"""
 
-    _vdot: None | VdotFn = field(default=None, kw_only=True)
-    _matmul: None | MatmulFn = field(default=None, kw_only=True)
+    _vdot: None | VdotFn = eqx.field(default=None, kw_only=True)
+    _matmul: None | MatmulFn = eqx.field(default=None, kw_only=True)
+
+    @overload
+    def zeros(self, shape: int) -> Num[Array, " {shape}"]: ...
+
+    @overload
+    def zeros(self, shape: Sequence[int]) -> Num[Array, " {*shape}"]: ...
 
     @override
-    def zeros(self, shape: Shape) -> Num[Array, " {shape}"]:
+    def zeros(self, shape: Shape) -> Num[Array, "*shape"]:
         """Return an array of given shape filled with the additive identity (zero)"""
         return jnp.full(shape, self.algebra.zero)
 
+    @overload
+    def ones(self, shape: int) -> Num[Array, " {shape}"]: ...
+
+    @overload
+    def ones(self, shape: Sequence[int]) -> Num[Array, " {*shape}"]: ...
+
     @override
-    def ones(self, shape: Shape) -> Num[Array, " {shape}"]:
+    def ones(self, shape: Shape) -> Num[Array, "*shape"]:
         """Return an array of given shape filled with the multiplicative identity (one)"""
         return jnp.full(shape, self.algebra.one)
 
@@ -196,10 +226,10 @@ class JaxBiModule[S: Semiring](BiModule[S]):
 def counting_semiring() -> JaxBiModule[Semiring]:
     r"""Implementation of the counting semiring (R, +, *, 0, 1)."""
 
-    def add(x1: Num[Array, " n"], x2: Num[Array, " n"]) -> Num[Array, " n"]:
+    def add(x1: Num[Array, "*#n"], x2: Num[Array, "*#n"]) -> Num[Array, "*#n"]:
         return x1 + x2
 
-    def multiply(x1: Num[Array, " n"], x2: Num[Array, " n"]) -> Num[Array, " n"]:
+    def multiply(x1: Num[Array, "*#n"], x2: Num[Array, "*#n"]) -> Num[Array, "*#n"]:
         return x1 * x2
 
     def sum(a: Num[Array, " ..."], axis: MaybeAxis = None) -> Num[Array, " ..."]:
@@ -225,9 +255,9 @@ def counting_semiring() -> JaxBiModule[Semiring]:
 @overload
 def max_min_algebra(
     *,
-    smooth: bool,
-    only: None,
-    temperature: float,
+    smooth: bool = False,
+    only: None = None,
+    temperature: float = 1.0,
 ) -> JaxBiModule[DeMorganAlgebra]: ...
 
 
@@ -278,13 +308,13 @@ def max_min_algebra(
     zero = jnp.asarray(0.0 if only == "positive" else -jnp.inf)
     one = jnp.asarray(-0.0 if only == "negative" else jnp.inf)
 
-    def add(x1: Num[Array, " n"], x2: Num[Array, " n"]) -> Num[Array, " n"]:
+    def add(x1: Num[Array, "*#n"], x2: Num[Array, "*#n"]) -> Num[Array, "*#n"]:
         return add_kernel(x1, x2)
 
     def sum(a: Num[Array, " ..."], axis: MaybeAxis = None) -> Num[Array, " ..."]:
         return sum_kernel(a, axis)
 
-    def multiply(x1: Num[Array, " n"], x2: Num[Array, " n"]) -> Num[Array, " n"]:
+    def multiply(x1: Num[Array, "*#n"], x2: Num[Array, "*#n"]) -> Num[Array, "*#n"]:
         return mul_kernel(x1, x2)
 
     def prod(a: Num[Array, " ..."], axis: MaybeAxis = None) -> Num[Array, " ..."]:
@@ -360,13 +390,13 @@ def tropical_semiring(*, minplus: bool = True, smooth: bool = False, temperature
         zero = jnp.asarray(-jnp.inf)
         one = jnp.asarray(-0.0)
 
-    def add(x1: Num[Array, " n"], x2: Num[Array, " n"]) -> Num[Array, " n"]:
+    def add(x1: Num[Array, "*#n"], x2: Num[Array, "*#n"]) -> Num[Array, "*#n"]:
         return add_kernel(x1, x2)
 
     def sum(a: Num[Array, " ..."], axis: MaybeAxis = None) -> Num[Array, " ..."]:
         return sum_kernel(a, axis)
 
-    def multiply(x1: Num[Array, " n"], x2: Num[Array, " n"]) -> Num[Array, " n"]:
+    def multiply(x1: Num[Array, "*#n"], x2: Num[Array, "*#n"]) -> Num[Array, "*#n"]:
         return x1 + x2
 
     def prod(a: Num[Array, " ..."], axis: MaybeAxis = None) -> Num[Array, " ..."]:
