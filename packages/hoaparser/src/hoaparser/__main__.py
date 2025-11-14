@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from pprint import pprint
 
-import automatix.hoa as hoa
+import hoaparser
 
 
 @dataclass
@@ -29,7 +29,7 @@ def main(args: Args) -> None:
     with open(args.infile, "r") as infile:
         spec = infile.read()
         print(spec)
-        tree = hoa.parse(spec)
+        tree = hoaparser.parse(spec)
 
     pprint(tree)
 

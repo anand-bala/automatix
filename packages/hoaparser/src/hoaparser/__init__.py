@@ -1,6 +1,7 @@
 # pyright: reportExplicitAny=false
 from __future__ import annotations
 
+import typing
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -245,11 +246,11 @@ class _AstTransformer(Transformer[Token, ParsedAutomaton]):
 
     @v_args(inline=True)
     def label_and(self, lhs: LabelExpr, rhs: LabelExpr) -> LabelExpr:
-        return lhs & rhs
+        return typing.cast(LabelExpr, lhs & rhs)
 
     @v_args(inline=True)
     def label_or(self, lhs: LabelExpr, rhs: LabelExpr) -> LabelExpr:
-        return lhs | rhs
+        return typing.cast(LabelExpr, lhs | rhs)
 
     @v_args(inline=True)
     def state_conj(self, *children: int) -> list[int]:
