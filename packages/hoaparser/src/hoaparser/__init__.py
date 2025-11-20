@@ -1,3 +1,8 @@
+"""Parser for HOA (Hanoi Omega-Automata) format.
+
+Provides parsing of automaton definitions in HOA format and data structures
+for representing parsed automata.
+"""
 # pyright: reportExplicitAny=false
 from __future__ import annotations
 
@@ -25,21 +30,36 @@ type LabelExpr = guard.BaseExpr[int]
 
 @dataclass(frozen=True, eq=True, kw_only=True)
 class Header:
+    """HOA file header containing automaton metadata."""
+
     acc: AcceptanceCondition
+    """Acceptance condition specification"""
     name: str | None = None
+    """Automaton name"""
     num_states: int | None = None
+    """Number of states"""
     initial: list[list[int]] = field(default_factory=list)
+    """Initial state(s)"""
     predicates: list[str] = field(default_factory=list)
+    """Atomic predicates"""
     aliases: dict[str, LabelExpr] = field(default_factory=dict)
+    """Label aliases"""
     properties: list[str] = field(default_factory=list)
+    """Automaton properties"""
 
 
 @dataclass(frozen=True)
 class State:
+    """HOA state representation."""
+
     idx: int
+    """State index"""
     label: LabelExpr | None = None
+    """State label expression"""
     acc_set: list[int] | None = None
+    """Acceptance set membership"""
     description: str | None = None
+    """Human-readable state description"""
 
     @override
     def __hash__(self) -> int:
@@ -48,48 +68,70 @@ class State:
 
 @dataclass(frozen=True)
 class Transition:
+    """HOA transition representation."""
+
     dst: list[int]
+    """Destination state(s)"""
     label: LabelExpr | None = None
+    """Transition label expression"""
     acc_set: list[int] | None = None
+    """Acceptance set membership"""
 
 
 @dataclass(frozen=True)
 class ParsedAutomaton:
+    """Parsed HOA automaton."""
+
     header: Header
+    """Automaton metadata"""
     body: dict[State, list[Transition]]
+    """State transitions mapping"""
 
 
 class HoaSyntaxError(Exception):
+    """Base exception for HOA parsing errors."""
+
     def __init__(self, label: str = "") -> None:
         super().__init__()
         self.label: str = label
 
     @override
     def __str__(self) -> str:
+        """Return error message."""
         return f"{self.label}"
 
 
 @dataclass
 class IncorrectVersionError(HoaSyntaxError):
+    """Raised when HOA version is not v1."""
+
     label: str = "hoaparser only supports v1"
 
 
 class DuplicateHeaderError(HoaSyntaxError):
+    """Raised when a header field is defined multiple times."""
+
     def __init__(self, header: str) -> None:
         super().__init__(f"Header field `{header}` already defined")
 
 
 class DuplicateAliasError(HoaSyntaxError):
+    """Raised when an alias is defined multiple times."""
+
     def __init__(self, alias: str) -> None:
         super().__init__(f"Duplicate alias definition: `{alias}`")
 
 
 class MissingHeaderError(HoaSyntaxError):
+    """Raised when a mandatory header field is missing."""
+
     def __init__(self, header: str) -> None:
         super().__init__(f"Missing mandatory field `{header}`")
 
 
 class UndefinedAliasError(HoaSyntaxError):
+    """Raised when an undefined alias is used in an expression."""
+
     def __init__(self, alias: str) -> None:
         super().__init__(f"Undefined alias present in expression: `{alias}`")
 
@@ -319,6 +361,7 @@ with open(HOA_GRAMMAR_FILE, "r") as grammar:
 
 
 def parse(expr: str) -> ParsedAutomaton:
+    """Parse HOA format string into an automaton structure."""
     tree = HOA_GRAMMAR.parse(expr)
     ret = _AstTransformer().transform(tree)
     assert isinstance(ret, ParsedAutomaton)

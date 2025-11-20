@@ -31,15 +31,19 @@ else:
 
 
 def _as_strel[AP: Hashable](expr: logic.Expr) -> STRELExpr[AP]:
+    """Cast logical expression to STREL expression."""
     return typing.cast(STRELExpr[AP], expr)
 
 
 def _as_poly[AP: Hashable](expr: logic.Expr) -> State:
+    """Cast logical expression to polynomial state."""
     return typing.cast(State, expr)
 
 
 @final
 class _NodeMap[AP: Hashable](MutableMapping[STRELExpr[AP], int]):
+    """Bidirectional mapping between STREL expressions and integer indices."""
+
     def __init__(self) -> None:
         super().__init__()
         self.forward: dict[STRELExpr[AP], int] = dict()
@@ -101,6 +105,7 @@ class STRELAutomaton[AP: Hashable](AbstractAutomaton[Input, bool, State, Q]):
         num_locations: int = 0,
         ego_location: int | Sequence[int] | None = None,
     ) -> None:
+        """Initialize STREL automaton from a spatio-temporal expression."""
         self._expr = expr
         self._expr_map = _NodeMap[AP]()
         self._expr_map.add_node(self._expr)
@@ -115,6 +120,7 @@ class STRELAutomaton[AP: Hashable](AbstractAutomaton[Input, bool, State, Q]):
         self._rewriter = _SpLTLRewrite[AP]()
 
     def set_ego_locations(self, value: int | Sequence[int] | None) -> None:
+        """Set the ego locations for spatial constraints."""
         if value is None:
             # All locations conjunction
             self._ego_locs = frozenset(range(self._num_locs))
@@ -126,9 +132,11 @@ class STRELAutomaton[AP: Hashable](AbstractAutomaton[Input, bool, State, Q]):
             raise TypeError(f"Incorrect type for ego_location: `{type(value)}`")
 
     def get_ego_locations(self) -> frozenset[int]:
+        """Get the ego locations for spatial constraints."""
         return self._ego_locs
 
     ego_locations = property(get_ego_locations, set_ego_locations)
+    """Property for getting/setting ego locations."""
 
     @property
     @override
@@ -141,6 +149,7 @@ class STRELAutomaton[AP: Hashable](AbstractAutomaton[Input, bool, State, Q]):
     @property
     @override
     def acceptance_condition(self) -> Finite[Q]:
+        """Acceptance condition based on STREL semantics."""
         return Finite(
             accepting=frozenset(
                 {
@@ -294,10 +303,13 @@ class STRELAutomaton[AP: Hashable](AbstractAutomaton[Input, bool, State, Q]):
 
 @attrs.define
 class _SpLTLRewrite[AP: Hashable]:
+    """Rewrites STREL expressions using automaton expansion rules."""
+
     _cache: dict[int, STRELExpr[AP]] = attrs.field(factory=dict)
     """Maintains a cache of rewritten expressions"""
 
     def __call__(self, expr: STRELExpr[AP]) -> STRELExpr[AP]:
+        """Rewrite a STREL expression to automaton form."""
         expr = typing.cast(STRELExpr[AP], expr.expand().to_nnf())
 
         expr_idx = hash(expr)

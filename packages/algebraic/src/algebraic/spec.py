@@ -89,18 +89,22 @@ class BoundedDistributiveLattice(Semiring):
 
     @property
     def join(self) -> BinaryOp:
+        r"""Lattice join operation (corresponds to $\oplus$)."""
         return self.add
 
     @property
     def meet(self) -> BinaryOp:
+        r"""Lattice meet operation (corresponds to $\otimes$)."""
         return self.mul
 
     @property
     def top(self) -> Array:
+        """Top element of the lattice (multiplicative identity)."""
         return self.one
 
     @property
     def bottom(self) -> Array:
+        """Bottom element of the lattice (additive identity)."""
         return self.zero
 
     def __post_init__(self) -> None:
@@ -144,6 +148,7 @@ class HeytingAlgebra(BoundedDistributiveLattice):
     implication: BinaryOp
 
     def complement(self, value: Array) -> Array:
+        """Pseudo-complement in Heyting algebra."""
         return self.implication(value, self.zero)
 
 
@@ -169,6 +174,7 @@ class BooleanAlgebra(DeMorganAlgebra):
     """
 
     def implication(self, a: Array, b: Array) -> Array:
+        r"""Boolean implication ($a \to b$ = $\neg a \lor b$)."""
         return self.add(self.complement(a), b)
 
 
@@ -196,9 +202,11 @@ class BiModule[S: Semiring](ABC):
     """Product reduction (potentially along a specific axis or set of axes) using semiring multiplication (*)"""
 
     def add(self, x: Array, y: Array) -> Array:
+        r"""Semiring addition ($\oplus$)."""
         return self.algebra.add(x, y)
 
     def mul(self, x: Array, y: Array) -> Array:
+        r"""Semiring multiplication ($\otimes$)."""
         return self.algebra.mul(x, y)
 
     @overload

@@ -1,3 +1,7 @@
+"""Acceptance condition expressions and implementations.
+
+Provides abstract and concrete acceptance condition classes for omega-automata.
+"""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -72,10 +76,14 @@ class AccExpr(ABC):
 
 @dataclass(frozen=True, slots=True, eq=True)
 class And(AccExpr):
+    """Logical conjunction of acceptance expressions."""
+
     args: list[AccExpr]
+    """Subexpressions to conjoin"""
 
     @override
     def dual(self) -> "AccExpr":
+        """Dual of conjunction (becomes disjunction by De Morgan's law)."""
         return Or([e.dual() for e in self.args])
 
     @override
@@ -85,10 +93,14 @@ class And(AccExpr):
 
 @dataclass(frozen=True, slots=True, eq=True)
 class Or(AccExpr):
+    """Logical disjunction of acceptance expressions."""
+
     args: list[AccExpr]
+    """Subexpressions to disjoin"""
 
     @override
     def dual(self) -> "AccExpr":
+        """Dual of disjunction (becomes conjunction by De Morgan's law)."""
         return And([e.dual() for e in self.args])
 
     @override
@@ -98,11 +110,16 @@ class Or(AccExpr):
 
 @dataclass(frozen=True, slots=True, eq=True)
 class Fin(AccExpr):
+    """Finitely often acceptance (set visited finitely many times)."""
+
     arg: int
+    """Acceptance set index"""
     invert: bool = False
+    """Invert the acceptance set"""
 
     @override
     def dual(self) -> "AccExpr":
+        """Dual is infinitely often."""
         return Inf(self.arg, self.invert)
 
     @override
@@ -114,11 +131,16 @@ class Fin(AccExpr):
 
 @dataclass(frozen=True, slots=True, eq=True)
 class Inf(AccExpr):
+    """Infinitely often acceptance (set visited infinitely many times)."""
+
     arg: int
+    """Acceptance set index"""
     invert: bool = False
+    """Invert the acceptance set"""
 
     @override
     def dual(self) -> "AccExpr":
+        """Dual is finitely often."""
         return Fin(self.arg, self.invert)
 
     @override
@@ -130,10 +152,14 @@ class Inf(AccExpr):
 
 @dataclass(frozen=True, slots=True, eq=True)
 class Literal(AccExpr):
+    """Boolean literal (always accept or never accept)."""
+
     value: bool
+    """True for always accept, False for never accept"""
 
     @override
     def dual(self) -> "AccExpr":
+        """Negation of the literal."""
         return Literal(not self.value)
 
     @override

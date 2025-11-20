@@ -10,7 +10,6 @@ from types import ModuleType
 from typing import Mapping, Sequence, TypeAlias
 
 import networkx as nx
-
 from automatix.afa.strel import StrelAutomaton
 
 N_TRIALS = 7

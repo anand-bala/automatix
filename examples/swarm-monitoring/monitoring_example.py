@@ -13,11 +13,10 @@ from typing import Mapping, MutableSequence, Sequence, TypeAlias
 import logic_asts
 import networkx as nx
 import numpy as np
+from automatix.afa.strel import StrelAutomaton, make_bool_automaton
 from logic_asts import strel
 from pydantic import BaseModel, Field, model_validator
 from typing_extensions import Self
-
-from automatix.afa.strel import StrelAutomaton, make_bool_automaton
 
 DRONE_COMMS_RADIUS: float = 40
 GCS_COMMS_RADIUS: float = 60

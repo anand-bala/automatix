@@ -1,3 +1,7 @@
+"""Acceptance conditions for omega-automata.
+
+Defines acceptance condition types including Büchi, co-Büchi, Rabin, Streett, and Muller.
+"""
 from __future__ import annotations
 
 from collections.abc import Hashable
@@ -42,8 +46,12 @@ class GeneralizedCoBuchi[Q: Hashable]:
 
 
 class AccPair[Q: Hashable](NamedTuple):
+    """Pair of accepting and rejecting state sets for Rabin/Streett conditions."""
+
     rejecting: AbstractSet[Q]
+    """States that must not appear infinitely often"""
     accepting: AbstractSet[Q]
+    """States that must appear infinitely often"""
 
 
 @dataclass(frozen=True)
@@ -54,6 +62,7 @@ class Streett[Q: Hashable]:
 
     @property
     def index(self) -> int:
+        """Number of pairs in this condition."""
         return len(self.pairs)
 
 
@@ -65,6 +74,7 @@ class Rabin[Q: Hashable]:
 
     @property
     def index(self) -> int:
+        """Number of pairs in this condition."""
         return len(self.pairs)
 
 

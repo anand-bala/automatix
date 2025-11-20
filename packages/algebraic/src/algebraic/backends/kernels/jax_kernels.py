@@ -1,3 +1,7 @@
+"""JAX kernel implementations for boolean and semiring operations.
+
+Provides smooth approximations and differentiable boolean operations.
+"""
 # mypy: disable-error-code="no-untyped-call, no-any-return"
 
 import functools

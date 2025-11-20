@@ -1,3 +1,4 @@
+"""Nondeterministic finite automaton (NFA) implementation."""
 from __future__ import annotations
 
 import typing
@@ -55,6 +56,7 @@ class NFA[In](SizedAutomaton[AbstractSet[In], bool, NFAState, int]):
     @property
     @override
     def acceptance_condition(self) -> Finite[int]:
+        """Acceptance condition based on final locations."""
         return Finite(self.final_locations)
 
     @property

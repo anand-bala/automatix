@@ -1,3 +1,8 @@
+"""Weighted automaton operators using semirings.
+
+Provides MatrixOperator for constructing weighted finite-word automaton operators
+from NFA and weight functions.
+"""
 from __future__ import annotations
 
 import functools

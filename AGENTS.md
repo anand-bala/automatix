@@ -1,17 +1,16 @@
-# Automatix: Agent Context and Refactoring Roadmap
+# Automatix: Agent Context
 
-**Version**:
-v0.5.0 (Phase 2 Complete) **Last Updated**:
-2025-11-07 **Status**:
-Core NFA weight functions complete; AFA deferred to v0.8.0
+**Version**: v0.4.0
+**Last Updated**: 2025-11-20
+**Status**: NFA operators with guard-based weight functions; STREL automaton (Boolean-only); hoaparser for HOA format parsing
 
 ## Quick Start for Agents
 
 ### Project Purpose
 Automatix is a library for **weighted automata over semirings** with a focus on:
-- Flexible weight functions mapping `(input_symbol, guard) -> semiring_value`
-- Multi-backend support (JAX-first, PyTorch/NumPy planned)
-- Spatio-temporal specifications (STREL-based AFA for future versions)
+- Flexible weight functions mapping `(input, guard) -> semiring_value`
+- Multi-backend support (JAX-first; PyTorch/NumPy planned for future versions)
+- Spatio-temporal specifications via STREL automata (Boolean-only currently)
 - Quantitative monitoring and synthesis
 
 ### Essential Commands
@@ -22,244 +21,186 @@ python -m pytest tests/ -v
 # Type check (strict mode)
 python -m mypy src/automatix/ --strict
 
-# View available semirings
-python -c "from automatix.algebra import list_semirings; print(list_semirings('jax'))"
+# Check workspace status
+jj status
 
 # Commit changes (use jj, not git)
 jj commit -m "your message"
-
-# Check status
-jj status
 ```
 
-### Directory Structure
-```
-src/automatix/
-├── predicates.py           # Predicate classes (And, Or, Predicate, AbstractPredicate)
-├── weights.py              # Weight functions + make_atomic_predicate_weight_function factory
-├── nfa/
-│   ├── automaton.py        # NFA, AutomatonOperator, make_automaton_operator
-│   ├── predicate.py        # Backward compatibility re-exports
-│   └── __init__.py
-├── afa/
-│   ├── automaton.py        # Generic AFA[Alph, Q, K] (abstract, deferred)
-│   └── strel.py            # STREL->AFA translation (Boolean only, v0.8.0+)
-└── algebra/
-    ├── spec.py             # AbstractSemiring interface
-    ├── backends/
-    │   ├── jax_.py         # 11 JAX semirings + kernels
-    │   ├── torch_.py       # v0.6.0 stub
-    │   └── numpy_.py       # v0.6.0 stub
-    └── polynomials/        # Polynomial implementations (Boolean only currently)
-```
-
-## Architecture Overview
-
-### Core Concepts
-
-**Weight Functions**:
-Map `(input, guard) -> weight` where:
-- `input`:
-  Concrete data (vector in state space)
-- `guard`:
-  Boolean expression (from logic_asts)
-- `weight`:
-  Value in target semiring (float, array, etc.)
-
-**Semiring Operations**:
-- AND (`land`):
-  Uses semiring multiplication (otimes)
-- OR (`lor`):
-  Uses semiring addition (oplus)
-
-**Key Semirings**:
-- **Tropical**:
-  MinPlus (min as addition), MaxPlus (max as addition)
-- **Robustness**:
-  MaxMin semiring for STL robustness degrees
-- **Boolean**:
-  Standard logical operations
-- **Others**:
-  Counting, Log, LSE variants
-
-### Module Integration
+### Workspace Structure
+This is a Jujutsu monorepo with three packages:
 
 ```
-predicates.py (base classes)
-    |
-weights.py (weight functions + factory)
-    |
-nfa/automaton.py (NFA + make_automaton_operator)
-    |
-algebra/ (semiring implementations)
+automatix/
+├── src/automatix/              # Main package
+│   ├── spec.py                 # Abstract interfaces (Automaton, WeightFunction, Guard, AcceptanceCondition)
+│   ├── operators.py            # MatrixOperator for finite-word automata
+│   ├── acc.py                  # Acceptance conditions (Finite, Buchi, CoBuchi, Rabin, Streett, etc.)
+│   ├── automata/
+│   │   ├── nfa.py              # NFA implementation
+│   │   └── strel.py            # STREL automaton (Boolean-only)
+│   └── weights/
+│       └── guard_weights.py    # Guard-based weight functions (Predicate, And, Or, ExprWeightFn)
+│
+├── packages/algebraic/         # Separate package: semiring algebra
+│   ├── spec.py                 # Semiring interfaces (Semiring, BoundedDistributiveLattice, etc.)
+│   └── backends/
+│       ├── jax.py              # JAX implementations
+│       └── torch.py            # PyTorch stub
+│
+├── packages/hoaparser/         # Separate package: HOA format parser
+│   ├── grammar.lark            # Lark grammar for HOA syntax
+│   └── parser.py               # Parser implementation
+│
+└── examples/                   # Example applications
+    ├── weight_functions_demo.py
+    ├── motion_planning/
+    └── swarm-monitoring/
 ```
 
-**No circular imports** - clean dependency hierarchy.
+## Core Architecture
 
-## Phase Completion Status
+### Main Modules
 
-### Phase 1: Foundation (COMPLETE - Nov 5, 2025)
-- Pure interface definitions (spec.py)
-- Modular backend structure
-- Centralized registry system
-- JAX kernels infrastructure
-- Type safety:
-  100% mypy strict
-- Tests:
-  18/18 passing
+**spec.py**:
+- Abstract interfaces: `AbstractAutomaton`, `SizedAutomaton`, `WeightFunction`, `Guard`, `AcceptanceCondition`
+- Defines contracts for automata and weight functions
 
-### Phase 2: Weight Functions (COMPLETE - Nov 6, 2025)
-- Weight function architecture finalized
-- Factory function:
-  `make_atomic_predicate_weight_function`
-- NFA integration via `make_automaton_operator`
-- Tests:
-  13/13 passing
-- Examples:
-  6 working patterns
+**operators.py**:
+- `MatrixOperator`: Weighted finite-word automaton operator
+- `MatrixOperator.make()`: Factory method for creating operators from NFA + weight functions
 
-### Phase 2.5: Backward Compatibility (COMPLETE - Nov 7, 2025)
-- Predicates moved to separate `predicates.py` module
-- NFA tests fully rewritten with new API
-- Examples for tropical semirings and robustness semantics
-- Type safety maintained:
-  100% mypy strict
-- Tests:
-  36/36 passing
+**acc.py**:
+- `Finite`: Accept after reaching final state
+- `Buchi`, `CoBuchi`: Accepting transitions in infinite runs
+- `GeneralizedBuchi`, `GeneralizedCoBuchi`
+- `Rabin`, `Streett`: Pairwise conditions
+- `Muller`: Set-based acceptance
 
-## Known Blockers and Deferments
+**automata/nfa.py**:
+- NFA implementation with location and transition management
+- Implements `SizedAutomaton` interface
+- Methods: `add_location()`, `add_transition()`, `guards()`
 
-### AFA Module (Deferred to v0.8.0)
+**automata/strel.py**:
+- STREL (Spatio-Temporal Requirement Elicitation Language) automaton
+- Boolean-only (no semiring support currently)
+- Expression-based polynomial structure (~750 lines)
+- Uses `_NodeMap` and helper classes for internal representation
 
-**Status**:
-Currently Boolean-only via `dd` package (Binary Decision Diagrams)
+**weights/guard_weights.py**:
+- `AbstractPredicate`: Base class for predicates
+- `Predicate`: Atomic predicates with boolean evaluation
+- `And`, `Or`: Logical operators over predicates
+- `ExprWeightFn`: Guard-based weight function class
 
-**Architecture Mismatch**:
-- NFA:
-  Guards on transitions, scalar weight functions
-- AFA:
-  STREL specifications, polynomial-based transitions over semirings
+### Separate Packages
 
-**Blockers for General Semiring Support**:
+**packages/algebraic/**:
+- Pure semiring algebra (no automata)
+- Interfaces: `Semiring`, `Ring`, `BiModule`, `BoundedDistributiveLattice`, `DeMorganAlgebra`, etc.
+- JAX implementations:
+  - `counting_semiring()`: Count semiring
+  - `tropical_semiring()`: MinPlus/MaxPlus with smooth options
+  - `max_min_algebra()`: MaxMin algebra (robustness semantics)
+  - `boolean_algebra()`: Standard Boolean algebra
 
-1. **Polynomial Representations**:
-   - Current:
-     Uses `dd` package (reduced ordered BDDs)
-   - Problem:
-     BDDs require properties not satisfied by arbitrary semirings
-   - Need:
-     Custom polynomial representations for each semiring family
-
-2. **Algebra Classes**:
-   - Required:
-     Implementations for De Morgan algebras (min-max, etc.)
-   - Required:
-     Boolean algebra specializations
-   - Scope:
-     Significant implementation effort
-
-3. **Labeling Function**:
-   - Current pattern:
-     `label_fn(spatial_model, location, atom) -> K`
-   - AFA uses this for atomic predicates, not weight functions
-   - Integration path unclear until polynomial representations exist
-
-4. **STREL Specificity**:
-   - Current implementation is tightly coupled to STREL
-   - Needs generalization for other temporal logics
-   - Deferred until core polynomial infrastructure in place
-
-**Path Forward for v0.8.0**:
-1. Design and implement custom polynomial representations
-2. Create De Morgan algebra implementations
-3. Add Boolean algebra specializations
-4. Generalize AFA beyond STREL
-5. Integrate with weight function abstraction (if applicable)
+**packages/hoaparser/**:
+- Hanoi Omega-Automata (HOA) format parser
+- Uses Lark parser generator
+- Parses automaton structure, states, transitions, acceptance conditions
 
 ## Design Decisions (Locked In)
 
-1. **Weight Function Scope**:
-   Core patterns only (guard-based + global)
-2. **Runtime Validation**:
-   Validation at automaton construction time
-3. **Semiring-Agnostic**:
-   Weight functions don't know which semiring they're used with
-4. **Backward Compatibility**:
-   No v0.4.0 support required (breaking changes OK)
-5. **Version Control**:
-   Use `jj` (Jujutsu) not git
-6. **Code Style**:
-   No emojis/unicode; use LaTeX for math symbols
+1. **Weight Function Scope**: Guard-based weight functions (input + boolean expression -> semiring value)
+2. **Runtime Validation**: Validation at automaton construction time
+3. **Semiring-Agnostic**: Weight functions don't know target semiring
+4. **Breaking Changes OK**: No v0.3.0 backward compatibility required
+5. **Version Control**: Use `jj` (Jujutsu), not git
+6. **Code Style**: No emojis/unicode; use LaTeX for math symbols (inline code blocks)
+
+## Module Integration
+
+```
+weights/guard_weights.py (predicates + ExprWeightFn)
+    |
+automata/nfa.py (NFA structure)
+    |
+operators.py (MatrixOperator.make())
+    |
+algebraic/ (semiring implementations)
+```
+
+**Dependency hierarchy**: Clean, no circular imports.
+
+## Current Implementation Status
+
+### What Works
+- NFA operators with guard-based weight functions
+- JAX semiring implementations (counting, tropical, max-min, boolean)
+- STREL automaton (Boolean-only)
+- HOA format parser
+- Example applications (weight functions, motion planning, swarm monitoring)
+
+### What's Out of Scope (v0.4.0)
+- General semiring support for STREL (Boolean-only currently)
+- PyTorch backend (JAX only)
+- Omega-regular automata (Buchi, co-Buchi)
+
+### Known Limitations
+- STREL is Boolean-only due to polynomial representation complexity
+- No polynomial evaluation over arbitrary semirings yet
+- Examples may have outdated import paths (check before running)
+
+## Important Notes for Agents
+
+1. **Single User**: Anand is the primary user; breaking changes are acceptable
+2. **JAX-First**: Optimize for JAX initially
+3. **No Deprecation**: Delete old code instead of wrapping it
+4. **Type Safety**: All new code must pass `mypy --strict`
+5. **Prefer Refactoring**: Update existing patterns rather than special-casing
+6. **Documentation**: Keep design decisions documented in markdown files
+7. **Commit Format**: Use present tense (`add`, `fix`, `refactor`); reference issues/papers when relevant
 
 ## Testing
 
-- **Framework**:
-  pytest with jaxtyping
-- **Coverage**:
-  All 36 tests passing (26 existing + 7 new + 3 HOA parser)
-- **Type Safety**:
-  100% mypy --strict across all modules
-- **JAX Integration**:
-  JIT, vmap, gradient flow all tested
+- **Framework**: pytest with jaxtyping
+- **Type Safety**: 100% mypy --strict
+- **JAX Integration**: JIT, vmap, gradient operations tested
 
 ## Examples
 
 Located in `examples/`:
-- `weight_functions_demo.py`:
-  6 weight function patterns
-- `tropical_semirings_demo.py`:
-  MinPlus/MaxPlus applications
-- `robustness_semantics_demo.py`:
-  STL robustness with MaxMin
+- `weight_functions_demo.py`: Guard-based weight function patterns
+- `motion_planning/`: Dynamics and planning examples
+- `swarm-monitoring/`: Multi-agent coordination specs
 
 Run examples:
-`python examples/FILENAME.py`
+```bash
+python examples/FILENAME.py
+```
 
-## Important Notes for Agents
+## Future Directions (Deferred)
 
-1. **Single User**:
-   Anand is the primary user; breaking changes are acceptable
-2. **JAX-First**:
-   Optimize for JAX initially; other backends later
-3. **No Deprecation**:
-   Delete old code instead of wrapping it
-4. **Type Safety**:
-   All new code must pass `mypy --strict`
-5. **Prefer Refactoring**:
-   Update existing code patterns rather than special-casing
-6. **Documentation**:
-   Keep design decisions documented in markdown files
-7. **Commit Message Format**:
-   Use present tense, reference papers/issues when relevant
+### Polynomial Semirings (v0.6.0+)
+- Custom polynomial representations for general semirings
+- STREL support beyond Boolean
+- De Morgan algebra implementations
+- Requires significant algebra infrastructure
 
-## Next Steps (v0.6.0 and Beyond)
+### Multi-Backend Support (v0.7.0+)
+- PyTorch implementations for semiring operations
+- Cross-backend testing and benchmarking
+- NumPy deferred (JAX on CPU sufficient for now)
 
-1. **Phase 3 (v0.6.0)**:
-   AFA Implementation - Multilinear Polynomials
-   - Optimized JAX kernels for semiring operations (prerequisite)
-   - MultilinearPolynomial data structure and monomial basis indexing
-   - Evaluation algorithms (Algorithms 1 and 4 from Gillespie 2023)
-   - Polynomial substitution and like-term collection
-   - PolynomialAutomatonOperator and AFA integration
-   - STREL to AFA translation (basic, Boolean only)
-   - **Constraint**: Only distributive lattice semirings (idempotent oplus/otimes)
-   - **Reference**: `.cache/AFA_POLYNOMIAL_ARCHITECTURE.md`
-
-2. **Phase 4 (v0.7.0)**:
-   Multi-backend support (PyTorch)
-   - Port optimized JAX kernels to PyTorch
-   - Cross-backend semiring testing
-   - Performance benchmarking
-   - **Note**: NumPy backend deferred (JAX on CPU is effective)
-
-3. **Phase 5 (v0.8.0)**:
-   Omega-Regular Automata
-   - BuchiNFA and co-Büchi support
-   - Limit-based weight semantics
-   - OmegaAutomatonOperator
-   - Tree automata exploration (if scoped)
+### Omega-Regular Automata (v0.8.0+)
+- Buchi and co-Buchi support
+- Limit-based weight semantics
+- OmegaAutomatonOperator
 
 ## References
 
-- **Architecture Reference**:
-  `ARCHITECTURE.md`
+- **Implementation planning**: `.cache/AFA_POLYNOMIAL_ARCHITECTURE.md`
+- **Workspace structure**: `pyproject.toml`
+- **Type specifications**: Code with jaxtyping decorators

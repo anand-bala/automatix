@@ -180,6 +180,10 @@ class ExprWeightFn[S: Semiring, AtomicPredicate: Hashable](eqx.Module):
         )
 
     def add_expr(self, guard: Guard[AtomicPredicate]) -> AbstractPredicate:
+        """Add a guard expression and return its weight predicate.
+
+        Recursively evaluates the guard using cached atoms and semiring operations.
+        """
         # Parse string guards to Expr if needed
         expr = cast(Guard[AtomicPredicate], guard.to_nnf())
         expr_str = str(expr)

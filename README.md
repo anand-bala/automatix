@@ -1,63 +1,99 @@
-# Symbolic (Weighted) Automata Monitoring
+# Automatix: Weighted Automata over Semirings
 
-This project implements different automata I use in my research, including
-nondeterministic weighted automata and alternating weighted automata.
+A Python library for weighted automata over semirings.
+The library currently includes:
 
-### Differentiable Automata in [JAX](https://github.com/google/jax)
+- NFA with Guard-Based Weights:
+  Nondeterministic finite automata with weight functions mapping `(input, guard)
+  -> semiring_value`
+- Semiring-Agnostic Design:
+  Support for counting, tropical (min/max-plus), max-min, and Boolean semirings
+- JAX Integration:
+  Differentiable operations via JAX with JIT compilation support
+- Alternating Finite Automata for Spatio-Temporal Reach Escape Logic (STREL)
 
-The `automatix.nfa` module implements differentiable automata in JAX. The `automatix.algebra`
-module provides GPU-optimized semiring kernels using frozen dataclasses as JAX pytrees,
-enabling dynamic algebra selection in jitted functions.
 
-Semirings can be used either as classes or as kernels:
+This repository also contains the following packages in the `packages/`
+subdirectory:
 
-```python
-from automatix.algebra import get_semiring, normalize_semiring
+- `algebraic`:
+  Implementations of algebraic structures as tensors.
 
-# Class-based API (backward compatible)
-MaxPlus = get_semiring("MaxPlus", backend="jax")
-weights = MaxPlus.zeros((3, 3))
+- `hoaparser`:
+  A parser for the
+  [Hanoi Omega-Automata format](https://adl.github.io/hoaf/index.html).
+  It supports the entire `v1` format, but does not implement any of the
+  semantics of the automata.
+  The goal is to use it as a base package to handle parsing HOA files outputted
+  by the tools linked in <https://adl.github.io/hoaf/support.html> without
+  having to generate the automata yourself.
 
-# Kernel-based API (GPU optimized)
-kernel = get_kernel("MaxPlus", "jax")
-weights = kernel.zeros((3, 3))
+## Quick Start
 
-# Both work with predicates and automata
-from automatix.predicates import And, Predicate
-pred = Predicate(lambda x: x > 0)
-and_pred = And(args=[pred, pred], semiring=MaxPlus)  # Normalizes to kernel
-```
-
-Differentiable Boolean kernels are available for learning:
-
-```python
-from automatix.algebra import create_boolean_kernel
-
-soft = create_boolean_kernel(mode="soft")        # Multiplicative relaxation
-smooth = create_boolean_kernel(mode="smooth")    # Sigmoid-based
-ste = create_boolean_kernel(mode="ste")          # Straight-through estimator
-```
-
-### Alternating Automata as Ring Polynomials
-
-The `automatix.afa` module implements weighted alternating finite automata over
-algebra defined in `automatix.algebra`.
-
-## Using the project
-
-If you are just using it as a library, the Git repository should be installable pretty
-easily using
+### Installation
 
 ```bash
 pip install git+https://github.com/anand-bala/automatix
 ```
 
-## Developing the project
+### Basic Usage
 
-The project is a standard Python package. I use [`uv`](https://docs.astral.sh/uv/) to
-develop it, as it is the most straightforward Python packaging tool I have used.
+For an example of using the matrix operator, see the file in
+<tests/nfa/test_jax_automaton_operator.py>
 
-## Examples
+## Citation
 
-You can look into the `examples` folder for some examples, and generally hack away at
-the code.
+If you are using the matrix operator or this package in general, you should cite
+one of the following papers:
+
+- For differentiable weighted automata in general:
+
+```bibtex
+@inproceedings{balakrishnan2024differentiable,
+  title = {Differentiable {{Weighted Automata}}},
+  booktitle = {{{ICML}} 2024 {{Workshop}} on {{Differentiable Almost Everything}}: {{Differentiable Relaxations}}, {{Algorithms}}, {{Operators}}, and {{Simulators}}},
+  author = {Balakrishnan, Anand and Deshmukh, Jyotirmoy V.},
+  year = 2024,
+  month = jun,
+  url = {https://openreview.net/forum?id=k2hIQYqHTh},
+  copyright = {All rights reserved},
+  langid = {english}
+}
+```
+
+- If you are using weighted automata for motion planning
+
+```bibtex
+@inproceedings{balakrishnan2024motion,
+  title = {Motion {{Planning}} for {{Automata-based Objectives}} Using {{Efficient Gradient-based Methods}}},
+  booktitle = {2024 {{IEEE}}/{{RSJ International Conference}} on {{Intelligent Robots}} and {{Systems}} ({{IROS}})},
+  author = {Balakrishnan, Anand and Atasever, Merve and Deshmukh, Jyotirmoy V.},
+  year = 2024,
+  month = oct,
+  pages = {13734--13740},
+  issn = {2153-0866},
+  doi = {10.1109/IROS58592.2024.10802177}
+}
+```
+
+- If you are using alternating weighted automata for multi-agent systems.
+
+```bibtex
+@inproceedings{balakrishnan2025monitoring,
+  title = {Monitoring {{Spatially Distributed Cyber-Physical Systems}} with {{Alternating Finite Automata}}},
+  booktitle = {Proceedings of the 28th {{ACM International Conference}} on {{Hybrid Systems}}: {{Computation}} and {{Control}}},
+  author = {Balakrishnan, Anand and Paul, Sheryl and Silvetti, Simone and Nenzi, Laura and Deshmukh, Jyotirmoy V.},
+  year = 2025,
+  month = may,
+  pages = {1--11},
+  publisher = {ACM},
+  address = {Irvine CA USA},
+  doi = {10.1145/3716863.3718033},
+  isbn = {979-8-4007-1504-4},
+  langid = {english}
+}
+```
+
+## License
+
+See LICENSE file for details.

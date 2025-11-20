@@ -83,6 +83,7 @@ class JaxBiModule[S: Semiring](eqx.Module, BiModule[S]):
 
     @override
     def vdot(self, a: Num[Array, " n"], b: Num[Array, " n"]) -> Num[Array, ""]:
+        """Compute semiring dot product of two 1D arrays."""
         if self._vdot is not None:
             return self._vdot(a, b)
 
@@ -102,6 +103,7 @@ class JaxBiModule[S: Semiring](eqx.Module, BiModule[S]):
 
     @override
     def matmul(self, a: Num[Array, "n k"], b: Num[Array, "k m"]) -> Num[Array, "n m"]:
+        """Compute semiring matrix multiplication."""
         if self._matmul is not None:
             return self._matmul(a, b)
         a = jnp.asarray(a)
@@ -128,6 +130,7 @@ class JaxBiModule[S: Semiring](eqx.Module, BiModule[S]):
 
     @override
     def transpose(self, a: Array, axes: Sequence[int] | None = None) -> Array:
+        """Transpose array axes."""
         return jnp.transpose(a, axes)
 
     @override
@@ -137,6 +140,7 @@ class JaxBiModule[S: Semiring](eqx.Module, BiModule[S]):
         b: Array,
         axes: int | tuple[Sequence[int], Sequence[int]] = 2,
     ) -> Array:
+        """Compute semiring tensor contraction."""
         # Normalize axes specification
         if isinstance(axes, int):
             # axes=n means: contract last n axes of a with first n axes of b
