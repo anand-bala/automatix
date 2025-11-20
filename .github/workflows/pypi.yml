@@ -17,25 +17,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.12", "3.13", "3.14"]
 
     steps:
-      # checkout@v4.2.2
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      # setup-uv@v6.0.1
-      - uses: astral-sh/setup-uv@6b9c6063abd6010835644d4c2e1bef4cf5cd0fca
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
           python-version: ${{ matrix.python-version }}
-      - name: lint
-        run: uv run ruff check .
       - name: format
-        run: uv run ruff format --check .
+        run: uv run --frozen ruff format --check .
+      - name: lint
+        run: uv run --frozen ruff check .
       - name: Test with Python ${{ matrix.python-version }}
         run: uv run --frozen --dev pytest
-      - name: Run type checker with Python
-        run: |
-          uv run --frozen --all-groups --extra polynomials  mypy src examples
+      - name: Run type checker
+        run: uv run --frozen zmypy
 
   release-build:
     name: Build and release package
@@ -55,21 +52,13 @@ jobs:
     if: "startsWith(github.ref, 'refs/tags/')"
 
     steps:
-      # checkout@v4.2.2
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      # setup-uv@v6.0.1
-      - uses: astral-sh/setup-uv@6b9c6063abd6010835644d4c2e1bef4cf5cd0fca
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - name: Install dependencies
         run: uv sync
       - name: Build wheels and sdist
         run: uv build
-      - name: Upload wheels and sdist
-        # upload-artifact@v4.6.2
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: release-dists
-          path: dist/
       - name: Publish release distributions to PyPI
         run: uv publish
