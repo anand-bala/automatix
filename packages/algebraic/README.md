@@ -112,4 +112,4 @@ Bounded distributive lattices specialize semirings where:
 | **Tropical (MaxPlus)** | max | + | Optimization, path problems |
 | **Tropical (MinPlus)** | min | + | Shortest paths, distances |
 | **Max-Min** | max | min | Robustness degrees, STL |
-| **Counting** | + | × | Counting paths |
+| **Counting** | + | $\times$ | Counting paths |
