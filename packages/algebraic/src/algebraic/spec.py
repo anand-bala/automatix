@@ -11,8 +11,8 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, runtime_checkable
 
-from jaxtyping import Array, Num
-from typing_extensions import overload, override
+from jaxtyping import Array, Num, ScalarLike
+from typing_extensions import overload
 
 type Axis = int | Sequence[int]
 type MaybeAxis = None | Axis
@@ -292,7 +292,7 @@ class BiModule[S: Semiring[Array]](ABC):
 
 
 @dataclass
-class PolynomialSemiring[Coeff, PolynomialRepr, K: Semiring](Semiring[PolynomialRepr]):
+class PolynomialSemiring[PolynomialRepr, K: Semiring]:
     """
     A polynomial semiring is formed from the set of polynomials with one or more
     indeterminants with coefficients in the underlying semiring (`algebra`).
@@ -308,27 +308,31 @@ class PolynomialSemiring[Coeff, PolynomialRepr, K: Semiring](Semiring[Polynomial
     degree: int = field(metadata=dict(static=True))
     """Maximum degree of the multilinear polynomial."""
 
-    def __init__(self, algebra: K, degree: int) -> None:
-        self.algebra = algebra
-        self.degree = degree
-        super().__init__(
-            add=self._add,
-            mul=self._mul,
-            zero=self.constant(algebra.zero),
-            one=self.constant(algebra.one),
-        )
-        self.__post_init__()
-
-    @override
     def __post_init__(self) -> None:
-        super().__post_init__()
+        pass
+
+    @property
+    def zero(self) -> PolynomialRepr:
+        return self.constant(self.algebra.zero)
+
+    @property
+    def one(self) -> PolynomialRepr:
+        return self.constant(self.algebra.one)
+
+    @property
+    def add(self) -> BinaryOp[PolynomialRepr]:
+        return self._add
+
+    @property
+    def mul(self) -> BinaryOp[PolynomialRepr]:
+        return self._mul
 
     @abstractmethod
-    def variable(self, i: int, coefficient: None | Coeff = None) -> PolynomialRepr:
+    def variable(self, i: int, coefficient: None | ScalarLike | Array = None) -> PolynomialRepr:
         """Create polynomial representing a single variable x_i."""
 
     @abstractmethod
-    def constant(self, value: Coeff) -> PolynomialRepr:
+    def constant(self, value: ScalarLike | Array) -> PolynomialRepr:
         """Create a constant polynomial"""
 
     @abstractmethod
@@ -340,7 +344,7 @@ class PolynomialSemiring[Coeff, PolynomialRepr, K: Semiring](Semiring[Polynomial
         """Multiply two polynomials with respect to their underlying algebra"""
 
     @abstractmethod
-    def evaluate(self, poly: PolynomialRepr, point: Mapping[int, Coeff]) -> PolynomialRepr:
+    def evaluate(self, poly: PolynomialRepr, point: Mapping[int, ScalarLike | Array]) -> PolynomialRepr:
         """Evaluate polynomial at a point."""
 
     @abstractmethod
@@ -360,9 +364,7 @@ class PolynomialSemiring[Coeff, PolynomialRepr, K: Semiring](Semiring[Polynomial
 
 
 @dataclass
-class MultilinearPolynomialAlgebra[Coeff, PolynomialRepr, K: BoundedDistributiveLattice](
-    PolynomialSemiring[Coeff, PolynomialRepr, K]
-):
+class MultilinearPolynomialAlgebra[PolynomialRepr, K: BoundedDistributiveLattice](PolynomialSemiring[PolynomialRepr, K]):
     """
     A multilinear polynomial over multiple variables/indeterminants has the maximum
     power of each indeterminant to be 1, i.e., each term is linear with respect to each

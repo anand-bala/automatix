@@ -5,3 +5,5 @@ addopts = [
   "--jaxtyping-packages=automatix,algebraic,beartype.beartype",
 ]
 testpaths = ["tests", "packages/**/tests"]
+
+markers = ["slow: mark test as slow."]

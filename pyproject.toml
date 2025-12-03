@@ -26,11 +26,13 @@ dev = [
   "beartype>=0.22.5",
   "black",
   "graphviz",
+  "hypothesis>=6.0.0",
   "ipython",
   "isort",
   "mypy",
   "pytest>=9.0.0",
   "ruff",
+  "sympy>=1.14.0",
   "ty",
   "zuban",
 ]

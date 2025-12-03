@@ -11,7 +11,7 @@ CUDA_VERSION ?=
 
 _DEV_TARGETS = uv.lock
 ifneq ($(CUDA_VERSION),)
-	_DEV_TARGETS += .venv/installed_cuda_marker
+_DEV_TARGETS += cuda-packages
 endif
 
 # Default: create the dev environment
@@ -38,12 +38,12 @@ hscc25experiments: ./examples/swarm-monitoring/run_hscc_experiments.py
 	uv run --group examples --script $<
 
 uv.lock .venv &: pyproject.toml
-	uv sync --all-packages --frozen --dev
+	uv sync --all-packages --frozen --inexact --dev
 
 export CUDA_VERSION
-.venv/installed_cuda_marker: uv.lock | .venv
-	uv pip install --upgrade jax[cuda$(CUDA_VERSION)]
-	@touch $@
+cuda-packages: uv.lock | .venv
+	uv pip install jax[cuda$(CUDA_VERSION)]
+.PHONY: cuda-packages
 
 # Automatic make target for scripts with locking
 %.py.lock: %.py

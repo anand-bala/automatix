@@ -9,20 +9,23 @@ from dataclasses import dataclass, field
 
 import bitarray.util as ba_util
 from bitarray import bitarray, frozenbitarray
+from jaxtyping import Array, ScalarLike
 from typing_extensions import final, override
 
 from algebraic.spec import BoundedDistributiveLattice, MultilinearPolynomialAlgebra
 
+type S = Array | ScalarLike
+
 
 @final
 @dataclass(frozen=True)
-class SparsePolynomial[S](Mapping[frozenbitarray, S]):
+class SparsePolynomial(Mapping[frozenbitarray, Array | ScalarLike]):
     """Sparse polynomial represented as monomial -> coefficient mapping."""
 
-    data: dict[frozenbitarray, S] = field(default_factory=dict)
+    data: Mapping[frozenbitarray, Array | ScalarLike] = field(default_factory=dict)
 
     @override
-    def __getitem__(self, monomial: bitarray | str | Iterable[int]) -> S:
+    def __getitem__(self, monomial: bitarray | str | Iterable[int]) -> Array | ScalarLike:
         """Return the coefficient of the monomial with the given binary powers."""
         return self.data[frozenbitarray(monomial)]
 
@@ -37,7 +40,7 @@ class SparsePolynomial[S](Mapping[frozenbitarray, S]):
 
 @final
 @dataclass
-class SparsePolynomialAlgebra[S, K: BoundedDistributiveLattice](MultilinearPolynomialAlgebra[S, SparsePolynomial[S], K]):
+class SparsePolynomialAlgebra[K: BoundedDistributiveLattice](MultilinearPolynomialAlgebra[SparsePolynomial, K]):
     """Algebra for polynomials represented as `SparsePolynomial`
 
     Complexity
@@ -60,11 +63,8 @@ class SparsePolynomialAlgebra[S, K: BoundedDistributiveLattice](MultilinearPolyn
     {frozenbitarray('100'): Array(True, dtype=bool), frozenbitarray('010'): Array(True, dtype=bool)}
     """
 
-    def __init__(self, algebra: K, degree: int) -> None:
-        super.__init__(algebra, degree)
-
     @override
-    def constant(self, value: S) -> SparsePolynomial[S]:
+    def constant(self, value: S) -> SparsePolynomial:
         """
         Examples
         --------
@@ -79,7 +79,7 @@ class SparsePolynomialAlgebra[S, K: BoundedDistributiveLattice](MultilinearPolyn
         return SparsePolynomial({zeros_idx: value})
 
     @override
-    def variable(self, i: int, coefficient: None | S = None) -> SparsePolynomial[S]:
+    def variable(self, i: int, coefficient: None | S = None) -> SparsePolynomial:
         """Create polynomial representing a single variable x_i."""
         monomial = ba_util.zeros(self.degree)
         monomial[i] = 1
@@ -89,7 +89,7 @@ class SparsePolynomialAlgebra[S, K: BoundedDistributiveLattice](MultilinearPolyn
         return SparsePolynomial({frozenbitarray(monomial): coefficient})
 
     @override
-    def _add(self, a: SparsePolynomial[S], b: SparsePolynomial[S]) -> SparsePolynomial[S]:
+    def _add(self, a: SparsePolynomial, b: SparsePolynomial) -> SparsePolynomial:
         # This will essentially merge the two polynomials by adding the monomial coefficients where they are common, or using the additive identity where one isn't available.
         ret = {
             key: self.algebra.add(
@@ -101,7 +101,7 @@ class SparsePolynomialAlgebra[S, K: BoundedDistributiveLattice](MultilinearPolyn
         return SparsePolynomial(ret)
 
     @override
-    def _mul(self, a: SparsePolynomial[S], b: SparsePolynomial[S]) -> SparsePolynomial[S]:
+    def _mul(self, a: SparsePolynomial, b: SparsePolynomial) -> SparsePolynomial:
         r"""Multiply two polynomials.
 
         $(\sum_{S \in a} c_S x^S) \cdot (\sum_{T \in b} d_T x^T) = sum_{S,T} (c_S * d_T) x^{S \cup T}$
@@ -115,7 +115,7 @@ class SparsePolynomialAlgebra[S, K: BoundedDistributiveLattice](MultilinearPolyn
         return SparsePolynomial(ret)
 
     @override
-    def evaluate(self, poly: SparsePolynomial[S], point: Mapping[int, S]) -> SparsePolynomial[S]:
+    def evaluate(self, poly: SparsePolynomial, point: Array | Mapping[int, S]) -> SparsePolynomial:
         """Evaluate polynomial at a point.
 
         Examples
@@ -133,18 +133,25 @@ class SparsePolynomialAlgebra[S, K: BoundedDistributiveLattice](MultilinearPolyn
         """
         # Make a mask for the monomials that are affected by this
         mask = ba_util.zeros(self.degree)
-        mask[list(point.keys())] = True
+        if isinstance(point, Mapping):
+            mask[list(point.keys())] = True
+        else:
+            # all monomials are affected...
+            pass
 
         # We will loop through the terms in the polynomial, not operating on terms that don't pass the mask
-
-        result = SparsePolynomial(
-            {
-                monomial: coeff
-                for monomial, coeff in poly.items()
-                # Filter out monomial terms that aren't affected by the substitution
-                if ba_util.count_and(monomial, mask) == 0
-            }
-        )
+        # only valid for Mapping
+        if isinstance(point, Mapping):
+            result = SparsePolynomial(
+                {
+                    monomial: coeff
+                    for monomial, coeff in poly.items()
+                    # Filter out monomial terms that aren't affected by the substitution
+                    if ba_util.count_and(monomial, mask) == 0
+                }
+            )
+        else:
+            result = self.zero
         # Now, we will process the affected terms
         for monomial in (key for key in poly.keys() if key not in result):
             coeff = poly[monomial]
@@ -164,9 +171,9 @@ class SparsePolynomialAlgebra[S, K: BoundedDistributiveLattice](MultilinearPolyn
     @override
     def compose(
         self,
-        poly: SparsePolynomial[S],
-        replacements: Mapping[int, SparsePolynomial[S]],
-    ) -> SparsePolynomial[S]:
+        poly: SparsePolynomial,
+        replacements: Mapping[int, SparsePolynomial],
+    ) -> SparsePolynomial:
         """Compose polynomial with multiple substitutions.
 
         Returns p(x_1 <- q_1, ..., x_n <- q_n) where only specified indices are replaced.
@@ -193,7 +200,7 @@ class SparsePolynomialAlgebra[S, K: BoundedDistributiveLattice](MultilinearPolyn
         for monomial in (key for key in poly.keys() if key not in result):
             # Create a monomial with the unsubstituted terms
             coeff = poly[monomial]
-            term = SparsePolynomial[S]({frozenbitarray(monomial & ~mask): coeff})
+            term = SparsePolynomial({frozenbitarray(monomial & ~mask): coeff})
             # use the algebra to multiply substituted terms with the unsub term
             term = functools.reduce(
                 self.mul,
@@ -205,10 +212,13 @@ class SparsePolynomialAlgebra[S, K: BoundedDistributiveLattice](MultilinearPolyn
 
         return result
 
-    def simplify(self, poly: SparsePolynomial[S]) -> SparsePolynomial[S]:
+    def simplify(self, poly: SparsePolynomial) -> SparsePolynomial:
         """Remove all terms with coefficient 0"""
         raise NotImplementedError()
 
-    def simplify_(self, poly: SparsePolynomial[S]) -> SparsePolynomial[S]:
+    def simplify_(self, poly: SparsePolynomial) -> SparsePolynomial:
         """In-place variant of `simplify`"""
         raise NotImplementedError()
+
+    def isscalar(self, poly: SparsePolynomial) -> bool:
+        return len(poly) == 0 or (len(poly) == 1 and poly.get(frozenbitarray(self.degree)) is not None)

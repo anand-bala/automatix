@@ -263,8 +263,8 @@ class JaxBiModule[S: JaxSemiring](eqx.Module, BiModule[S]):
         import opt_einsum
         from opt_einsum.parser import parse_einsum_input
 
-        operands: list[Array]
-        input_str, output_str, operands = parse_einsum_input(args)
+        input_str, output_str, operands_tuple = parse_einsum_input(args)
+        operands: list[Array] = list(operands_tuple)
         contraction_str = f"{input_str}->{output_str}"
         operand_shapes = [op.shape for op in operands]
 
@@ -276,8 +276,8 @@ class JaxBiModule[S: JaxSemiring](eqx.Module, BiModule[S]):
         # expr.contraction_list is a list of (input_indices, rm_indices, equation, remaining_indices, do_blas)
         contraction_indices: Sequence[int]
         for contraction_indices, _rm_idx, einsum_str, *_ in expr.contraction_list:
-            # Extract operands for this contraction
-            contract_ops: list[Array] = [operands.pop(i) for i in contraction_indices]
+            # Extract operands for this contraction (in reverse order to preserve indices)
+            contract_ops: list[Array] = [operands.pop(i) for i in sorted(contraction_indices, reverse=True)]
 
             # Perform the pairwise contraction using semiring operations
             if len(contract_ops) == 1:
