@@ -5,6 +5,8 @@ from algebraic.spec import (
     BoundedDistributiveLattice,
     DeMorganAlgebra,
     HeytingAlgebra,
+    MultilinearPolynomialAlgebra,
+    PolynomialSemiring,
     Ring,
     Semiring,
     StoneAlgebra,
@@ -20,4 +22,6 @@ __all__: list[str] = [
     "StoneAlgebra",
     "BooleanAlgebra",
     "BiModule",
+    "MultilinearPolynomialAlgebra",
+    "PolynomialSemiring",
 ]

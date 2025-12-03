@@ -18,6 +18,7 @@ from jaxtyping import Array, Num
 from typing_extensions import final, overload, override
 
 import algebraic.kernels.jax as kernels
+import algebraic.utils as utils
 from algebraic.spec import (
     AlgebraicStructure,
     BiModule,
@@ -51,9 +52,11 @@ for dataclass_type in [
 ]:
     jtu.register_dataclass(dataclass_type)
 
+type JaxSemiring = Semiring[Array]
+
 
 @final
-class JaxBiModule[S: Semiring](eqx.Module, BiModule[S]):
+class JaxBiModule[S: JaxSemiring](eqx.Module, BiModule[S]):
     """JAX wrappers for the vector interface for algebraic structures"""
 
     _vdot: None | VdotFn = eqx.field(default=None, kw_only=True)
@@ -226,8 +229,174 @@ class JaxBiModule[S: Semiring](eqx.Module, BiModule[S]):
 
         return result
 
+    @overload
+    def einsum(self, subscript: str, *operands: Array) -> Array: ...
 
-def counting_semiring() -> JaxBiModule[Semiring]:
+    @overload
+    def einsum(self, *args: tuple[Array, Sequence[int]] | Sequence[int]) -> Array: ...
+
+    def einsum[**P](self, *args: P.args, **kwargs: P.kwargs) -> Array:
+        """Compute einsum using semiring operations.
+
+        Uses opt_einsum for parsing and optimal contraction ordering, but performs
+        all arithmetic operations using semiring add/mul instead of standard ops.
+
+        Supports standard einsum notation:
+            'ij,jk->ik': matrix multiplication
+            'ii->i': diagonal extraction
+            'ij->': sum all elements
+            'i,i->': dot product
+            'ijk,ikl->ijl': batched matmul
+
+        Parameters
+        ----------
+        subscripts : str
+            Einsum subscript string
+        *operands : Array
+            Input arrays
+
+        Returns
+        -------
+        Array
+            Result of semiring einsum operation
+        """
+        import opt_einsum
+        from opt_einsum.parser import parse_einsum_input
+
+        operands: list[Array]
+        input_str, output_str, operands = parse_einsum_input(args)
+        contraction_str = f"{input_str}->{output_str}"
+        operand_shapes = [op.shape for op in operands]
+
+        # Parse the einsum expression and get optimized contraction path
+        # This returns a ContractExpression object
+        expr = opt_einsum.contract_expression(contraction_str, *operand_shapes)
+
+        # Execute the contraction path using semiring operations
+        # expr.contraction_list is a list of (input_indices, rm_indices, equation, remaining_indices, do_blas)
+        contraction_indices: Sequence[int]
+        for contraction_indices, _rm_idx, einsum_str, *_ in expr.contraction_list:
+            # Extract operands for this contraction
+            contract_ops: list[Array] = [operands.pop(i) for i in contraction_indices]
+
+            # Perform the pairwise contraction using semiring operations
+            if len(contract_ops) == 1:
+                # Single operand: transpose/reduction
+                result = self._execute_unary(einsum_str, contract_ops[0])
+            elif len(contract_ops) == 2:
+                # Binary contraction: use tensordot
+                result = self._execute_binary(einsum_str, contract_ops[0], contract_ops[1])
+            else:
+                # Shouldn't happen with pairwise contractions, but handle gracefully
+                raise NotImplementedError(f"opt_einsum returned {len(contract_ops)}-way contraction; expected unary or binary")
+
+            operands.append(result)
+
+        # Should have exactly one operand left
+        assert len(operands) == 1
+        return operands[0]
+
+    def _execute_unary(self, einsum_str: str, operand: Array) -> Array:
+        """Execute a unary einsum operation (transpose/reduction).
+
+        Parameters
+        ----------
+        einsum_str : str
+            Einsum string like 'ijk->ik' or 'ii->i'
+        operand : Array
+            Input array
+        """
+        if "->" not in einsum_str:
+            # No reduction, just return
+            return operand
+
+        input_spec, output_spec = einsum_str.split("->")
+
+        # Find dimensions to reduce
+        reduce_dims = tuple(i for i, idx in enumerate(input_spec) if idx not in output_spec)
+
+        result = operand
+
+        # Reduce dimensions (in reverse order to preserve indices)
+        if reduce_dims:
+            for dim in sorted(reduce_dims, reverse=True):
+                if self.sum is not None:
+                    result = self.sum(result, axis=dim)
+                else:
+                    result = jax.lax.reduce(result, self.algebra.zero, self.add, (dim,))
+
+        # Transpose to match output order
+        if output_spec:
+            remaining_spec = "".join(idx for idx in input_spec if idx in output_spec)
+            if remaining_spec != output_spec:
+                perm = tuple(remaining_spec.index(idx) for idx in output_spec)
+                result = self.transpose(result, perm)
+
+        return result
+
+    def _execute_binary(self, einsum_str: str, a: Array, b: Array) -> Array:
+        """Execute a binary einsum operation using tensordot.
+
+        Parameters
+        ----------
+        einsum_str : str
+            Einsum string like 'ij,jk->ik' or 'ab,bc->ac'
+        a, b : Array
+            Input arrays
+        """
+        # Parse the einsum string
+        parts = einsum_str.split("->")
+        inputs_str = parts[0]
+        output_str = parts[1] if len(parts) > 1 else ""
+
+        spec_a, spec_b = inputs_str.split(",")
+
+        # Find contracted indices
+        contracted = set(spec_a) & set(spec_b)
+
+        # Build axes for tensordot
+        axes_a = tuple(i for i, idx in enumerate(spec_a) if idx in contracted)
+        axes_b = tuple(i for i, idx in enumerate(spec_b) if idx in contracted)
+
+        if not axes_a:
+            # Pure outer product
+            a_expanded = a.reshape(a.shape + (1,) * b.ndim)
+            b_expanded = b.reshape((1,) * a.ndim + b.shape)
+            result = self.mul(a_expanded, b_expanded)
+            result_spec = spec_a + spec_b
+        else:
+            # Contract using tensordot
+            result = self.tensordot(a, b, axes=(axes_a, axes_b))
+
+            # Determine result spec: [free_a, free_b]
+            free_a = "".join(idx for i, idx in enumerate(spec_a) if i not in axes_a)
+            free_b = "".join(idx for i, idx in enumerate(spec_b) if i not in axes_b)
+            result_spec = free_a + free_b
+
+        # Handle output specification
+        if output_str:
+            # Sum over dimensions not in output
+            reduce_dims = tuple(i for i, idx in enumerate(result_spec) if idx not in output_str)
+
+            if reduce_dims:
+                for dim in sorted(reduce_dims, reverse=True):
+                    if self.sum is not None:
+                        result = self.sum(result, axis=dim)
+                    else:
+                        result = jax.lax.reduce(result, self.algebra.zero, self.add, (dim,))
+
+                # Update result_spec
+                result_spec = "".join(idx for idx in result_spec if idx in output_str)
+
+            # Transpose to match output order
+            if result_spec != output_str:
+                perm = tuple(result_spec.index(idx) for idx in output_str)
+                result = self.transpose(result, perm)
+
+        return result
+
+
+def counting_semiring() -> JaxBiModule[JaxSemiring]:
     r"""Implementation of the counting semiring (R, +, *, 0, 1)."""
 
     def add(x1: Num[Array, "*#n"], x2: Num[Array, "*#n"]) -> Num[Array, "*#n"]:
@@ -299,14 +468,14 @@ def max_min_algebra(
     prod_kernel: ReductionOp
 
     if smooth:
-        add_kernel = functools.partial(kernels.smooth_maximum, temperature=temperature)
-        sum_kernel = functools.partial(kernels.smooth_max, temperature=temperature)
-        mul_kernel = functools.partial(kernels.smooth_minimum, temperature=temperature)
-        prod_kernel = functools.partial(kernels.smooth_min, temperature=temperature)
+        add_kernel = utils.wrap_binary_op(kernels.smooth_maximum, temperature=temperature)
+        sum_kernel = utils.wrap_reduction_op(kernels.smooth_max, temperature=temperature)
+        mul_kernel = utils.wrap_binary_op(kernels.smooth_minimum, temperature=temperature)
+        prod_kernel = utils.wrap_reduction_op(kernels.smooth_min, temperature=temperature)
     else:
-        add_kernel = jnp.maximum
+        add_kernel = utils.wrap_binary_op(jnp.maximum)
         sum_kernel = jnp.max
-        mul_kernel = jnp.minimum
+        mul_kernel = utils.wrap_binary_op(jnp.minimum)
         prod_kernel = jnp.min
 
     zero = jnp.asarray(0.0 if only == "positive" else -jnp.inf)
@@ -348,10 +517,12 @@ def max_min_algebra(
         algebra=algebra,
         sum=sum,
         prod=prod,
+        _vdot=None,
+        _matmul=None,
     )
 
 
-def tropical_semiring(*, minplus: bool = True, smooth: bool = False, temperature: float = 1.0) -> JaxBiModule[Semiring]:
+def tropical_semiring(*, minplus: bool = True, smooth: bool = False, temperature: float = 1.0) -> JaxBiModule[JaxSemiring]:
     """The min-plus tropical semiring
 
     The choice of `minplus` determines if the output is the min-plus semiring (R_>=0 cup
@@ -374,17 +545,17 @@ def tropical_semiring(*, minplus: bool = True, smooth: bool = False, temperature
     sum_kernel: ReductionOp
     if smooth:
         if minplus:
-            add_kernel = functools.partial(kernels.smooth_minimum, temperature=temperature)
+            add_kernel = utils.wrap_binary_op(kernels.smooth_minimum, temperature=temperature)
             sum_kernel = functools.partial(kernels.smooth_min, temperature=temperature)
         else:
-            add_kernel = functools.partial(kernels.smooth_maximum, temperature=temperature)
+            add_kernel = utils.wrap_binary_op(kernels.smooth_maximum, temperature=temperature)
             sum_kernel = functools.partial(kernels.smooth_max, temperature=temperature)
     else:
         if minplus:
-            add_kernel = jnp.minimum
+            add_kernel = utils.wrap_binary_op(jnp.minimum)
             sum_kernel = jnp.min
         else:
-            add_kernel = jnp.maximum
+            add_kernel = utils.wrap_binary_op(jnp.maximum)
             sum_kernel = jnp.max
 
     if minplus:
@@ -416,6 +587,8 @@ def tropical_semiring(*, minplus: bool = True, smooth: bool = False, temperature
         ),
         sum=sum,
         prod=prod,
+        _vdot=None,
+        _matmul=None,
     )
 
 
@@ -452,21 +625,21 @@ def boolean_algebra(
     matmul = None
     match mode:
         case "logic":
-            add = lambda x, y: jnp.logical_or(x, y)  # noqa: E731
-            mul = lambda x, y: jnp.logical_and(x, y)  # noqa: E731
-            neg = lambda x: jnp.logical_not(x)  # noqa: E731
+            add = utils.wrap_binary_op(jnp.logical_or)
+            mul = utils.wrap_binary_op(jnp.logical_and)
+            neg = utils.wrap_unary_op(jnp.logical_not)
         case "soft":
-            add = kernels.soft_boolean_or
-            mul = kernels.soft_boolean_and
+            add = utils.wrap_binary_op(kernels.soft_boolean_or)
+            mul = utils.wrap_binary_op(kernels.soft_boolean_and)
             neg = kernels.soft_boolean_not
         case "smooth":
-            add = functools.partial(kernels.smooth_boolean_or, temperature=temperature)  # noqa: E731
-            mul = functools.partial(kernels.smooth_boolean_and, temperature=temperature)  # noqa: E731
-            neg = functools.partial(kernels.smooth_boolean_not, temperature=temperature)  # noqa: E731
+            add = utils.wrap_binary_op(kernels.smooth_boolean_or, temperature=temperature)
+            mul = utils.wrap_binary_op(kernels.smooth_boolean_and, temperature=temperature)
+            neg = functools.partial(kernels.smooth_boolean_not, temperature=temperature)
         case "ste":
-            add = lambda x, y: jnp.max(x, y)  # noqa: E731
-            mul = lambda x, y: jnp.min(x, y)  # noqa: E731
-            neg = lambda x: 1 - x  # noqa: E731
+            add = utils.wrap_binary_op(jnp.max)
+            mul = utils.wrap_binary_op(jnp.min)
+            neg = utils.wrap_unary_op(lambda x: 1 - x)
         case _:
             raise ValueError(f"Unknown mode: {mode}. Use 'logic', 'soft', 'smooth', or 'ste'.")
     return JaxBiModule(
