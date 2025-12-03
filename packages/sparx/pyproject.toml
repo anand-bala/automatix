@@ -1,0 +1,18 @@
+[project]
+name = "sparx"
+version = "0.1.0"
+description = "Implementations of sparse multidimensional arrays in JAX"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "jax>=0.8",
+  "jaxtyping>=0.3",
+  "equinox>=0.12",
+  "quax>=0.2.1",
+  "opt-einsum>=3.4.0",
+  "typing-extensions",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.21,<0.10.0"]
+build-backend = "uv_build"
