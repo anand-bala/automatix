@@ -3,6 +3,7 @@
 Provides parsing of automaton definitions in HOA format and data structures
 for representing parsed automata.
 """
+
 # pyright: reportExplicitAny=false
 from __future__ import annotations
 

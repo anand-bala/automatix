@@ -2,6 +2,7 @@
 
 Provides abstract and concrete acceptance condition classes for omega-automata.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

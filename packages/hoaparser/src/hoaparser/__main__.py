@@ -1,4 +1,5 @@
 """Command-line interface for HOA format parser."""
+
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
