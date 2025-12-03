@@ -7,8 +7,8 @@ requires-python = ">=3.12"
 
 dependencies = [
   "typing-extensions",
-  "jax>=0.5",
-  "jaxtyping>=0.2",
+  "jax>=0.8",
+  "jaxtyping>=0.3",
   "equinox>=0.12",
   "numpy",
   "optree>=0.17.0",
@@ -20,9 +20,6 @@ dependencies = [
   "attrs>=25.4.0",
   "logic-asts>=1.1.4",
 ]
-
-[project.optional-dependencies]
-cuda = ["jax[cuda]>=0.5"]
 
 [dependency-groups]
 dev = [
