@@ -3,10 +3,12 @@
 This module defines the abstract base classes that all algebraic implementations
 must follow. These are pure interfaces with no implementation.
 """
+# pyright: reportMissingParameterType=false
+# ruff: noqa: ANN003
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import ABC, ABCMeta, abstractmethod
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, runtime_checkable
@@ -106,7 +108,7 @@ class BoundedDistributiveLattice[S](Semiring[S]):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-
+        self.properties: set[Property]
         self.properties |= {"idempotent_add", "idempotent_mul", "commutative", "simple"}
 
 
@@ -129,7 +131,7 @@ class DeMorganAlgebra[S](BoundedDistributiveLattice[S]):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-
+        self.properties: set[Property]
         self.properties |= {"complemented"}
 
 
@@ -292,7 +294,7 @@ class BiModule[S: Semiring[Array]](ABC):
 
 
 @dataclass
-class PolynomialSemiring[PolynomialRepr, K: Semiring]:
+class PolynomialSemiring[PolynomialRepr, K: Semiring](ABC):
     """
     A polynomial semiring is formed from the set of polynomials with one or more
     indeterminants with coefficients in the underlying semiring (`algebra`).
@@ -308,7 +310,7 @@ class PolynomialSemiring[PolynomialRepr, K: Semiring]:
     degree: int = field(metadata=dict(static=True))
     """Maximum degree of the multilinear polynomial."""
 
-    def __post_init__(self) -> None:
+    def __post_init__(self) -> None:  # noqa: B027
         pass
 
     @property
@@ -364,7 +366,9 @@ class PolynomialSemiring[PolynomialRepr, K: Semiring]:
 
 
 @dataclass
-class MultilinearPolynomialAlgebra[PolynomialRepr, K: BoundedDistributiveLattice](PolynomialSemiring[PolynomialRepr, K]):
+class MultilinearPolynomialAlgebra[PolynomialRepr, K: BoundedDistributiveLattice](
+    PolynomialSemiring[PolynomialRepr, K], metaclass=ABCMeta
+):
     """
     A multilinear polynomial over multiple variables/indeterminants has the maximum
     power of each indeterminant to be 1, i.e., each term is linear with respect to each

@@ -50,7 +50,7 @@ for dataclass_type in [
     BooleanAlgebra,
     BiModule,
 ]:
-    jtu.register_dataclass(dataclass_type)
+    _ = jtu.register_dataclass(dataclass_type)
 
 type JaxSemiring = Semiring[Array]
 
@@ -448,7 +448,7 @@ def max_min_algebra(
     smooth: bool = False,
     only: None | Literal["negative", "positive"] = None,
     temperature: float = 1.0,
-) -> JaxBiModule[Lattice] | JaxBiModule[DeMorganAlgebra]:
+) -> JaxBiModule[Lattice[Array]] | JaxBiModule[DeMorganAlgebra[Array]]:
     """Implementation of the min-max semiring on reals (R cup {-inf, inf}, max, min, -inf, inf).
 
     Parameters
@@ -496,30 +496,36 @@ def max_min_algebra(
     def complement(x: Num[Array, " ..."]) -> Num[Array, " ..."]:
         return -x
 
-    algebra: DeMorganAlgebra | Lattice
     if only is None:
         # We can return complemented algebra
         algebra = DeMorganAlgebra(
-            add=jnp.maximum,
-            mul=jnp.minimum,
+            add=add,
+            mul=multiply,
             zero=zero,
             one=one,
             complement=complement,
         )
+        return JaxBiModule(
+            algebra=algebra,
+            sum=sum,
+            prod=prod,
+            _vdot=None,
+            _matmul=None,
+        )
     else:
         algebra = Lattice(
-            add=jnp.maximum,
-            mul=jnp.minimum,
+            add=add,
+            mul=multiply,
             zero=zero,
             one=one,
         )
-    return JaxBiModule(
-        algebra=algebra,
-        sum=sum,
-        prod=prod,
-        _vdot=None,
-        _matmul=None,
-    )
+        return JaxBiModule(
+            algebra=algebra,
+            sum=sum,
+            prod=prod,
+            _vdot=None,
+            _matmul=None,
+        )
 
 
 def tropical_semiring(*, minplus: bool = True, smooth: bool = False, temperature: float = 1.0) -> JaxBiModule[JaxSemiring]:
