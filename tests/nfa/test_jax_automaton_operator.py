@@ -6,8 +6,8 @@ import jax.numpy as jnp
 import logic_asts as logic
 import pytest
 from algebraic import Semiring
-from algebraic.backends import jax as absalg
-from algebraic.backends.jax import JaxBiModule as BiModule
+from algebraic.tensor_algebra import jax as absalg
+from algebraic.tensor_algebra.jax import JaxBiModule as BiModule
 from jaxtyping import Array, Num, Scalar
 from typing_extensions import TypeAlias
 

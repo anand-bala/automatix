@@ -9,7 +9,7 @@ This test module covers:
 
 import jax.numpy as jnp
 import logic_asts as logic
-from algebraic.backends.jax import tropical_semiring
+from algebraic.tensor_algebra.jax import tropical_semiring
 from jaxtyping import Array, Scalar, ScalarLike
 
 from automatix import Guard

@@ -1,18 +1,26 @@
 # HOA Parser: Hanoi Omega-Automata Format Parser
 
-A Python parser for the **HOA (Hanoi Omega-Automata) format** - a standardized specification for describing omega-automata.
+A Python parser for the **HOA (Hanoi Omega-Automata) format** - a standardized
+specification for describing omega-automata.
 
 ## Overview
 
-This package provides a complete parser for the HOA format, a human-readable format for specifying omega-automata with various acceptance conditions (Büchi, co-Büchi, Rabin, Streett, parity, etc.).
+This package provides a complete parser for the HOA format, a human-readable
+format for specifying omega-automata with various acceptance conditions (Büchi,
+co-Büchi, Rabin, Streett, parity, etc.).
 
 ## Features
 
-- **Complete HOA v1 Support**: Full parsing of HOA format version 1.0
-- **Multiple Acceptance Conditions**: Büchi, co-Büchi, Rabin, Streett, parity, Muller, generalized variants
-- **Flexible Label Expressions**: Support for complex boolean predicates on transitions
-- **Type Safe**: Full mypy strict type checking
-- **Lark-Based**: Uses Lark parser generator for robust grammar-based parsing
+- **Complete HOA v1 Support**:
+  Full parsing of HOA format version 1.0
+- **Multiple Acceptance Conditions**:
+  Büchi, co-Büchi, Rabin, Streett, parity, Muller, generalized variants
+- **Flexible Label Expressions**:
+  Support for complex boolean predicates on transitions
+- **Type Safe**:
+  Full mypy strict type checking
+- **Lark-Based**:
+  Uses Lark parser generator for robust grammar-based parsing
 
 ## Installation
 
@@ -261,7 +269,7 @@ The hoaparser is designed to integrate with automatix automata:
 from hoaparser import parse
 from automatix.operators import MatrixOperator
 from automatix.weights.guard_weights import ExprWeightFn
-from algebraic.backends.jax import tropical_semiring
+from algebraic.tensor_algebra.jax import tropical_semiring
 
 # Parse HOA specification
 automaton_spec = parse(hoa_string)
@@ -277,9 +285,12 @@ semiring = tropical_semiring(semiring_type="MaxPlus")
 
 ## Limitations
 
-- **Boolean only**: Acceptance conditions are expressed as boolean formulas
-- **No optimization**: Parser focuses on correctness, not performance
-- **HOA v1 only**: Earlier versions are not supported
+- **Boolean only**:
+  Acceptance conditions are expressed as boolean formulas
+- **No optimization**:
+  Parser focuses on correctness, not performance
+- **HOA v1 only**:
+  Earlier versions are not supported
 
 ## Testing
 
@@ -293,23 +304,34 @@ python -m mypy src/hoaparser/ --strict
 
 ## Design Notes
 
-- **Lark Parser**: Uses the Lark parsing toolkit for robust, maintainable grammar
-- **Immutable Data**: `State` and other key classes are frozen dataclasses
-- **Expression Trees**: Labels are represented as logic_asts expression trees
-- **Type Safe**: Full typing with jaxtyping for numpy operations
+- **Lark Parser**:
+  Uses the Lark parsing toolkit for robust, maintainable grammar
+- **Immutable Data**:
+  `State` and other key classes are frozen dataclasses
+- **Expression Trees**:
+  Labels are represented as logic_asts expression trees
+- **Type Safe**:
+  Full typing with jaxtyping for numpy operations
 
 ## Future Directions
 
-- **Optimization**: Lazy parsing for large automata
-- **Serialization**: Write back to HOA format
-- **Validation**: Check acceptance conditions and structural properties
-- **Simplification**: Minimize/optimize parsed automata
+- **Optimization**:
+  Lazy parsing for large automata
+- **Serialization**:
+  Write back to HOA format
+- **Validation**:
+  Check acceptance conditions and structural properties
+- **Simplification**:
+  Minimize/optimize parsed automata
 
 ## References
 
-- HOA Format Specification: http://adl.github.io/hoaf/
-- Accepted Tool Papers: https://adl.github.io/hoaf/papers.html
-- Related Tools: Spot, ltl2ba, ltl3ba
+- HOA Format Specification:
+  http://adl.github.io/hoaf/
+- Accepted Tool Papers:
+  https://adl.github.io/hoaf/papers.html
+- Related Tools:
+  Spot, ltl2ba, ltl3ba
 
 ## License
 

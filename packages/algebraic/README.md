@@ -30,7 +30,7 @@ for:
 ### Basic Semiring Operations
 
 ```python
-from algebraic.backends.jax import tropical_semiring, max_min_algebra
+from algebraic.tensor_algebra.jax import tropical_semiring, max_min_algebra
 
 # Tropical semiring (MaxPlus: max is addition, + is multiplication)
 maxplus = tropical_semiring(semiring_type="MaxPlus")
@@ -43,7 +43,7 @@ c = maxmin.add(-0.5, 0.2)  # max(-0.5, 0.2) = 0.2
 d = maxmin.mul(-0.5, 0.2)  # min(-0.5, 0.2) = -0.5
 
 # Boolean algebra
-from algebraic.backends.jax import boolean_algebra
+from algebraic.tensor_algebra.jax import boolean_algebra
 bool_alg = boolean_algebra()
 true = bool_alg.one
 false = bool_alg.zero
@@ -54,7 +54,7 @@ result = bool_alg.add(true, false)  # True OR False = True
 
 ```python
 import jax.numpy as jnp
-from algebraic.backends.jax import tropical_semiring
+from algebraic.tensor_algebra.jax import tropical_semiring
 
 semiring = tropical_semiring(semiring_type="MinPlus")
 
@@ -72,7 +72,7 @@ C = semiring.matmul(A, B)  # Shortest path computation
 ### Smooth Boolean Operations for Learning
 
 ```python
-from algebraic.backends.jax import boolean_algebra
+from algebraic.tensor_algebra.jax import boolean_algebra
 
 # Smooth AND/OR for backpropagation
 smooth_kernel = boolean_algebra(mode="smooth", temperature=0.1)

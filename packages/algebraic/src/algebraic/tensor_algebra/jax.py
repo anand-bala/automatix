@@ -17,7 +17,7 @@ import jax.tree_util as jtu
 from jaxtyping import Array, Num
 from typing_extensions import final, overload, override
 
-import algebraic.backends.kernels.jax_kernels as kernels
+import algebraic.kernels.jax as kernels
 from algebraic.spec import (
     AlgebraicStructure,
     BiModule,
@@ -448,13 +448,13 @@ def boolean_algebra(
     # TODO: Need to add the reduction version of these
     sum = None
     prod = None
+    vdot = None
+    matmul = None
     match mode:
         case "logic":
             add = lambda x, y: jnp.logical_or(x, y)  # noqa: E731
             mul = lambda x, y: jnp.logical_and(x, y)  # noqa: E731
             neg = lambda x: jnp.logical_not(x)  # noqa: E731
-            vdot = None
-            matmul = None
         case "soft":
             add = kernels.soft_boolean_or
             mul = kernels.soft_boolean_and

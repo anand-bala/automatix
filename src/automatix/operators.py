@@ -3,6 +3,7 @@
 Provides MatrixOperator for constructing weighted finite-word automaton operators
 from NFA and weight functions.
 """
+
 from __future__ import annotations
 
 import functools
@@ -11,7 +12,7 @@ from collections.abc import Callable
 import equinox as eqx
 import jax.numpy as jnp
 from algebraic import Semiring
-from algebraic.backends.jax import JaxBiModule
+from algebraic.tensor_algebra.jax import JaxBiModule
 from jaxtyping import Array, Num
 
 from automatix.automata.nfa import NFA

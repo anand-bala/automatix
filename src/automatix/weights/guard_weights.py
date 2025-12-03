@@ -11,7 +11,7 @@ import jax
 import jax.numpy as jnp
 import logic_asts.base as exprs
 from algebraic import Semiring
-from algebraic.backends.jax import JaxBiModule as BiModule
+from algebraic.tensor_algebra.jax import JaxBiModule as BiModule
 from jaxtyping import Array, Num, Scalar, ScalarLike
 
 from automatix.spec import Guard

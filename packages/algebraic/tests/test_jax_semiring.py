@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 import jax
 import jax.numpy as jnp
 import pytest
-from algebraic.backends.jax import counting_semiring
+from algebraic.tensor_algebra.jax import counting_semiring
 
 
 @pytest.mark.parametrize(
