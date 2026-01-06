@@ -3,68 +3,69 @@
 
 from __future__ import annotations
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import pytest
-from algebraic.polynomials.jax import MonomialBasisAlgebra, RankDecompositionAlgebra
-from algebraic.polynomials.sparse import SparsePolynomial, SparsePolynomialAlgebra
+import quax
+from algebraic.polynomials.rank_decomp import RankDecomposition
+from algebraic.polynomials.sparse import SparsePolynomial
 
 
 class TestRankDecompositionConversion:
     """Test conversion between sparse and rank decomposition representations."""
 
-    def test_from_sparse_constant(self, sparse_alg_factory, rank_alg_factory, bool_algebra, bool_module):
+    def test_from_sparse_constant(self, sparse_helper, rank_helper, bool_algebra):
         """Test converting constant from sparse to rank decomposition."""
-        sparse_alg = sparse_alg_factory(bool_algebra, 3)
-        rank_alg = rank_alg_factory(bool_module, 3)
+        sparse_alg = sparse_helper(bool_algebra, 3)
+        rank_alg = rank_helper(bool_algebra, 3)
 
         # Create constant in sparse form
         p_sparse = sparse_alg.constant(jnp.array(True))
 
-        # Convert to rank decomposition via monomial basis
-        monomial_alg = MonomialBasisAlgebra(num_vars=3, module=bool_module)
-        p_monomial = monomial_alg.from_sparse(p_sparse)
-
         # For now, test basic properties
-        # TODO: Implement from_sparse for RankDecomposition
-        # p_rank = rank_alg.from_sparse(p_sparse)
+        p_rank = RankDecomposition.from_sparse(p_sparse)
 
-    def test_variable_creation(self, rank_alg_factory, bool_module):
+    def test_variable_creation(self, rank_helper, bool_algebra):
         """Test creating a single variable."""
-        rank_alg = rank_alg_factory(bool_module, 3)
+        rank_alg = rank_helper(bool_algebra, 3)
 
         x_0 = rank_alg.variable(0)
 
         # Evaluate at a point where x_0 = True
         result = rank_alg.evaluate(x_0, jnp.array([True, False, False]))
         # Result is a constant polynomial, extract the scalar
-        assert jnp.array_equal(result.factors[0, 0, 0], jnp.array(True))
+        array_equal = quax.quaxify(jnp.array_equal)
+        assert array_equal(result.factors[0, 0, 0].data, jnp.array(True))
 
         # Evaluate at a point where x_0 = False
         result = rank_alg.evaluate(x_0, jnp.array([False, True, True]))
-        assert jnp.array_equal(result.factors[0, 0, 0], jnp.array(False))
+        array_equal = quax.quaxify(jnp.array_equal)
+        assert array_equal(result.factors[0, 0, 0].data, jnp.array(False))
 
-    def test_constant_creation(self, rank_alg_factory, bool_module):
+    def test_constant_creation(self, rank_helper, bool_algebra):
         """Test creating a constant."""
-        rank_alg = rank_alg_factory(bool_module, 3)
+        rank_alg = rank_helper(bool_algebra, 3)
 
         c = rank_alg.constant(jnp.array(True))
 
         # Should evaluate to True at any point
         result = rank_alg.evaluate(c, jnp.array([True, True, True]))
-        assert jnp.array_equal(result.factors[0, 0, 0], jnp.array(True))
+        array_equal = quax.quaxify(jnp.array_equal)
+        assert array_equal(result.factors[0, 0, 0].data, jnp.array(True))
 
         result = rank_alg.evaluate(c, jnp.array([False, False, False]))
-        assert jnp.array_equal(result.factors[0, 0, 0], jnp.array(True))
+        array_equal = quax.quaxify(jnp.array_equal)
+        assert array_equal(result.factors[0, 0, 0].data, jnp.array(True))
 
 
 class TestRankDecompositionAddition:
     """Test that addition matches sparse representation."""
 
-    def test_add_variables(self, sparse_alg_factory, rank_alg_factory, tropical_maxplus_algebra, tropical_maxplus_module):
+    def test_add_variables(self, sparse_helper, rank_helper, maxmin_algebra):
         """Test adding two variables."""
-        sparse_alg = sparse_alg_factory(tropical_maxplus_algebra, 3)
-        rank_alg = rank_alg_factory(tropical_maxplus_module, 3)
+        sparse_alg = sparse_helper(maxmin_algebra, 3)
+        rank_alg = rank_helper(maxmin_algebra, 3)
 
         # Create in both representations
         x_0_sparse = sparse_alg.variable(0)
@@ -81,18 +82,18 @@ class TestRankDecompositionAddition:
 
         result_sparse = list(sparse_alg.evaluate(sum_sparse, {i: point[i] for i in range(3)}).values())[0]
         result_rank = rank_alg.evaluate(sum_rank, point)
-        rank_value = result_rank.factors[0, 0, 0]
+        rank_value = result_rank.factors[0, 0, 0].data
 
-        assert jnp.allclose(result_sparse, rank_value)
+        assert quax.quaxify(jnp.allclose)(result_sparse, rank_value)
 
 
 class TestRankDecompositionMultiplication:
     """Test that multiplication matches sparse representation."""
 
-    def test_multiply_variables_bool(self, sparse_alg_factory, rank_alg_factory, bool_algebra, bool_module):
+    def test_multiply_variables_bool(self, sparse_helper, rank_helper, bool_algebra):
         """Test multiplying two variables in Boolean algebra."""
-        sparse_alg = sparse_alg_factory(bool_algebra, 2)
-        rank_alg = rank_alg_factory(bool_module, 2)
+        sparse_alg = sparse_helper(bool_algebra, 2)
+        rank_alg = rank_helper(bool_algebra, 2)
 
         # Create in both representations
         x_0_sparse = sparse_alg.variable(0)
@@ -115,14 +116,14 @@ class TestRankDecompositionMultiplication:
         for point in test_points:
             result_sparse = list(sparse_alg.evaluate(prod_sparse, {i: point[i] for i in range(2)}).values())[0]
             result_rank = rank_alg.evaluate(prod_rank, point)
-            rank_value = result_rank.factors[0, 0, 0]
+            rank_value = result_rank.factors[0, 0, 0].data
 
-            assert jnp.array_equal(result_sparse, rank_value), f"Mismatch at {point}"
+            assert quax.quaxify(jnp.array_equal)(result_sparse, rank_value), f"Mismatch at {point}"
 
-    def test_multiply_with_constant(self, sparse_alg_factory, rank_alg_factory, tropical_maxplus_algebra, tropical_maxplus_module):
+    def test_multiply_with_constant(self, sparse_helper, rank_helper, maxmin_algebra):
         """Test multiplication with constant."""
-        sparse_alg = sparse_alg_factory(tropical_maxplus_algebra, 2)
-        rank_alg = rank_alg_factory(tropical_maxplus_module, 2)
+        sparse_alg = sparse_helper(maxmin_algebra, 2)
+        rank_alg = rank_helper(maxmin_algebra, 2)
 
         # Create variable and constant
         x_0_sparse = sparse_alg.variable(0)
@@ -140,19 +141,18 @@ class TestRankDecompositionMultiplication:
 
         result_sparse = list(sparse_alg.evaluate(prod_sparse, {0: test_point[0], 1: test_point[1]}).values())[0]
         result_rank = rank_alg.evaluate(prod_rank, test_point)
-        rank_value = result_rank.factors[0, 0, 0]
+        rank_value = result_rank.factors[0, 0, 0].data
 
-        # In tropical max-plus: mul is +, so 5.0 + 3.0 = 8.0
-        assert jnp.allclose(result_sparse, rank_value)
+        assert quax.quaxify(jnp.allclose)(result_sparse, rank_value)
 
 
 class TestRankDecompositionEvaluation:
     """Test that evaluation matches sparse representation."""
 
-    def test_evaluate_variable(self, sparse_alg_factory, rank_alg_factory, tropical_maxplus_algebra, tropical_maxplus_module):
+    def test_evaluate_variable(self, sparse_helper, rank_helper, maxmin_algebra):
         """Test evaluating a variable."""
-        sparse_alg = sparse_alg_factory(tropical_maxplus_algebra, 3)
-        rank_alg = rank_alg_factory(tropical_maxplus_module, 3)
+        sparse_alg = sparse_helper(maxmin_algebra, 3)
+        rank_alg = rank_helper(maxmin_algebra, 3)
 
         # Create variable
         x_0_sparse = sparse_alg.variable(0)
@@ -164,14 +164,14 @@ class TestRankDecompositionEvaluation:
 
         result_sparse = list(sparse_alg.evaluate(x_0_sparse, point_dict).values())[0]
         result_rank = rank_alg.evaluate(x_0_rank, point_array)
-        rank_value = result_rank.factors[0, 0, 0]
+        rank_value = result_rank.factors[0, 0, 0].data
 
-        assert jnp.allclose(result_sparse, rank_value)
+        assert quax.quaxify(jnp.allclose)(result_sparse, rank_value)
 
-    def test_evaluate_product(self, sparse_alg_factory, rank_alg_factory, tropical_maxplus_algebra, tropical_maxplus_module):
+    def test_evaluate_product(self, sparse_helper, rank_helper, maxmin_algebra):
         """Test evaluating a product."""
-        sparse_alg = sparse_alg_factory(tropical_maxplus_algebra, 2)
-        rank_alg = rank_alg_factory(tropical_maxplus_module, 2)
+        sparse_alg = sparse_helper(maxmin_algebra, 2)
+        rank_alg = rank_helper(maxmin_algebra, 2)
 
         # Create x_0 * x_1
         x_0_sparse = sparse_alg.variable(0)
@@ -188,18 +188,18 @@ class TestRankDecompositionEvaluation:
 
         result_sparse = list(sparse_alg.evaluate(p_sparse, point_dict).values())[0]
         result_rank = rank_alg.evaluate(p_rank, point_array)
-        rank_value = result_rank.factors[0, 0, 0]
+        rank_value = result_rank.factors[0, 0, 0].data
 
-        assert jnp.allclose(result_sparse, rank_value)
+        assert quax.quaxify(jnp.allclose)(result_sparse, rank_value)
 
 
 class TestRankDecompositionCompose:
     """Test that composition matches sparse representation."""
 
-    def test_compose_simple(self, sparse_alg_factory, rank_alg_factory, bool_algebra, bool_module):
+    def test_compose_simple(self, sparse_helper, rank_helper, bool_algebra):
         """Test simple composition."""
-        sparse_alg = sparse_alg_factory(bool_algebra, 2)
-        rank_alg = rank_alg_factory(bool_module, 2)
+        sparse_alg = sparse_helper(bool_algebra, 2)
+        rank_alg = rank_helper(bool_algebra, 2)
 
         # Create x_0 and x_1
         x_0_sparse = sparse_alg.variable(0)
@@ -222,28 +222,29 @@ class TestRankDecompositionCompose:
         for point in test_points:
             val_sparse = list(sparse_alg.evaluate(result_sparse, {i: point[i] for i in range(2)}).values())[0]
             val_rank = rank_alg.evaluate(result_rank, point)
-            rank_value = val_rank.factors[0, 0, 0]
+            rank_value = val_rank.factors[0, 0, 0].data
 
-            assert jnp.array_equal(val_sparse, rank_value), f"Mismatch at {point}"
+            assert quax.quaxify(jnp.array_equal)(val_sparse, rank_value), f"Mismatch at {point}"
 
 
 class TestRankDecompositionEdgeCases:
     """Test edge cases for rank decomposition."""
 
-    def test_zero_polynomial(self, rank_alg_factory, tropical_maxplus_module):
+    def test_zero_polynomial(self, rank_helper, maxmin_algebra):
         """Test zero polynomial."""
-        rank_alg = rank_alg_factory(tropical_maxplus_module, 2)
+        rank_alg = rank_helper(maxmin_algebra, 2)
 
         zero = rank_alg.zero
 
         # Should evaluate to zero (which is -inf in tropical max-plus) at any point
         result = rank_alg.evaluate(zero, jnp.array([1.0, 2.0]))
-        expected = tropical_maxplus_module.algebra.zero
-        assert jnp.allclose(result.factors[0, 0, 0], expected)
+        expected = maxmin_algebra.zero
+        allclose = quax.quaxify(jnp.allclose)
+        assert allclose(result.factors[0, 0, 0], expected)
 
-    def test_multilinear_idempotence(self, rank_alg_factory, bool_module):
+    def test_multilinear_idempotence(self, rank_helper, bool_algebra):
         """Test that x_i * x_i = x_i (multilinear property)."""
-        rank_alg = rank_alg_factory(bool_module, 2)
+        rank_alg = rank_helper(bool_algebra, 2)
 
         x_0 = rank_alg.variable(0)
 
@@ -252,19 +253,21 @@ class TestRankDecompositionEdgeCases:
 
         # Test at True
         result = rank_alg.evaluate(p, jnp.array([True, False]))
-        assert jnp.array_equal(result.factors[0, 0, 0], jnp.array(True))
+        array_equal = quax.quaxify(jnp.array_equal)
+        assert array_equal(result.factors[0, 0, 0].data, jnp.array(True))
 
         # Test at False
         result = rank_alg.evaluate(p, jnp.array([False, False]))
-        assert jnp.array_equal(result.factors[0, 0, 0], jnp.array(False))
+        array_equal = quax.quaxify(jnp.array_equal)
+        assert array_equal(result.factors[0, 0, 0].data, jnp.array(False))
 
 
 class TestRankDecompositionJAXTransformations:
     """Test JAX transformations on rank decomposition polynomials."""
 
-    def test_jit_compilation(self, rank_alg_factory, tropical_maxplus_module):
+    def test_jit_compilation(self, rank_helper, maxmin_algebra):
         """Test that evaluation can be JIT-compiled."""
-        rank_alg = rank_alg_factory(tropical_maxplus_module, 2)
+        rank_alg = rank_helper(maxmin_algebra, 2)
         x_0 = rank_alg.variable(0)
         x_1 = rank_alg.variable(1)
         p = rank_alg.mul(x_0, x_1)
@@ -275,12 +278,13 @@ class TestRankDecompositionJAXTransformations:
             return rank_alg.evaluate(p, point)
 
         result = eval_fn(jnp.array([2.0, 3.0]))
-        # In tropical max-plus: mul is +, so 2.0 + 3.0 = 5.0
-        assert jnp.allclose(result.factors[0, 0, 0], jnp.array(5.0))
+        # In max-min: mul is min, so min(2.0, 3.0) = 2.0
+        allclose = quax.quaxify(jnp.allclose)
+        assert allclose(result.factors[0, 0, 0].data, jnp.array(2.0))
 
-    def test_vmap_evaluation(self, rank_alg_factory, tropical_maxplus_module):
+    def test_vmap_evaluation(self, rank_helper, maxmin_algebra):
         """Test batched evaluation using vmap."""
-        rank_alg = rank_alg_factory(tropical_maxplus_module, 2)
+        rank_alg = rank_helper(maxmin_algebra, 2)
         x_0 = rank_alg.variable(0)
 
         # Batch of points to evaluate
@@ -290,69 +294,74 @@ class TestRankDecompositionJAXTransformations:
         results = jax.vmap(lambda pt: rank_alg.evaluate(x_0, pt).factors[0, 0, 0])(points)
 
         expected = jnp.array([1.0, 2.0, 3.0])
-        assert jnp.allclose(results, expected)
+        assert quax.quaxify(jnp.allclose)(results, expected)
 
-    def test_grad_evaluation(self, rank_alg_factory, tropical_maxplus_module):
+    def test_grad_evaluation(self, rank_helper, maxmin_algebra):
         """Test gradient computation through polynomial evaluation."""
-        rank_alg = rank_alg_factory(tropical_maxplus_module, 2)
+        rank_alg = rank_helper(maxmin_algebra, 2)
         x_0 = rank_alg.variable(0)
         x_1 = rank_alg.variable(1)
         p = rank_alg.mul(x_0, x_1)  # In tropical max-plus: x_0 + x_1
 
+        def fn(x):
+            return rank_alg.evaluate(p, x).factors[0, 0, 0].data
+
         # Compute gradient
-        grad_fn = jax.grad(lambda x: rank_alg.evaluate(p, x).factors[0, 0, 0])
+        grad_fn = eqx.filter_grad(fn)
 
         point = jnp.array([2.0, 3.0])
         gradient = grad_fn(point)
 
-        # d/dx_0 (x_0 + x_1) = 1.0
-        # d/dx_1 (x_0 + x_1) = 1.0
-        expected = jnp.array([1.0, 1.0])
-        assert jnp.allclose(gradient, expected)
+        # d/dx_0 min(x_0, x_1) at (2.0, 3.0) = 1.0 (x_0 is active minimum)
+        # d/dx_1 min(x_0, x_1) at (2.0, 3.0) = 0.0 (x_1 is not the minimum)
+        expected = jnp.array([1.0, 0.0])
+        assert quax.quaxify(jnp.allclose)(gradient, expected)
 
 
 class TestRankDecompositionTropical:
     """Test rank decomposition with tropical algebras."""
 
-    def test_tropical_min_plus(self, rank_alg_factory):
-        """Test tropical min-plus algebra."""
-        from algebraic.tensor_algebra.jax import tropical_semiring
-
-        module = tropical_semiring(minplus=True)
-        rank_alg = rank_alg_factory(module, 2)
+    def test_tropical_min_plus(self, rank_helper, maxmin_algebra):
+        """Test max-min algebra (negative reals) - similar to tropical min-plus."""
+        rank_alg = rank_helper(maxmin_algebra, 2)
 
         x_0 = rank_alg.variable(0)
         x_1 = rank_alg.variable(1)
 
-        # In min-plus: add = min, mul = +
-        # x_0 * x_1 means x_0 + x_1
+        # In max-min: add = max, mul = min
+        # x_0 * x_1 means min(x_0, x_1)
         p = rank_alg.mul(x_0, x_1)
 
-        result = rank_alg.evaluate(p, jnp.array([2.0, 3.0]))
-        assert jnp.allclose(result.factors[0, 0, 0], jnp.array(5.0))  # 2 + 3
+        # Use negative values for negative reals algebra
+        result = rank_alg.evaluate(p, jnp.array([-2.0, -3.0]))
+        # min(-2, -3) = -3
+        allclose = quax.quaxify(jnp.allclose)
+        assert allclose(result.factors[0, 0, 0].data, jnp.array(-3.0))
 
-    def test_tropical_max_plus(self, rank_alg_factory, tropical_maxplus_module):
-        """Test tropical max-plus algebra."""
-        rank_alg = rank_alg_factory(tropical_maxplus_module, 2)
+    def test_tropical_max_plus(self, rank_helper, maxmin_algebra):
+        """Test max-min algebra (positive reals) - similar to tropical max-plus."""
+        rank_alg = rank_helper(maxmin_algebra, 2)
 
         x_0 = rank_alg.variable(0)
         x_1 = rank_alg.variable(1)
 
-        # In max-plus: add = max, mul = +
-        # x_0 * x_1 means x_0 + x_1
+        # In max-min: add = max, mul = min
+        # x_0 * x_1 means min(x_0, x_1)
         p = rank_alg.mul(x_0, x_1)
 
         result = rank_alg.evaluate(p, jnp.array([2.0, 3.0]))
-        assert jnp.allclose(result.factors[0, 0, 0], jnp.array(5.0))  # 2 + 3
+        # min(2, 3) = 2
+        allclose = quax.quaxify(jnp.allclose)
+        assert allclose(result.factors[0, 0, 0].data, jnp.array(2.0))
 
 
 class TestRankDecompositionMemoryEfficiency:
     """Test memory efficiency of rank decomposition."""
 
-    def test_large_num_vars_feasible(self, rank_alg_factory, tropical_maxplus_module):
+    def test_large_num_vars_feasible(self, rank_helper, maxmin_algebra):
         """Test that rank decomposition can handle large num_vars."""
         # n=15 would require 2^15 = 32768 entries in monomial basis form
-        rank_alg = rank_alg_factory(tropical_maxplus_module, 15)
+        rank_alg = rank_helper(maxmin_algebra, 15)
 
         x_0 = rank_alg.variable(0)
         x_1 = rank_alg.variable(1)
@@ -364,8 +373,9 @@ class TestRankDecompositionMemoryEfficiency:
         point = jnp.ones(15) * 2.0
         result = rank_alg.evaluate(p, point)
 
-        # In tropical max-plus: 2 + 2 + 2 = 6
-        assert jnp.allclose(result.factors[0, 0, 0], jnp.array(6.0))
+        # In max-min: min(min(2, 2), 2) = 2
+        allclose = quax.quaxify(jnp.allclose)
+        assert allclose(result.factors[0, 0, 0].data, jnp.array(2.0))
 
 
 if __name__ == "__main__":

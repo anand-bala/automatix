@@ -8,20 +8,19 @@ must follow. These are pure interfaces with no implementation.
 
 from __future__ import annotations
 
-from abc import ABC, ABCMeta, abstractmethod
+from abc import abstractmethod
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
 from typing import Literal, Protocol, runtime_checkable
 
-from jaxtyping import Array, Num, ScalarLike
-from typing_extensions import overload
+import equinox as eqx
+from jaxtyping import Array, Num, Scalar, ScalarLike
 
 type Axis = int | Sequence[int]
 type MaybeAxis = None | Axis
-type Shape = int | Sequence[int]
+type Shape = int | tuple[int, ...]
 
-type UnaryOp[S] = Callable[[S], S]
-type BinaryOp[S] = Callable[[S, S], S]
+type UnaryOp = Callable[[Scalar | Array], Scalar | Array]
+type BinaryOp = Callable[[Scalar | Array, Scalar | Array], Scalar | Array]
 type VdotFn = Callable[[Num[Array, " n"], Num[Array, " n"]], Num[Array, ""]]
 type MatmulFn = Callable[[Num[Array, "n k"], Num[Array, "k m"]], Num[Array, "n m"]]
 
@@ -34,9 +33,8 @@ class ReductionOp(Protocol):
 type Property = Literal["idempotent_add", "idempotent_mul", "commutative", "simple", "complemented"] | str  # noqa: PYI051
 
 
-@dataclass
-class AlgebraicStructure:
-    properties: set[Property] = field(default_factory=set, kw_only=True, metadata=dict(static=True))
+class AlgebraicStructure(eqx.Module):
+    properties: set[Property] = eqx.field(default_factory=set, kw_only=True, static=True)
     """Set of algebraic properties.
     Valid values: "idempotent_add", "idempotent_mul", "commutative", "simple", "has_negation" 
     """
@@ -59,84 +57,69 @@ class AlgebraicStructure:
 
     def has_negation(self) -> bool:
         """Check if structure has a negation operation."""
-        return getattr(self, "negate", None) is not None
-
-    def __post_init__(self) -> None:
-        pass
+        return getattr(self, "complement", None) is not None
 
 
-@dataclass
-class Semiring[S](AlgebraicStructure):
+class Semiring(AlgebraicStructure):
     """A simple runtime representation of an algebraic semiring."""
 
-    add: BinaryOp[S]
+    add: BinaryOp = eqx.field(static=True)
     """Semiring addition operation (oplus)"""
 
-    mul: BinaryOp[S]
+    mul: BinaryOp = eqx.field(static=True)
     """Semiring multiplication (otimes)"""
 
-    zero: S
+    zero: Scalar | Array
     """Additive identity of the semiring"""
 
-    one: S
+    one: Scalar | Array
     """Multiplicative identity of the semiring"""
 
 
-@dataclass
-class BoundedDistributiveLattice[S](Semiring[S]):
+class BoundedDistributiveLattice(Semiring):
     """A bounded distributive lattice is a specialization of a semiring, where the `oplus` operator corresponds to `join` operator, `otimes` is the `meet` operator."""
 
+    def __post_init__(self) -> None:
+        self.properties |= {"idempotent_add", "idempotent_mul", "commutative", "simple"}
+
     @property
-    def join(self) -> BinaryOp[S]:
+    def join(self) -> BinaryOp:
         r"""Lattice join operation (corresponds to $\oplus$)."""
         return self.add
 
     @property
-    def meet(self) -> BinaryOp[S]:
+    def meet(self) -> BinaryOp:
         r"""Lattice meet operation (corresponds to $\otimes$)."""
         return self.mul
 
     @property
-    def top(self) -> S:
+    def top(self) -> Scalar | Array:
         """Top element of the lattice (multiplicative identity)."""
         return self.one
 
     @property
-    def bottom(self) -> S:
+    def bottom(self) -> Scalar | Array:
         """Bottom element of the lattice (additive identity)."""
         return self.zero
 
-    def __post_init__(self) -> None:
-        super().__post_init__()
-        self.properties: set[Property]
-        self.properties |= {"idempotent_add", "idempotent_mul", "commutative", "simple"}
 
-
-@dataclass
-class Ring[S](Semiring[S]):
+class Ring(Semiring):
     """A ring is a semiring with the additional requirement that each element must have an additive inverse"""
 
-    additive_inverse: UnaryOp[S]
+    additive_inverse: UnaryOp = eqx.field(static=True)
 
 
-@dataclass
-class DeMorganAlgebra[S](BoundedDistributiveLattice[S]):
+class DeMorganAlgebra(BoundedDistributiveLattice):
     """
     A De Morgan Algebra is a bounded distributive lattice equipped with
     a complementation operator that is an involution (`~~a = a`) that follows De
     Morgan's laws.
     """
 
-    complement: UnaryOp[S]
-
-    def __post_init__(self) -> None:
-        super().__post_init__()
-        self.properties: set[Property]
-        self.properties |= {"complemented"}
+    complement: UnaryOp = eqx.field(static=True)
 
 
-@dataclass
-class HeytingAlgebra[S](BoundedDistributiveLattice[S]):
+class HeytingAlgebra(BoundedDistributiveLattice):
     """
     A Heyting algebra is a bounded lattice equipped with a binary operation `a -> b`
     called implication such that `(c and a) <= b` is equivalent to `c <= (a -> b)`
@@ -144,26 +127,24 @@ class HeytingAlgebra[S](BoundedDistributiveLattice[S]):
     A Heyting algebra has a pseudo-complement such that `~a` is equivalent to `a -> 0`.
     """
 
-    implication: BinaryOp[S]
+    implication: BinaryOp = eqx.field(static=True)
 
-    def complement(self, value: S) -> S:
+    def complement(self, value: Scalar | Array) -> Scalar | Array:
         """Pseudo-complement in Heyting algebra."""
         return self.implication(value, self.zero)
 
 
-@dataclass
-class StoneAlgebra[S](BoundedDistributiveLattice[S]):
+class StoneAlgebra(BoundedDistributiveLattice):
     """
     A Stone Algebra is a bounded distributive lattice equipped with a pseudo-complement
     such that `~a or ~~a = 1` (but is not necessarily an involution) but follows De
     Morgan's laws.
     """
 
-    complement: UnaryOp[S]
+    complement: UnaryOp = eqx.field(static=True)
 
 
-@dataclass
-class BooleanAlgebra[S](DeMorganAlgebra[S]):
+class BooleanAlgebra(DeMorganAlgebra):
     """
     A full Boolean algebra, i.e., the operators with complementation follow:
 
@@ -172,129 +153,12 @@ class BooleanAlgebra[S](DeMorganAlgebra[S]):
     3. The law of noncontradiction (`~x and x = 0`)
     """
 
-    def implication(self, a: S, b: S) -> S:
+    def implication(self, a: Scalar | Array, b: Scalar | Array) -> Scalar | Array:
         r"""Boolean implication ($a \to b$ = $\neg a \lor b$)."""
         return self.add(self.complement(a), b)
 
 
-@dataclass
-class BiModule[S: Semiring[Array]](ABC):
-    """
-    A bimodule is a generalization of a vector space over a semiring (ususally a ring,
-    but we relax it in this library).
-
-    They are equipped with an operator that is analogous to matrix multiplication (or
-    the inner product), and since they are *bimodules*, the operation can be performed
-    from either side, but the operation is not necessarily commutative.
-
-    In this library, we use `BiModule` as a generic interface for the various tensor
-    libraries to operate on the algebraic structures.
-    That is, the `BiModule` interface effectively also describes a tensor algebra over the bimodule.
-    """
-
-    algebra: S
-    """The underlying algebra to define the module on. Must be a semiring or a specialization of a semiring"""
-
-    sum: ReductionOp | None = None
-    """Sum reduction (potentially along a specific axis or set of axes) using semiring addition (+)"""
-
-    prod: ReductionOp | None = None
-    """Product reduction (potentially along a specific axis or set of axes) using semiring multiplication (*)"""
-
-    def add(self, x: Array, y: Array) -> Array:
-        r"""Semiring addition ($\oplus$)."""
-        return self.algebra.add(x, y)
-
-    def mul(self, x: Array, y: Array) -> Array:
-        r"""Semiring multiplication ($\otimes$)."""
-        return self.algebra.mul(x, y)
-
-    @overload
-    @abstractmethod
-    def zeros(self, shape: int) -> Num[Array, " {shape}"]:
-        """Return an array of given shape filled with the additive identity (zero)"""
-
-    @overload
-    @abstractmethod
-    def zeros(self, shape: Sequence[int]) -> Num[Array, " {*shape}"]:
-        """Return an array of given shape filled with the additive identity (zero)"""
-
-    @overload
-    @abstractmethod
-    def ones(self, shape: int) -> Num[Array, " {shape}"]:
-        """Return an array of given shape filled with the multiplicative identity (one)"""
-
-    @overload
-    @abstractmethod
-    def ones(self, shape: Sequence[int]) -> Num[Array, " {*shape}"]:
-        """Return an array of given shape filled with the multiplicative identity (one)"""
-
-    @abstractmethod
-    def vdot(self, a: Num[Array, " n"], b: Num[Array, " n"]) -> Num[Array, ""]:
-        """Compute the dot product of two 1D arrays using the semiring.
-
-        Computes: sum_i (a_i * b_i) using semiring operations.
-
-        Parameters
-        ----------
-        a : Num[Array, " n"]
-            First input array.
-        b : Num[Array, " n"]
-            Second input array.
-
-        Returns
-        -------
-        Num[Array, ""]
-            Scalar result of the semiring dot product.
-        """
-
-    @abstractmethod
-    def matmul(self, a: Num[Array, "n k"], b: Num[Array, "k m"]) -> Num[Array, "n m"]:
-        """Compute matrix-semiring product of two arrays.
-
-        This uses vdot (which uses semiring operations) for each row-column pair.
-
-        Parameters
-        ----------
-        a : Num[Array, "n k"]
-            First matrix.
-        b : Num[Array, "k m"]
-            Second matrix.
-
-        Returns
-        -------
-        Num[Array, "n m"]
-            Result of semiring matrix multiplication.
-        """
-
-    @abstractmethod
-    def tensordot(
-        self,
-        a: Array,
-        b: Array,
-        axes: int | tuple[Sequence[int], Sequence[int]] = 2,
-    ) -> Array:
-        """
-        Compute tensor dot product over a semiring.
-
-        Args:
-            a: First tensor
-            b: Second tensor
-            axes: Specification of axes to contract:
-                - int: contract last `axes` axes of a with first `axes` axes of b
-                - tuple of lists: ([axes_a], [axes_b]) specifying which axes to contract
-
-        Returns:
-            Contracted tensor
-        """
-
-    @abstractmethod
-    def transpose(self, a: Array, axes: Sequence[int] | None = None) -> Array:
-        """Returns an array with axes transposed."""
-
-
-@dataclass
-class PolynomialSemiring[PolynomialRepr, K: Semiring](ABC):
+class PolynomialSemiring[PolynomialRepr, K: Semiring](eqx.Module):
     """
     A polynomial semiring is formed from the set of polynomials with one or more
     indeterminants with coefficients in the underlying semiring (`algebra`).
@@ -307,7 +171,7 @@ class PolynomialSemiring[PolynomialRepr, K: Semiring](ABC):
 
     algebra: K
     """The underlying algebra to define the polynomial on. Must be a semiring or a specialization of a semiring"""
-    degree: int = field(metadata=dict(static=True))
+    degree: int = eqx.field(static=True)
     """Maximum degree of the multilinear polynomial."""
 
     def __post_init__(self) -> None:  # noqa: B027
@@ -321,13 +185,13 @@ class PolynomialSemiring[PolynomialRepr, K: Semiring](ABC):
     def one(self) -> PolynomialRepr:
         return self.constant(self.algebra.one)
 
-    @property
-    def add(self) -> BinaryOp[PolynomialRepr]:
-        return self._add
+    # @property
+    # def add(self) -> BinaryOp:
+    #     return self._add
 
-    @property
-    def mul(self) -> BinaryOp[PolynomialRepr]:
-        return self._mul
+    # @property
+    # def mul(self) -> BinaryOp[PolynomialRepr]:
+    #     return self._mul
 
     @abstractmethod
     def variable(self, i: int, coefficient: None | ScalarLike | Array = None) -> PolynomialRepr:
@@ -365,10 +229,7 @@ class PolynomialSemiring[PolynomialRepr, K: Semiring](ABC):
         """
 
 
-@dataclass
-class MultilinearPolynomialAlgebra[PolynomialRepr, K: BoundedDistributiveLattice](
-    PolynomialSemiring[PolynomialRepr, K], metaclass=ABCMeta
-):
+class MultilinearPolynomialAlgebra[PolynomialRepr, K: BoundedDistributiveLattice](PolynomialSemiring[PolynomialRepr, K]):
     """
     A multilinear polynomial over multiple variables/indeterminants has the maximum
     power of each indeterminant to be 1, i.e., each term is linear with respect to each

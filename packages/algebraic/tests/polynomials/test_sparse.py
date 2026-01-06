@@ -11,43 +11,43 @@ from bitarray import frozenbitarray
 class TestSparsePolynomialConstruction:
     """Test basic polynomial construction."""
 
-    def test_constant_creation(self, sparse_alg_factory, bool_algebra):
+    def test_constant_creation(self, sparse_helper, bool_algebra):
         """Test constant polynomial creation."""
-        alg = sparse_alg_factory(bool_algebra, 3)
+        alg = sparse_helper(bool_algebra, 3)
         p = alg.constant(jnp.array(True))
 
         assert len(p) == 1
         assert frozenbitarray("000") in p
         assert jnp.array_equal(p[frozenbitarray("000")], jnp.array(True))
 
-    def test_variable_creation(self, sparse_alg_factory, bool_algebra):
+    def test_variable_creation(self, sparse_helper, bool_algebra):
         """Test single variable polynomial creation."""
-        alg = sparse_alg_factory(bool_algebra, 3)
+        alg = sparse_helper(bool_algebra, 3)
         x_0 = alg.variable(0)
 
         assert len(x_0) == 1
         assert frozenbitarray("100") in x_0
         assert jnp.array_equal(x_0[frozenbitarray("100")], jnp.array(True))
 
-    def test_variable_with_coefficient(self, sparse_alg_factory, tropical_maxplus_algebra):
+    def test_variable_with_coefficient(self, sparse_helper, maxmin_algebra):
         """Test variable creation with custom coefficient."""
-        alg = sparse_alg_factory(tropical_maxplus_algebra, 2)
+        alg = sparse_helper(maxmin_algebra, 2)
         x_0 = alg.variable(0, coefficient=jnp.array(5.0))
 
         assert len(x_0) == 1
         assert jnp.array_equal(x_0[frozenbitarray("10")], jnp.array(5.0))
 
-    def test_zero_polynomial(self, sparse_alg_factory, bool_algebra):
+    def test_zero_polynomial(self, sparse_helper, bool_algebra):
         """Test zero polynomial (constant with zero value)."""
-        alg = sparse_alg_factory(bool_algebra, 3)
+        alg = sparse_helper(bool_algebra, 3)
         p = alg.constant(bool_algebra.zero)
 
         assert len(p) == 1
         assert jnp.array_equal(p[frozenbitarray("000")], bool_algebra.zero)
 
-    def test_one_polynomial(self, sparse_alg_factory, bool_algebra):
+    def test_one_polynomial(self, sparse_helper, bool_algebra):
         """Test one polynomial (multiplicative identity)."""
-        alg = sparse_alg_factory(bool_algebra, 3)
+        alg = sparse_helper(bool_algebra, 3)
         p = alg.constant(bool_algebra.one)
 
         assert len(p) == 1
@@ -57,9 +57,9 @@ class TestSparsePolynomialConstruction:
 class TestSparsePolynomialAddition:
     """Test polynomial addition."""
 
-    def test_addition_simple(self, sparse_alg_factory, bool_algebra):
+    def test_addition_simple(self, sparse_helper, bool_algebra):
         """Test adding two variables."""
-        alg = sparse_alg_factory(bool_algebra, 2)
+        alg = sparse_helper(bool_algebra, 2)
         x_0 = alg.variable(0)
         x_1 = alg.variable(1)
 
@@ -71,9 +71,9 @@ class TestSparsePolynomialAddition:
         assert frozenbitarray("10") in p
         assert frozenbitarray("01") in p
 
-    def test_addition_commutative(self, sparse_alg_factory, tropical_maxplus_algebra):
+    def test_addition_commutative(self, sparse_helper, maxmin_algebra):
         """Test a + b = b + a."""
-        alg = sparse_alg_factory(tropical_maxplus_algebra, 3)
+        alg = sparse_helper(maxmin_algebra, 3)
         x_0 = alg.variable(0)
         x_1 = alg.variable(1)
 
@@ -85,9 +85,9 @@ class TestSparsePolynomialAddition:
         for key in p1.keys():
             assert jnp.array_equal(p1[key], p2[key])
 
-    def test_addition_associative(self, sparse_alg_factory, tropical_maxplus_algebra):
+    def test_addition_associative(self, sparse_helper, maxmin_algebra):
         """Test (a + b) + c = a + (b + c)."""
-        alg = sparse_alg_factory(tropical_maxplus_algebra, 3)
+        alg = sparse_helper(maxmin_algebra, 3)
         x_0 = alg.variable(0)
         x_1 = alg.variable(1)
         x_2 = alg.variable(2)
@@ -100,11 +100,11 @@ class TestSparsePolynomialAddition:
         for key in p1.keys():
             assert jnp.allclose(p1[key], p2[key])
 
-    def test_addition_identity(self, sparse_alg_factory, tropical_maxplus_algebra):
+    def test_addition_identity(self, sparse_helper, maxmin_algebra):
         """Test a + 0 = a."""
-        alg = sparse_alg_factory(tropical_maxplus_algebra, 3)
+        alg = sparse_helper(maxmin_algebra, 3)
         x_0 = alg.variable(0)
-        zero = alg.constant(tropical_maxplus_algebra.zero)
+        zero = alg.constant(maxmin_algebra.zero)
 
         p = alg.add(x_0, zero)
 
@@ -114,9 +114,9 @@ class TestSparsePolynomialAddition:
         result = alg.evaluate(p, test_point)
         assert jnp.allclose(list(result.values())[0], jnp.array(2.0))
 
-    def test_addition_same_monomial(self, sparse_alg_factory, tropical_maxplus_algebra):
+    def test_addition_same_monomial(self, sparse_helper, maxmin_algebra):
         """Test that adding same monomial combines coefficients."""
-        alg = sparse_alg_factory(tropical_maxplus_algebra, 2)
+        alg = sparse_helper(maxmin_algebra, 2)
         x_0 = alg.variable(0, coefficient=jnp.array(2.0))
         x_0_again = alg.variable(0, coefficient=jnp.array(3.0))
 
@@ -130,9 +130,9 @@ class TestSparsePolynomialAddition:
 class TestSparsePolynomialMultiplication:
     """Test polynomial multiplication."""
 
-    def test_multiplication_simple(self, sparse_alg_factory, bool_algebra):
+    def test_multiplication_simple(self, sparse_helper, bool_algebra):
         """Test multiplying two variables."""
-        alg = sparse_alg_factory(bool_algebra, 2)
+        alg = sparse_helper(bool_algebra, 2)
         x_0 = alg.variable(0)
         x_1 = alg.variable(1)
 
@@ -142,9 +142,9 @@ class TestSparsePolynomialMultiplication:
         assert len(p) == 1
         assert frozenbitarray("11") in p
 
-    def test_multiplication_commutative(self, sparse_alg_factory, tropical_maxplus_algebra):
+    def test_multiplication_commutative(self, sparse_helper, maxmin_algebra):
         """Test a * b = b * a for commutative semirings."""
-        alg = sparse_alg_factory(tropical_maxplus_algebra, 3)
+        alg = sparse_helper(maxmin_algebra, 3)
         x_0 = alg.variable(0)
         x_1 = alg.variable(1)
 
@@ -155,9 +155,9 @@ class TestSparsePolynomialMultiplication:
         for key in p1.keys():
             assert jnp.allclose(p1[key], p2[key])
 
-    def test_multiplication_associative(self, sparse_alg_factory, tropical_maxplus_algebra):
+    def test_multiplication_associative(self, sparse_helper, maxmin_algebra):
         """Test (a * b) * c = a * (b * c)."""
-        alg = sparse_alg_factory(tropical_maxplus_algebra, 3)
+        alg = sparse_helper(maxmin_algebra, 3)
         x_0 = alg.variable(0)
         x_1 = alg.variable(1)
         x_2 = alg.variable(2)
@@ -169,11 +169,11 @@ class TestSparsePolynomialMultiplication:
         for key in p1.keys():
             assert jnp.allclose(p1[key], p2[key])
 
-    def test_multiplication_identity(self, sparse_alg_factory, tropical_maxplus_algebra):
+    def test_multiplication_identity(self, sparse_helper, maxmin_algebra):
         """Test a * 1 = a."""
-        alg = sparse_alg_factory(tropical_maxplus_algebra, 3)
+        alg = sparse_helper(maxmin_algebra, 3)
         x_0 = alg.variable(0)
-        one = alg.constant(tropical_maxplus_algebra.one)
+        one = alg.constant(maxmin_algebra.one)
 
         p = alg.mul(x_0, one)
 
@@ -182,39 +182,39 @@ class TestSparsePolynomialMultiplication:
         result = alg.evaluate(p, test_point)
         assert jnp.allclose(list(result.values())[0], jnp.array(2.0))
 
-    def test_multiplication_absorbing(self, sparse_alg_factory, tropical_maxplus_algebra):
+    def test_multiplication_absorbing(self, sparse_helper, maxmin_algebra):
         """Test a * 0 = 0."""
-        alg = sparse_alg_factory(tropical_maxplus_algebra, 3)
+        alg = sparse_helper(maxmin_algebra, 3)
         x_0 = alg.variable(0)
-        zero = alg.constant(tropical_maxplus_algebra.zero)
+        zero = alg.constant(maxmin_algebra.zero)
 
         p = alg.mul(x_0, zero)
 
         # Result should evaluate to zero
         test_point = {0: jnp.array(2.0), 1: jnp.array(3.0), 2: jnp.array(4.0)}
         result = alg.evaluate(p, test_point)
-        assert jnp.allclose(list(result.values())[0], tropical_maxplus_algebra.zero)
+        assert jnp.allclose(list(result.values())[0], maxmin_algebra.zero)
 
-    def test_multiplication_with_constant(self, sparse_alg_factory, tropical_maxplus_algebra):
+    def test_multiplication_with_constant(self, sparse_helper, maxmin_algebra):
         """Test multiplication with constant scales the polynomial."""
-        alg = sparse_alg_factory(tropical_maxplus_algebra, 2)
+        alg = sparse_helper(maxmin_algebra, 2)
         x_0 = alg.variable(0)
         c = alg.constant(jnp.array(5.0))
 
         p = alg.mul(x_0, c)
 
-        # In tropical max-plus: mul is +, so 5.0 + x_0, evaluated at x_0=3.0 gives 5.0 + 3.0 = 8.0
+        # In max-min: mul is min, so min(5.0, x_0), evaluated at x_0=3.0 gives min(5.0, 3.0) = 3.0
         test_point = {0: jnp.array(3.0), 1: jnp.array(2.0)}
         result = alg.evaluate(p, test_point)
-        assert jnp.allclose(list(result.values())[0], jnp.array(8.0))
+        assert jnp.allclose(list(result.values())[0], jnp.array(3.0))
 
 
 class TestSparsePolynomialDistributivity:
     """Test distributive law."""
 
-    def test_distributive_law(self, sparse_alg_factory, tropical_maxplus_algebra):
+    def test_distributive_law(self, sparse_helper, maxmin_algebra):
         """Test a * (b + c) = a*b + a*c."""
-        alg = sparse_alg_factory(tropical_maxplus_algebra, 3)
+        alg = sparse_helper(maxmin_algebra, 3)
         x_0 = alg.variable(0)
         x_1 = alg.variable(1)
         x_2 = alg.variable(2)
@@ -228,9 +228,9 @@ class TestSparsePolynomialDistributivity:
         rhs_result = list(alg.evaluate(rhs, test_point).values())[0]
         assert jnp.allclose(lhs_result, rhs_result)
 
-    def test_distributive_law_boolean(self, sparse_alg_factory, bool_algebra):
+    def test_distributive_law_boolean(self, sparse_helper, bool_algebra):
         """Test a * (b + c) = a*b + a*c for boolean algebra."""
-        alg = sparse_alg_factory(bool_algebra, 3)
+        alg = sparse_helper(bool_algebra, 3)
         x_0 = alg.variable(0)
         x_1 = alg.variable(1)
         x_2 = alg.variable(2)
@@ -251,9 +251,9 @@ class TestSparsePolynomialDistributivity:
 class TestSparsePolynomialMultilinear:
     """Test multilinear property."""
 
-    def test_multilinear_idempotence(self, sparse_alg_factory, bool_algebra):
+    def test_multilinear_idempotence(self, sparse_helper, bool_algebra):
         """Test x_i * x_i = x_i."""
-        alg = sparse_alg_factory(bool_algebra, 2)
+        alg = sparse_helper(bool_algebra, 2)
         x_0 = alg.variable(0)
 
         p = alg.mul(x_0, x_0)
@@ -262,9 +262,9 @@ class TestSparsePolynomialMultilinear:
         assert len(p) == 1
         assert frozenbitarray("10") in p
 
-    def test_multilinear_commutativity(self, sparse_alg_factory, bool_algebra):
+    def test_multilinear_commutativity(self, sparse_helper, bool_algebra):
         """Test x_i * x_j = x_j * x_i."""
-        alg = sparse_alg_factory(bool_algebra, 3)
+        alg = sparse_helper(bool_algebra, 3)
         x_0 = alg.variable(0)
         x_1 = alg.variable(1)
 
@@ -275,9 +275,9 @@ class TestSparsePolynomialMultilinear:
         assert p1.keys() == p2.keys()
         assert frozenbitarray("110") in p1
 
-    def test_monomial_multiplication(self, sparse_alg_factory, bool_algebra):
+    def test_monomial_multiplication(self, sparse_helper, bool_algebra):
         """Test that monomial multiplication uses bitwise OR."""
-        alg = sparse_alg_factory(bool_algebra, 3)
+        alg = sparse_helper(bool_algebra, 3)
         x_0 = alg.variable(0)
         x_1 = alg.variable(1)
         x_2 = alg.variable(2)
@@ -293,17 +293,17 @@ class TestSparsePolynomialMultilinear:
 class TestSparsePolynomialEvaluation:
     """Test polynomial evaluation."""
 
-    def test_evaluate_constant(self, sparse_alg_factory, tropical_maxplus_algebra):
+    def test_evaluate_constant(self, sparse_helper, maxmin_algebra):
         """Test evaluating constant polynomial."""
-        alg = sparse_alg_factory(tropical_maxplus_algebra, 3)
+        alg = sparse_helper(maxmin_algebra, 3)
         p = alg.constant(jnp.array(5.0))
 
         result = alg.evaluate(p, {0: jnp.array(1.0), 1: jnp.array(2.0), 2: jnp.array(3.0)})
         assert jnp.allclose(result[frozenbitarray("000")], jnp.array(5.0))
 
-    def test_evaluate_variable(self, sparse_alg_factory, tropical_maxplus_algebra):
+    def test_evaluate_variable(self, sparse_helper, maxmin_algebra):
         """Test evaluating single variable."""
-        alg = sparse_alg_factory(tropical_maxplus_algebra, 3)
+        alg = sparse_helper(maxmin_algebra, 3)
         x_0 = alg.variable(0)
 
         result = alg.evaluate(x_0, {0: jnp.array(2.0), 1: jnp.array(3.0), 2: jnp.array(4.0)})
@@ -311,9 +311,9 @@ class TestSparsePolynomialEvaluation:
         assert len(result) == 1
         assert jnp.allclose(list(result.values())[0], jnp.array(2.0))
 
-    def test_evaluate_at_sparse_point(self, sparse_alg_factory, bool_algebra):
+    def test_evaluate_at_sparse_point(self, sparse_helper, bool_algebra):
         """Test evaluation at sparse point (mapping)."""
-        alg = sparse_alg_factory(bool_algebra, 3)
+        alg = sparse_helper(bool_algebra, 3)
         x_0 = alg.variable(0)
 
         result = alg.evaluate(x_0, {0: jnp.array(True)})
@@ -321,20 +321,20 @@ class TestSparsePolynomialEvaluation:
         assert len(result) == 1
         assert jnp.array_equal(list(result.values())[0], jnp.array(True))
 
-    def test_evaluate_product(self, sparse_alg_factory, tropical_maxplus_algebra):
+    def test_evaluate_product(self, sparse_helper, maxmin_algebra):
         """Test evaluating product polynomial."""
-        alg = sparse_alg_factory(tropical_maxplus_algebra, 2)
+        alg = sparse_helper(maxmin_algebra, 2)
         x_0 = alg.variable(0)
         x_1 = alg.variable(1)
         p = alg.mul(x_0, x_1)
 
         result = alg.evaluate(p, {0: jnp.array(2.0), 1: jnp.array(3.0)})
-        # In tropical max-plus: mul is +, so x_0 + x_1 at (2,3) gives 2.0 + 3.0 = 5.0
-        assert jnp.allclose(list(result.values())[0], jnp.array(5.0))
+        # In max-min: mul is min, so min(x_0, x_1) at (2,3) gives min(2.0, 3.0) = 2.0
+        assert jnp.allclose(list(result.values())[0], jnp.array(2.0))
 
-    def test_evaluate_boolean_truth_table(self, sparse_alg_factory, bool_algebra):
+    def test_evaluate_boolean_truth_table(self, sparse_helper, bool_algebra):
         """Test boolean evaluation with full truth table."""
-        alg = sparse_alg_factory(bool_algebra, 2)
+        alg = sparse_helper(bool_algebra, 2)
         x_0 = alg.variable(0)
         x_1 = alg.variable(1)
         p = alg.mul(x_0, x_1)  # AND
@@ -357,9 +357,9 @@ class TestSparsePolynomialEvaluation:
 class TestSparsePolynomialComposition:
     """Test polynomial composition."""
 
-    def test_compose_single_variable(self, sparse_alg_factory, bool_algebra):
+    def test_compose_single_variable(self, sparse_helper, bool_algebra):
         """Test composing single variable with another polynomial."""
-        alg = sparse_alg_factory(bool_algebra, 2)
+        alg = sparse_helper(bool_algebra, 2)
         x_0 = alg.variable(0)
         x_1 = alg.variable(1)
 
@@ -369,9 +369,9 @@ class TestSparsePolynomialComposition:
         # Should get x_1
         assert frozenbitarray("01") in result
 
-    def test_compose_with_constant(self, sparse_alg_factory, tropical_maxplus_algebra):
+    def test_compose_with_constant(self, sparse_helper, maxmin_algebra):
         """Test composing with constant."""
-        alg = sparse_alg_factory(tropical_maxplus_algebra, 2)
+        alg = sparse_helper(maxmin_algebra, 2)
         x_0 = alg.variable(0)
         c = alg.constant(jnp.array(5.0))
 
@@ -382,9 +382,9 @@ class TestSparsePolynomialComposition:
         assert len(result) == 1
         assert jnp.allclose(list(result.values())[0], jnp.array(5.0))
 
-    def test_compose_multiple_variables(self, sparse_alg_factory, bool_algebra):
+    def test_compose_multiple_variables(self, sparse_helper, bool_algebra):
         """Test simultaneous composition of multiple variables."""
-        alg = sparse_alg_factory(bool_algebra, 3)
+        alg = sparse_helper(bool_algebra, 3)
         x_0 = alg.variable(0)
         x_1 = alg.variable(1)
         x_2 = alg.variable(2)
@@ -398,9 +398,9 @@ class TestSparsePolynomialComposition:
         # Should get x_2 * x_2 = x_2
         assert frozenbitarray("001") in result
 
-    def test_compose_no_occurrence(self, sparse_alg_factory, bool_algebra):
+    def test_compose_no_occurrence(self, sparse_helper, bool_algebra):
         """Test composition when variable doesn't appear."""
-        alg = sparse_alg_factory(bool_algebra, 3)
+        alg = sparse_helper(bool_algebra, 3)
         x_1 = alg.variable(1)
         x_2 = alg.variable(2)
 
@@ -414,35 +414,36 @@ class TestSparsePolynomialComposition:
 class TestSparsePolynomialSemirings:
     """Test with different semirings."""
 
-    def test_tropical_minplus(self, sparse_alg_factory, tropical_minplus_algebra):
-        """Test with tropical min-plus semiring."""
-        alg = sparse_alg_factory(tropical_minplus_algebra, 2)
+    def test_tropical_minplus(self, sparse_helper, maxmin_algebra):
+        """Test with max-min algebra (negative reals)."""
+        alg = sparse_helper(maxmin_algebra, 2)
         x_0 = alg.variable(0)
         x_1 = alg.variable(1)
 
-        # In min-plus: add = min, mul = +
+        # In max-min: add = max, mul = min
         p = alg.mul(x_0, x_1)
 
-        result = alg.evaluate(p, {0: jnp.array(2.0), 1: jnp.array(3.0)})
-        # x_0 * x_1 in min-plus means x_0 + x_1 = 2 + 3 = 5
-        assert jnp.allclose(list(result.values())[0], jnp.array(5.0))
+        # Use negative values since this algebra is restricted to negative reals
+        result = alg.evaluate(p, {0: jnp.array(-2.0), 1: jnp.array(-3.0)})
+        # x_0 * x_1 in max-min means min(x_0, x_1) = min(-2, -3) = -3
+        assert jnp.allclose(list(result.values())[0], jnp.array(-3.0))
 
-    def test_tropical_maxplus(self, sparse_alg_factory, tropical_maxplus_algebra):
-        """Test with tropical max-plus semiring."""
-        alg = sparse_alg_factory(tropical_maxplus_algebra, 2)
+    def test_tropical_maxplus(self, sparse_helper, maxmin_algebra):
+        """Test with max-min algebra (positive reals)."""
+        alg = sparse_helper(maxmin_algebra, 2)
         x_0 = alg.variable(0)
         x_1 = alg.variable(1)
 
-        # In max-plus: add = max, mul = +
+        # In max-min: add = max, mul = min
         p = alg.mul(x_0, x_1)
 
         result = alg.evaluate(p, {0: jnp.array(2.0), 1: jnp.array(3.0)})
-        # x_0 * x_1 in max-plus means x_0 + x_1 = 2 + 3 = 5
-        assert jnp.allclose(list(result.values())[0], jnp.array(5.0))
+        # x_0 * x_1 in max-min means min(x_0, x_1) = min(2, 3) = 2
+        assert jnp.allclose(list(result.values())[0], jnp.array(2.0))
 
-    def test_maxmin_algebra(self, sparse_alg_factory, maxmin_algebra):
+    def test_maxmin_algebra(self, sparse_helper, maxmin_algebra):
         """Test with max-min algebra."""
-        alg = sparse_alg_factory(maxmin_algebra, 2)
+        alg = sparse_helper(maxmin_algebra, 2)
         x_0 = alg.variable(0)
         x_1 = alg.variable(1)
 
@@ -457,9 +458,9 @@ class TestSparsePolynomialSemirings:
 class TestSparsePolynomialEdgeCases:
     """Test edge cases."""
 
-    def test_empty_composition(self, sparse_alg_factory, bool_algebra):
+    def test_empty_composition(self, sparse_helper, bool_algebra):
         """Test composition with empty replacement map."""
-        alg = sparse_alg_factory(bool_algebra, 2)
+        alg = sparse_helper(bool_algebra, 2)
         x_0 = alg.variable(0)
 
         result = alg.compose(x_0, {})
@@ -467,9 +468,9 @@ class TestSparsePolynomialEdgeCases:
         # Should be unchanged
         assert frozenbitarray("10") in result
 
-    def test_multiple_monomials(self, sparse_alg_factory, tropical_maxplus_algebra):
+    def test_multiple_monomials(self, sparse_helper, maxmin_algebra):
         """Test polynomial with multiple monomials."""
-        alg = sparse_alg_factory(tropical_maxplus_algebra, 2)
+        alg = sparse_helper(maxmin_algebra, 2)
         x_0 = alg.variable(0)
         x_1 = alg.variable(1)
         x_0_x_1 = alg.mul(x_0, x_1)
@@ -482,9 +483,9 @@ class TestSparsePolynomialEdgeCases:
         assert frozenbitarray("01") in p
         assert frozenbitarray("11") in p
 
-    def test_large_degree(self, sparse_alg_factory, bool_algebra):
+    def test_large_degree(self, sparse_helper, bool_algebra):
         """Test with larger degree polynomials."""
-        alg = sparse_alg_factory(bool_algebra, 10)
+        alg = sparse_helper(bool_algebra, 10)
         x_0 = alg.variable(0)
         x_9 = alg.variable(9)
 

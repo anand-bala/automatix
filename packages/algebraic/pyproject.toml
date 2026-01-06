@@ -13,6 +13,7 @@ dependencies = [
     "opt-einsum>=3.4.0",
     "bitarray>=3.0.0",
     "optree>=0.18.0",
+    "quax>=0.2.1",
 ]
 
 [build-system]

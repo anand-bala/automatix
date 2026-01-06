@@ -5,21 +5,19 @@
 import functools
 import typing as ty
 
-from jaxtyping import Array
-
 from algebraic.spec import BinaryOp, ReductionOp, UnaryOp
 
 # Versions of functools.partial that specifically wrap Unary, Binary, and Reduction operations for type checking.
 
 
-def wrap_unary_op[**P](fn: ty.Any, /, *args: P.args, **kwargs: P.kwargs) -> UnaryOp[Array]:
+def wrap_unary_op[**P](fn: ty.Any, /, *args: P.args, **kwargs: P.kwargs) -> UnaryOp:
     assert callable(fn)
-    return ty.cast(UnaryOp[Array], functools.partial(fn, *args, **kwargs))
+    return ty.cast(UnaryOp, functools.partial(fn, *args, **kwargs))
 
 
-def wrap_binary_op[**P](fn: ty.Any, /, *args: P.args, **kwargs: P.kwargs) -> BinaryOp[Array]:
+def wrap_binary_op[**P](fn: ty.Any, /, *args: P.args, **kwargs: P.kwargs) -> BinaryOp:
     assert callable(fn)
-    return ty.cast(BinaryOp[Array], functools.partial(fn, *args, **kwargs))
+    return ty.cast(BinaryOp, functools.partial(fn, *args, **kwargs))
 
 
 def wrap_reduction_op[**P](fn: ty.Any, /, *args: P.args, **kwargs: P.kwargs) -> ReductionOp:

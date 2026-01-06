@@ -6,21 +6,23 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 import pytest
-from algebraic.polynomials.jax import MonomialBasis, MonomialBasisAlgebra
-from algebraic.polynomials.sparse import SparsePolynomial, SparsePolynomialAlgebra
-from algebraic.tensor_algebra.jax import max_min_algebra
+import quax
+from algebraic.polynomials.monomial_basis import MonomialBasis
+from algebraic.polynomials.sparse import SparsePolynomial
 from bitarray import frozenbitarray
 from hypothesis import given, settings
 from hypothesis import strategies as st
+
+allclose = quax.quaxify(jnp.allclose)
 
 
 class TestMonomialBasisConversion:
     """Test conversion between sparse and monomial basis representations."""
 
-    def test_from_sparse_constant(self, sparse_alg_factory, monomial_alg_factory, bool_algebra, bool_module):
+    def test_from_sparse_constant(self, sparse_helper, monomial_helper, bool_algebra):
         """Test converting constant from sparse to monomial basis."""
-        sparse_alg = sparse_alg_factory(bool_algebra, 3)
-        monomial_alg = monomial_alg_factory(bool_module, 3)
+        sparse_alg = sparse_helper(bool_algebra, 3)
+        monomial_alg = monomial_helper(bool_algebra, 3)
 
         # Create constant in sparse form
         p_sparse = sparse_alg.constant(jnp.array(True))
@@ -31,13 +33,14 @@ class TestMonomialBasisConversion:
         # Check shape
         assert p_monomial.shape == (2, 2, 2)
 
-        # Check that constant term is correct
-        assert jnp.array_equal(p_monomial.coeffs[0, 0, 0], jnp.array(True))
+        # Check that constant term is correct (use quaxified array_equal)
+        array_equal = quax.quaxify(jnp.array_equal)
+        assert array_equal(p_monomial.coeffs[0, 0, 0].data, jnp.array(True))
 
-    def test_from_sparse_variable(self, sparse_alg_factory, monomial_alg_factory, bool_algebra, bool_module):
+    def test_from_sparse_variable(self, sparse_helper, monomial_helper, bool_algebra):
         """Test converting variable from sparse to monomial basis."""
-        sparse_alg = sparse_alg_factory(bool_algebra, 3)
-        monomial_alg = monomial_alg_factory(bool_module, 3)
+        sparse_alg = sparse_helper(bool_algebra, 3)
+        monomial_alg = monomial_helper(bool_algebra, 3)
 
         # Create variable in sparse form
         x_0 = sparse_alg.variable(0)
@@ -46,11 +49,12 @@ class TestMonomialBasisConversion:
         x_0_monomial = monomial_alg.from_sparse(x_0)
 
         # Check that variable term is correct
-        assert jnp.array_equal(x_0_monomial.coeffs[1, 0, 0], jnp.array(True))
+        array_equal = quax.quaxify(jnp.array_equal)
+        assert array_equal(x_0_monomial.coeffs[1, 0, 0], jnp.array(True))
 
-    def test_to_sparse_from_monomial(self, monomial_alg_factory, bool_module):
+    def test_to_sparse_from_monomial(self, monomial_helper, bool_algebra):
         """Test converting monomial basis back to sparse."""
-        monomial_alg = monomial_alg_factory(bool_module, 2)
+        monomial_alg = monomial_helper(bool_algebra, 2)
 
         # Create variable x_0
         x_0 = monomial_alg.variable(0)
@@ -62,10 +66,10 @@ class TestMonomialBasisConversion:
         assert len(x_0_sparse) == 1
         assert frozenbitarray("10") in x_0_sparse
 
-    def test_round_trip_conversion(self, sparse_alg_factory, monomial_alg_factory, bool_algebra, bool_module):
+    def test_round_trip_conversion(self, sparse_helper, monomial_helper, bool_algebra):
         """Test sparse -> monomial -> sparse preserves polynomial."""
-        sparse_alg = sparse_alg_factory(bool_algebra, 2)
-        monomial_alg = monomial_alg_factory(bool_module, 2)
+        sparse_alg = sparse_helper(bool_algebra, 2)
+        monomial_alg = monomial_helper(bool_algebra, 2)
 
         # Create polynomial x_0 + x_1
         x_0 = sparse_alg.variable(0)
@@ -85,10 +89,10 @@ class TestMonomialBasisConversion:
 class TestMonomialBasisAddition:
     """Test that addition matches sparse representation."""
 
-    def test_add_variables(self, sparse_alg_factory, monomial_alg_factory, tropical_maxplus_algebra, tropical_maxplus_module):
+    def test_add_variables(self, sparse_helper, monomial_helper, maxmin_algebra):
         """Test adding two variables."""
-        sparse_alg = sparse_alg_factory(tropical_maxplus_algebra, 3)
-        monomial_alg = monomial_alg_factory(tropical_maxplus_module, 3)
+        sparse_alg = sparse_helper(maxmin_algebra, 3)
+        monomial_alg = monomial_helper(maxmin_algebra, 3)
 
         # Create in both representations
         x_0_sparse = sparse_alg.variable(0)
@@ -106,7 +110,7 @@ class TestMonomialBasisAddition:
         # Compare
         assert sum_sparse.keys() == sum_monomial_as_sparse.keys()
         for key in sum_sparse.keys():
-            assert jnp.allclose(sum_sparse[key], sum_monomial_as_sparse[key])
+            assert allclose(sum_sparse[key], sum_monomial_as_sparse[key])
 
     @pytest.mark.skip(reason="Too slow - hypothesis test disabled temporarily")
     @given(st.integers(2, 3))
@@ -153,17 +157,17 @@ class TestMonomialBasisAddition:
 
         assert set(result_sparse.keys()) == set(sparse_repr.keys())
         for monom in result_sparse.keys():
-            if not jnp.allclose(result_sparse[monom], sparse_repr[monom]):
+            if not allclose(result_sparse[monom], sparse_repr[monom]):
                 raise AssertionError(f"{result_sparse[monom]=} != {sparse_repr[monom]=} at {monom}")
 
 
 class TestMonomialBasisMultiplication:
     """Test that multiplication matches sparse representation."""
 
-    def test_multiply_variables(self, sparse_alg_factory, monomial_alg_factory, bool_algebra, bool_module):
+    def test_multiply_variables(self, sparse_helper, monomial_helper, bool_algebra):
         """Test multiplying two variables."""
-        sparse_alg = sparse_alg_factory(bool_algebra, 2)
-        monomial_alg = monomial_alg_factory(bool_module, 2)
+        sparse_alg = sparse_helper(bool_algebra, 2)
+        monomial_alg = monomial_helper(bool_algebra, 2)
 
         # Create in both representations
         x_0_sparse = sparse_alg.variable(0)
@@ -179,14 +183,15 @@ class TestMonomialBasisMultiplication:
         prod_monomial_as_sparse = monomial_alg.to_sparse(prod_monomial)
 
         # Compare
+        array_equal = quax.quaxify(jnp.array_equal)
         assert prod_sparse.keys() == prod_monomial_as_sparse.keys()
         for key in prod_sparse.keys():
-            assert jnp.array_equal(prod_sparse[key], prod_monomial_as_sparse[key])
+            assert array_equal(prod_sparse[key], prod_monomial_as_sparse[key])
 
-    def test_multiply_with_constant(self, sparse_alg_factory, monomial_alg_factory, tropical_maxplus_algebra, tropical_maxplus_module):
+    def test_multiply_with_constant(self, sparse_helper, monomial_helper, maxmin_algebra):
         """Test multiplication with constant."""
-        sparse_alg = sparse_alg_factory(tropical_maxplus_algebra, 2)
-        monomial_alg = monomial_alg_factory(tropical_maxplus_module, 2)
+        sparse_alg = sparse_helper(maxmin_algebra, 2)
+        monomial_alg = monomial_helper(maxmin_algebra, 2)
 
         # Create variable and constant
         x_0_sparse = sparse_alg.variable(0)
@@ -208,9 +213,9 @@ class TestMonomialBasisMultiplication:
         # Evaluate monomial at the test point
         point_array = jnp.array([3.0, 2.0])
         result_monomial_eval = monomial_alg.evaluate(prod_monomial, point_array)
-        result_monomial_val = result_monomial_eval.coeffs[0, 0]
+        result_monomial_val = result_monomial_eval.coeffs[0, 0].data
 
-        assert jnp.allclose(result_sparse, result_monomial_val)
+        assert allclose(result_sparse, result_monomial_val)
 
     @pytest.mark.skip(reason="Too slow - hypothesis test disabled temporarily")
     @given(st.integers(2, 3))
@@ -249,16 +254,16 @@ class TestMonomialBasisMultiplication:
         result_monomial = monomial_alg.evaluate(prod_monomial, point)
         monomial_value = result_monomial.coeffs[tuple([0] * degree)]
 
-        assert jnp.allclose(result_sparse, monomial_value, rtol=1e-5)
+        assert allclose(result_sparse, monomial_value, rtol=1e-5)
 
 
 class TestMonomialBasisEvaluation:
     """Test that evaluation matches sparse representation."""
 
-    def test_evaluate_variable(self, sparse_alg_factory, monomial_alg_factory, tropical_maxplus_algebra, tropical_maxplus_module):
+    def test_evaluate_variable(self, sparse_helper, monomial_helper, maxmin_algebra):
         """Test evaluating a variable."""
-        sparse_alg = sparse_alg_factory(tropical_maxplus_algebra, 3)
-        monomial_alg = monomial_alg_factory(tropical_maxplus_module, 3)
+        sparse_alg = sparse_helper(maxmin_algebra, 3)
+        monomial_alg = monomial_helper(maxmin_algebra, 3)
 
         # Create variable
         x_0_sparse = sparse_alg.variable(0)
@@ -272,14 +277,14 @@ class TestMonomialBasisEvaluation:
         result_monomial = monomial_alg.evaluate(x_0_monomial, point_array)
 
         # After evaluating all variables, we should have a constant
-        monomial_value = result_monomial.coeffs[0, 0, 0]
+        monomial_value = result_monomial.coeffs[0, 0, 0].data
 
-        assert jnp.allclose(result_sparse, monomial_value)
+        assert allclose(result_sparse, monomial_value)
 
-    def test_evaluate_product(self, sparse_alg_factory, monomial_alg_factory, tropical_maxplus_algebra, tropical_maxplus_module):
+    def test_evaluate_product(self, sparse_helper, monomial_helper, maxmin_algebra):
         """Test evaluating a product."""
-        sparse_alg = sparse_alg_factory(tropical_maxplus_algebra, 2)
-        monomial_alg = monomial_alg_factory(tropical_maxplus_module, 2)
+        sparse_alg = sparse_helper(maxmin_algebra, 2)
+        monomial_alg = monomial_helper(maxmin_algebra, 2)
 
         # Create x_0 * x_1
         x_0 = sparse_alg.variable(0)
@@ -293,18 +298,18 @@ class TestMonomialBasisEvaluation:
 
         result_sparse = list(sparse_alg.evaluate(p_sparse, point_dict).values())[0]
         result_monomial = monomial_alg.evaluate(p_monomial, point_array)
-        monomial_value = result_monomial.coeffs[0, 0]
+        monomial_value = result_monomial.coeffs[0, 0].data
 
-        assert jnp.allclose(result_sparse, monomial_value)
+        assert allclose(result_sparse, monomial_value)
 
 
 class TestMonomialBasisCompose:
     """Test that composition matches sparse representation."""
 
-    def test_compose_simple(self, sparse_alg_factory, monomial_alg_factory, bool_algebra, bool_module):
+    def test_compose_simple(self, sparse_helper, monomial_helper, bool_algebra):
         """Test simple composition."""
-        sparse_alg = sparse_alg_factory(bool_algebra, 2)
-        monomial_alg = monomial_alg_factory(bool_module, 2)
+        sparse_alg = sparse_helper(bool_algebra, 2)
+        monomial_alg = monomial_helper(bool_algebra, 2)
 
         # Create x_0 and x_1
         x_0_sparse = sparse_alg.variable(0)
@@ -320,30 +325,37 @@ class TestMonomialBasisCompose:
         # Convert monomial result to sparse
         result_monomial_as_sparse = monomial_alg.to_sparse(result_monomial)
 
-        # Compare
-        assert result_sparse.keys() == result_monomial_as_sparse.keys()
-        for key in result_sparse.keys():
-            assert jnp.array_equal(result_sparse[key], result_monomial_as_sparse[key])
+        # Compare - filter out zero coefficients for comparison
+        # (sparse representation may include explicit zeros)
+        array_equal = quax.quaxify(jnp.array_equal)
+
+        # Get non-zero keys from result_sparse
+        nonzero_keys_sparse = {k for k, v in result_sparse.items() if not jnp.array_equal(v, bool_algebra.zero)}
+        nonzero_keys_monomial = set(result_monomial_as_sparse.keys())
+
+        assert nonzero_keys_sparse == nonzero_keys_monomial
+        for key in nonzero_keys_sparse:
+            assert array_equal(result_sparse[key], result_monomial_as_sparse[key])
 
 
 class TestMonomialBasisEdgeCases:
     """Test edge cases for monomial basis."""
 
-    def test_zero_polynomial(self, monomial_alg_factory, tropical_maxplus_module):
+    def test_zero_polynomial(self, monomial_helper, maxmin_algebra):
         """Test zero polynomial."""
-        monomial_alg = monomial_alg_factory(tropical_maxplus_module, 2)
+        monomial_alg = monomial_helper(maxmin_algebra, 2)
 
-        zero = monomial_alg.constant(tropical_maxplus_module.algebra.zero)
+        zero = monomial_alg.constant(maxmin_algebra.zero)
 
         # In tropical max-plus, zero = -inf
-        expected = jnp.full((2, 2), tropical_maxplus_module.algebra.zero)
-        assert jnp.allclose(zero.coeffs, expected)
+        expected = jnp.full((2, 2), maxmin_algebra.zero)
+        assert allclose(zero.coeffs, expected)
 
-    def test_large_degree(self, sparse_alg_factory, monomial_alg_factory, bool_algebra, bool_module):
+    def test_large_degree(self, sparse_helper, monomial_helper, bool_algebra):
         """Test with larger degree (but still manageable)."""
         # 2^6 = 64 entries, should be fine
-        sparse_alg = sparse_alg_factory(bool_algebra, 6)
-        monomial_alg = monomial_alg_factory(bool_module, 6)
+        sparse_alg = sparse_helper(bool_algebra, 6)
+        monomial_alg = monomial_helper(bool_algebra, 6)
 
         x_0 = sparse_alg.variable(0)
         x_0_monomial = monomial_alg.from_sparse(x_0)
