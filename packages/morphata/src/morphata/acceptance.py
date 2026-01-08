@@ -1,6 +1,11 @@
 """Acceptance condition expressions and implementations.
 
-Provides abstract and concrete acceptance condition classes for omega-automata.
+Provides abstract and concrete acceptance condition classes for omega-automata
+and finite-word automata. This module extends the standard HOA v1 format with
+a Final(n) operator for expressing finite-word acceptance conditions.
+
+Extensions to HOA v1:
+    - Final(n): For finite-word automata (not part of standard HOA specification)
 """
 
 from __future__ import annotations
@@ -13,12 +18,13 @@ from typing_extensions import override
 
 
 class AccExpr(ABC):
-    """Generalized omega-regular acceptance conditions
+    """Generalized omega-regular and regular acceptance conditions
 
     Acceptance formulas are positive Boolean formula over atoms of the form
-    `t`, `f`, `Inf(n)`, or `Fin(n)`, where `n` is a non-negative integer
-    denoting an acceptance set.
+    `t`, `f`, `Inf(n)`, `Fin(n)`, or `Final(n)`, where `n` is a non-negative
+    integer denoting an acceptance set.
 
+    Standard HOA v1 operators (for omega-automata):
     - `t` denotes the true acceptance condition: any run is accepting
     - `f` denotes the false acceptance condition: no run is accepting
     - `Inf(n)` means that a run is accepting if it visits infinitely often
@@ -26,23 +32,24 @@ class AccExpr(ABC):
     - `Fin(n)` means that a run is accepting if it visits finitely often the
         acceptance set `n`
 
+    Extended operators (morphata-specific):
+    - `Final(n)` means that a finite run is accepting if it ends in a state
+        marked with acceptance set `n` (for finite-word automata)
+
     The above atoms can be combined using only the operator `&` and `|`
     (with obvious semantics), and parentheses for grouping. Note that there
     is no negation, but an acceptance condition can be negated swapping `t`
     and `f`, `&` and `|`, and `Fin(n)` and `Inf(n)`.
 
-    For instance the formula `Inf(0)&Inf(1)` specifies that accepting runs
-    should visit infinitely often the acceptance 0, and infinitely often the
-    acceptance set 1. This corresponds the generalized Büchi acceptance with
-    two sets.
-
-    The opposite acceptance condition `Fin(0)|Fin(1)` is known as
-    *generalized co-Büchi acceptance* (with two sets). Accepting runs have
-    to visit finitely often set 0 *or* finitely often set 1.
-
-    A *Rabin acceptance condition* with 3 pairs corresponds to the following
-    formula: `(Fin(0)&Inf(1)) | (Fin(2)&Inf(3)) |
-    (Fin(4)&Inf(5))`
+    Examples:
+    - `Inf(0)&Inf(1)`: Generalized Büchi acceptance - accepting runs visit
+        both acceptance set 0 and set 1 infinitely often
+    - `Fin(0)|Fin(1)`: Generalized co-Büchi acceptance - accepting runs visit
+        set 0 or set 1 finitely often
+    - `(Fin(0)&Inf(1)) | (Fin(2)&Inf(3)) | (Fin(4)&Inf(5))`: Rabin acceptance
+        with 3 pairs
+    - `Final(0)`: Finite-word acceptance - accepting runs end in states marked
+        with set 0
     """
 
     def __and__(self, other: AccExpr) -> AccExpr:
@@ -152,6 +159,41 @@ class Inf(AccExpr):
 
 
 @dataclass(frozen=True, slots=True, eq=True)
+class Final(AccExpr):
+    """Final state acceptance (for finite-word automata).
+
+    This is a morphata-specific extension to the HOA v1 format, not part of the
+    standard specification. It provides a natural way to express finite-word
+    acceptance conditions in HOA syntax.
+
+    Unlike Inf/Fin which are for omega-automata (infinite words), Final is used
+    for finite-word automata where acceptance means reaching a state marked as
+    final. The acceptance set index identifies which states are final.
+
+    Semantics:
+        - Inf(n): Run visits acceptance set n infinitely often (omega-regular)
+        - Fin(n): Run visits acceptance set n finitely often (omega-regular)
+        - Final(n): Run ends in a state marked with acceptance set n (regular)
+
+    Example:
+        Acceptance: 1 Final(0)
+        State: 1 {0}  # State 1 is marked as final
+    """
+
+    arg: int
+    """Acceptance set index"""
+
+    @override
+    def dual(self) -> AccExpr:
+        """Dual is always reject (no defined dual for finite acceptance)."""
+        return Literal(False)
+
+    @override
+    def __str__(self) -> str:
+        return f"Final({self.arg})"
+
+
+@dataclass(frozen=True, slots=True, eq=True)
 class Literal(AccExpr):
     """Boolean literal (always accept or never accept)."""
 
@@ -197,6 +239,8 @@ class AcceptanceCondition(ABC):
         match name:
             case "Buchi":
                 return Buchi()
+            case "Finite":
+                return Finite()
             case "generalized-Buchi":
                 assert len(props) == 1 and isinstance(props[0], int) and props[0] >= 0, (
                     "Generalized Buchi condition needs one integer property"
@@ -276,6 +320,31 @@ class CoBuchi(AcceptanceCondition):
     @override
     def to_expr(self) -> AccExpr:
         return Fin(0)
+
+
+@dataclass(frozen=True)
+class Finite(AcceptanceCondition):
+    """Finite-word acceptance condition (morphata HOA extension).
+
+    This acceptance condition is used with the extended HOA format's Final(n)
+    operator to express finite-word automata. It is not part of the standard
+    HOA v1 specification.
+
+    For finite automata, acceptance means reaching a final state. This uses
+    a single acceptance set (set 0) to mark final states.
+
+    Usage in HOA format:
+        acc-name: Finite
+        Acceptance: 1 Final(0)
+    """
+
+    @override
+    def __len__(self) -> int:
+        return 1
+
+    @override
+    def to_expr(self) -> AccExpr:
+        return Final(0)
 
 
 @dataclass(frozen=True)

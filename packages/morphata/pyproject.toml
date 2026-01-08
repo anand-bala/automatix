@@ -5,7 +5,14 @@ description = "Flexible automata representations for regular and ω-regular lang
 authors = [{ name = "Anand Balakrishnan" }]
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["typing-extensions", "lark", "logic-asts>=1.1.0"]
+dependencies = [
+    "typing-extensions",
+    "lark",
+    "logic-asts>=1.1.4",
+    "networkx",
+    "types-networkx",
+    "attrs>=25.4.0",
+]
 
 [build-system]
 requires = ["uv_build>=0.9.22,<0.10.0"]

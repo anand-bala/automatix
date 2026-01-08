@@ -1,7 +1,30 @@
-"""Parser for HOA (Hanoi Omega-Automata) format.
+"""Parser for extended HOA (Hanoi Omega-Automata) format.
 
 Provides parsing of automaton definitions in HOA format and data structures
 for representing parsed automata.
+
+This parser supports the standard HOA v1 format with the following extension:
+    - Final(n) operator: For finite-word automata acceptance conditions
+      (not part of the standard HOA v1 specification)
+
+Standard HOA v1 acceptance operators (Inf, Fin, Buchi, co-Buchi, Rabin, Streett,
+Parity, Muller) are fully supported. The Final(n) operator provides a natural
+way to express finite-word acceptance in HOA syntax.
+
+Example extended HOA with finite acceptance:
+    HOA: v1
+    States: 2
+    Start: 0
+    acc-name: Finite
+    Acceptance: 1 Final(0)
+    AP: 1 "a"
+    --BODY--
+    State: 0
+      [0] 1 {0}
+      [!0] 0
+    State: 1
+      [t] 1
+    --END--
 """
 
 # pyright: reportExplicitAny=false
@@ -21,6 +44,7 @@ from morphata.acceptance import (
     AcceptanceCondition,
     AccExpr,
     Fin,
+    Final,
     GenericCondition,
     Inf,
     Literal,
@@ -319,6 +343,13 @@ class _AstTransformer(Transformer[Token, ParsedAutomaton]):
     def acc_inf(self, acc_set: tuple[bool, int]) -> Inf:
         invert, arg_set = acc_set
         return Inf(arg_set, invert)
+
+    @v_args(inline=True)
+    def acc_final(self, acc_set: tuple[bool, int]) -> Final:
+        invert, arg_set = acc_set
+        if invert:
+            raise HoaSyntaxError("Final acceptance sets cannot be inverted")
+        return Final(arg_set)
 
     @v_args(inline=True)
     def acc_and(self, lhs: AccExpr, rhs: AccExpr) -> AccExpr:

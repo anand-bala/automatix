@@ -33,6 +33,7 @@ state_conj: INT ("&" INT)*
 ?acceptance_cond: BOOLEAN -> acc_bool
                | "Fin" "(" acc_set ")" -> acc_fin
                | "Inf" "(" acc_set ")" -> acc_inf
+               | "Final" "(" acc_set ")" -> acc_final
                | "(" acceptance_cond ")"
                | acceptance_cond "&" acceptance_cond -> acc_and
                | acceptance_cond "|" acceptance_cond -> acc_or
