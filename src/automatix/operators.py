@@ -15,7 +15,7 @@ from algebraic import Semiring
 from algebraic.tensor_algebra.jax import JaxBiModule
 from jaxtyping import Array, Num
 
-from automatix.automata.nfa import NFA
+from morphata.automata.nfa import NFA
 from automatix.spec import WeightFunction
 
 

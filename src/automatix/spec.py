@@ -1,16 +1,38 @@
-"""Pure abstract interfaces for various automata and related concepts"""
+"""Automatix-specific interfaces extending morphata base.
+
+This module provides automatix-specific extensions to the base automata interfaces
+from morphata. It adds weighted semantics, semiring operations, and state-set-based
+acceptance conditions for runtime checking.
+"""
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from collections.abc import Hashable, Iterator
+from collections.abc import Hashable
 from typing import Protocol, runtime_checkable
 
-import logic_asts.base as exprs
 from jaxtyping import Array, ScalarLike
+
+# Import and re-export base interfaces from morphata
+from morphata.spec import (
+    AbstractAutomaton as _BaseAutomaton,
+    Guard,
+    SizedAutomaton as _BaseSizedAutomaton,
+)
 
 import automatix.acc as acc
 
+# Re-export morphata base interfaces for backward compatibility
+# These are the pure structural interfaces without weighted semantics
+__all__ = [
+    "Guard",
+    "AbstractAutomaton",
+    "SizedAutomaton",
+    "WeightFunction",
+    "AcceptanceCondition",
+]
+
+# Automatix-specific: state-set based acceptance conditions for runtime checking
+# This is different from morphata.acceptance which is expression-based for HOA specs
 type AcceptanceCondition[Q: Hashable] = (
     acc.Finite[Q]
     | acc.Buchi[Q]
@@ -22,41 +44,10 @@ type AcceptanceCondition[Q: Hashable] = (
     | acc.Muller[Q]
 )
 
-type Guard[AtomicPredicate] = exprs.BaseExpr[AtomicPredicate]
-
-
-class AbstractAutomaton[In, Out, StateRep, Q: Hashable](ABC):
-    r"""
-    The `Automaton` class defines a general interface for all automata-like transition
-    systems, and can be used by other components in `automatix` to define their own
-    semantics.
-    """
-
-    @property
-    @abstractmethod
-    def initial_state(self) -> StateRep: ...
-
-    @property
-    @abstractmethod
-    def acceptance_condition(self) -> AcceptanceCondition[Q]: ...
-
-    @abstractmethod
-    def __call__(self, input_symbol: In, state: StateRep) -> tuple[Out, StateRep]:
-        """
-        The transition function that reads the input symbol `input_symbol` at an
-        automaton state `state` and outputs an output symbol in `Out` and a successor
-        `StateRep`.
-        """
-
-
-class SizedAutomaton[In, Out, StateRep, Q: Hashable](AbstractAutomaton[In, Out, StateRep, Q]):
-    """A sized automaton has a finite number, a priori known, number of states in it."""
-
-    @abstractmethod
-    def __len__(self) -> int: ...
-
-    @abstractmethod
-    def __iter__(self) -> Iterator[Q]: ...
+# Re-export morphata interfaces
+# Note: These don't use automatix.AcceptanceCondition, they use morphata.spec.FiniteAcceptance
+AbstractAutomaton = _BaseAutomaton
+SizedAutomaton = _BaseSizedAutomaton
 
 
 @runtime_checkable
