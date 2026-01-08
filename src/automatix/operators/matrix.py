@@ -1,4 +1,4 @@
-"""Weighted automaton operators using semirings.
+"""Matrix-based weighted automaton operator.
 
 Provides MatrixOperator for constructing weighted finite-word automaton operators
 from NFA and weight functions.
@@ -92,12 +92,6 @@ class MatrixOperator[S: Semiring, In](eqx.Module):
         assert final_weights.shape == (n_q,)
 
         transitions = {(src, dst): functools.partial(weight_function, guard=guard) for src, dst, guard in aut.transitions}
-
-        # # Build list of transitions for use in cost_transitions
-        # idx: Sequence[tuple[int, int]]
-        # guards: Sequence[Guard[In]]
-
-        # idx, guards = tuple(zip(*(((src, dst), guard) for src, dst, guard in aut.transitions)))
 
         def cost_transitions(x: Num[Array, "..."]) -> Shaped[AlgebraicArray, "q q"]:
             """Compute transition matrix for input x using weight_function.
