@@ -4,6 +4,6 @@ addopts = [
   "--import-mode=importlib",
   "--jaxtyping-packages=automatix,algebraic,beartype.beartype",
 ]
-testpaths = ["tests", "packages/**/tests"]
+testpaths = ["tests", "src", "packages/**/tests", "packages/**/src"]
 
 markers = ["slow: mark test as slow."]
