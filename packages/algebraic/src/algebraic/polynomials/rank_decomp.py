@@ -230,6 +230,9 @@ class RankDecomposition[K: Lattice](eqx.Module):
         new_factors = self._multiply_arrays(self.factors, other.factors)
         result = eqx.tree_at(lambda t: t.factors, self, new_factors)
 
+        # Filter out zero components (rank-1 components with any all-zero factor)
+        result = result._remove_zero_components()
+
         # Post-processing: Use fast heuristic first, falls back to exact if needed
         result = result._simplify_multilinear_fast()  # Apply x_i * x_i = x_i
         result = result._compress_rank()
@@ -352,6 +355,38 @@ class RankDecomposition[K: Lattice](eqx.Module):
             new_factors = eqx.tree_at(lambda t: t.data, new_factors, new_factors_data)
             # new_factors = new_factors.at[r, :, :].set(jnp.where(should_zero, zero_component, new_factors[r, :, :]))
 
+        return self._replace_factors(new_factors)
+
+    def _remove_zero_components(self) -> RankDecomposition[K]:
+        """Remove rank-1 components that have any all-zero factors.
+
+        A rank-1 component with an all-zero factor evaluates to zero everywhere,
+        so it can be safely removed from the sum.
+
+        Uses algebra-aware comparison: checks if all coefficients in a factor
+        are close to algebra.zero (works for any semiring, not just numeric ones).
+        """
+        # Vectorized zero-component detection
+        # Shape: [rank, degree, num_vars+1]
+        is_zero_coeff = jnp.isclose(self.factors.data, self.algebra.zero, atol=1e-7, rtol=0)
+
+        # Check if each factor is all-zero (all coefficients are zero)
+        # Shape: [rank, degree]
+        is_zero_factor = jnp.all(is_zero_coeff, axis=2)
+
+        # Check if any factor in each component is all-zero
+        # Shape: [rank]
+        has_zero_factor = jnp.any(is_zero_factor, axis=1)
+
+        # Keep components that don't have any all-zero factors
+        keep_mask = ~has_zero_factor
+
+        if jnp.all(~keep_mask):
+            # All components are zero: return zero polynomial
+            return self._make_const(self.algebra.zero)
+
+        # Keep only non-zero components
+        new_factors = self.factors[keep_mask]
         return self._replace_factors(new_factors)
 
     @eqx.filter_jit
@@ -494,16 +529,39 @@ class RankDecomposition[K: Lattice](eqx.Module):
         for r in range(self.rank):
             p_component = self.factors[r]  # [d_p, n+1]
 
-            # Identify which index each factor selects (0=constant, 1=x_0, 2=x_1, ...)
-            var_indices = jnp.argmax(p_component.data, axis=1)  # [d_p]
+            # Algebra-aware approach: find non-zero coefficients by comparing to algebra.zero
+            # By construction, each factor should have exactly one non-zero coefficient
+            is_nonzero = ~jnp.isclose(p_component.data, self.algebra.zero, atol=1e-7, rtol=0)
+
+            # Find which index has the non-zero coefficient (0=constant, 1=x_0, 2=x_1, ...)
+            # argmax on boolean array finds the first True value
+            var_indices = jnp.argmax(is_nonzero, axis=1)  # [d_p]
+
+            # Check if any factors are all-zero
+            # A factor is all-zero if all coefficients equal algebra.zero
+            is_zero_factor = jnp.all(~is_nonzero, axis=1)  # [d_p]
 
             # Gather the polynomials to multiply
             selected = q_array[var_indices]  # [d_p, R_max, max_replacement_degree, m+1]
 
             # Multiply sequentially
             result = selected[0]  # [R_max, max_replacement_degree, m+1]
-            for k in range(1, self.degree):
-                result = self._multiply_arrays(result, selected[k])
+
+            # Check if any factor is zero - if so, entire component is zero
+            has_any_zero: bool = jnp.any(is_zero_factor).item()
+
+            if has_any_zero:
+                # If any factor is zero, the entire component evaluates to zero
+                # Create a zero result with appropriate shape after all multiplications
+                # TODO: does the shape have to be the same as all other, or can we put a dummy shape here?
+                temp_result = result
+                for k in range(1, self.degree):
+                    temp_result = self._multiply_arrays(temp_result, selected[k])
+                result = alge.zeros(temp_result.shape, self.algebra)
+            else:
+                # Normal composition without any zero factors
+                for k in range(1, self.degree):
+                    result = self._multiply_arrays(result, selected[k])
 
             composed_list.append(result)
 
@@ -520,6 +578,8 @@ class RankDecomposition[K: Lattice](eqx.Module):
         result = self._replace_factors(result_factors)
 
         # Step 4: Simplify and compress
+        # Remove zero components first (components with any all-zero factor)
+        result = result._remove_zero_components()
         # Use fast heuristic first (especially important for AFA hot path)
         # Falls back to exact simplification if needed
         result = result._simplify_multilinear_fast()

@@ -144,6 +144,48 @@ class TestRankDecompositionMultiplication:
 
         assert quax.quaxify(jnp.allclose)(result_sparse, rank_value)
 
+    def test_multiply_with_zero_constant(self, rank_helper, bool_algebra):
+        """Test multiplication with zero constant (regression test).
+
+        This tests the fix for a bug where multiplying any polynomial by zero
+        did not properly simplify to a zero polynomial. The issue was that
+        rank-1 components with all-zero factors were not being removed.
+        """
+        rank_alg = rank_helper(bool_algebra, 3)
+
+        # Create const(1) and const(0)
+        const_one = rank_alg.constant(jnp.array(True))
+        const_zero = rank_alg.zero
+
+        # Multiply them
+        product = rank_alg.mul(const_one, const_zero)
+
+        # Result should be zero polynomial
+        # Check by evaluating at any point
+        result = rank_alg.evaluate(product, jnp.array([True, True, False]))
+        array_equal = quax.quaxify(jnp.array_equal)
+        assert array_equal(result.factors[0, 0, 0].data, jnp.array(False))
+
+        # Also test that factors are properly zero
+        assert quax.quaxify(jnp.allclose)(result.factors[0, 0, 0], bool_algebra.zero)
+
+    def test_multiply_zero_with_variable(self, rank_helper, bool_algebra):
+        """Test multiplying zero with a variable (regression test)."""
+        rank_alg = rank_helper(bool_algebra, 3)
+
+        zero = rank_alg.zero
+        x_0 = rank_alg.variable(0)
+
+        # Zero * variable should be zero
+        result = rank_alg.mul(zero, x_0)
+
+        # Should evaluate to False at any point
+        test_point = jnp.array([True, True, False])
+        eval_result = rank_alg.evaluate(result, test_point)
+
+        array_equal = quax.quaxify(jnp.array_equal)
+        assert array_equal(eval_result.factors[0, 0, 0].data, jnp.array(False))
+
 
 class TestRankDecompositionEvaluation:
     """Test that evaluation matches sparse representation."""
@@ -224,6 +266,52 @@ class TestRankDecompositionCompose:
             rank_value = val_rank.factors[0, 0, 0].data
 
             assert quax.quaxify(jnp.array_equal)(val_sparse, rank_value), f"Mismatch at {point}"
+
+    def test_compose_zero_polynomial(self, rank_helper, bool_algebra):
+        """Test composing zero polynomial with constants (regression test).
+
+        This tests the fix for a bug where composing a zero polynomial with
+        constant replacements would incorrectly return a non-zero polynomial.
+        The issue was in how compose() handled all-zero factors.
+        """
+        rank_alg = rank_helper(bool_algebra, 3)
+
+        # Create zero polynomial
+        zero = rank_alg.zero
+
+        # Create constant replacements
+        const_one = rank_alg.constant(jnp.array(True))
+        replacements = {
+            0: const_one,
+            1: const_one,
+            2: const_one,
+        }
+
+        # Compose zero polynomial with constants
+        result = rank_alg.compose(zero, replacements)
+
+        # Result should still be zero
+        eval_result = rank_alg.evaluate(result, jnp.array([True, True, True]))
+        array_equal = quax.quaxify(jnp.array_equal)
+        assert array_equal(eval_result.factors[0, 0, 0].data, jnp.array(False))
+
+    def test_compose_product_with_zero_substitution(self, rank_helper, bool_algebra):
+        """Test composing product where one variable is replaced with zero (regression test)."""
+        rank_alg = rank_helper(bool_algebra, 3)
+
+        # Create x_0 * x_1
+        x_0 = rank_alg.variable(0)
+        x_1 = rank_alg.variable(1)
+        product = rank_alg.mul(x_0, x_1)
+
+        # Compose: replace x_1 with zero
+        zero = rank_alg.zero
+        result = rank_alg.compose(product, {1: zero})
+
+        # Result should be zero (since x_0 * 0 = 0)
+        eval_result = rank_alg.evaluate(result, jnp.array([True, True, False]))
+        array_equal = quax.quaxify(jnp.array_equal)
+        assert array_equal(eval_result.factors[0, 0, 0].data, jnp.array(False))
 
 
 class TestRankDecompositionEdgeCases:
@@ -352,6 +440,31 @@ class TestRankDecompositionTropical:
         # min(2, 3) = 2
         allclose = quax.quaxify(jnp.allclose)
         assert allclose(result.factors[0, 0, 0].data, jnp.array(2.0))
+
+    def test_multiply_with_zero_maxmin(self, rank_helper, maxmin_algebra):
+        """Test multiplication with zero in max-min algebra (regression test).
+
+        This verifies that the algebra-aware zero detection works correctly
+        for non-Boolean semirings like max-min where zero = -inf.
+        """
+        rank_alg = rank_helper(maxmin_algebra, 3)
+
+        # Create const(one) and const(zero) for max-min algebra
+        # In max-min: zero = -inf, one = 0 (identity for min)
+        const_one = rank_alg.constant(jnp.array(0.0))
+        const_zero = rank_alg.zero  # Should be -inf
+
+        # Multiply them: 0 * (-inf) should give -inf
+        product = rank_alg.mul(const_one, const_zero)
+
+        # Result should be zero polynomial (zero = -inf in max-min)
+        result = rank_alg.evaluate(product, jnp.array([1.0, 2.0, 3.0]))
+
+        # Extract the scalar value
+        result_value = result.factors[0, 0, 0].data
+
+        # Should be -inf (the zero element)
+        assert jnp.isinf(result_value) and result_value < 0
 
 
 class TestRankDecompositionMemoryEfficiency:
