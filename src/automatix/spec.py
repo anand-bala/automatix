@@ -7,35 +7,16 @@ acceptance conditions for runtime checking.
 
 from __future__ import annotations
 
-from collections.abc import Hashable
 from typing import Protocol, runtime_checkable
 
 from jaxtyping import Array, ScalarLike
-
-# Import and re-export base interfaces from morphata
 from morphata.spec import BoolExpr as Guard
-
-import automatix.acc as acc
 
 # Re-export morphata base interfaces for backward compatibility
 __all__ = [
     "Guard",
     "WeightFunction",
-    "AcceptanceCondition",
 ]
-
-# Automatix-specific: state-set based acceptance conditions for runtime checking
-# This is different from morphata.acceptance which is expression-based for HOA specs
-type AcceptanceCondition[Q: Hashable] = (
-    acc.Finite[Q]
-    | acc.Buchi[Q]
-    | acc.CoBuchi[Q]
-    | acc.GeneralizedBuchi[Q]
-    | acc.GeneralizedCoBuchi[Q]
-    | acc.Rabin[Q]
-    | acc.Streett[Q]
-    | acc.Muller[Q]
-)
 
 
 @runtime_checkable

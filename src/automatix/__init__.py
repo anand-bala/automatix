@@ -11,13 +11,11 @@ Core exports:
 import automatix.automata as automata
 import automatix.weights as weights
 from automatix.spec import (
-    AcceptanceCondition,
     Guard,
     WeightFunction,
 )
 
 __all__ = [
-    "AcceptanceCondition",
     "Guard",
     "WeightFunction",
     "automata",
