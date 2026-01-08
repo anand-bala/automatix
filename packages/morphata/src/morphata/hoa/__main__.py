@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from pprint import pprint
 
-import morphata.hoaparser as hoa
+import morphata.hoa as hoa
 
 
 @dataclass

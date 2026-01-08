@@ -3,14 +3,21 @@
 This package provides:
 - Pure structural automaton interfaces (Automaton, Domain, TransitionRelation)
 - Acceptance condition expressions (morphata.acceptance)
-- HOA format parser (morphata.hoaparser)
+- HOA format parser (morphata.hoa.parser)
 - Example implementations (morphata.examples)
 """
+
+from collections.abc import Hashable, Mapping
+from collections.abc import Set as AbstractSet
+from dataclasses import dataclass
+
+from typing_extensions import override
 
 from morphata.spec import (
     AcceptanceCondition,
     AlternatingTransitions,
     Automaton,
+    BoolExpr,
     DeterministicTransitions,
     Domain,
     InitialState,
@@ -18,6 +25,43 @@ from morphata.spec import (
     TransitionRelation,
     UniversalTransitions,
 )
+
+
+@dataclass
+class DeterministicTransitionRelation[Q: Hashable, S: Hashable](DeterministicTransitions[Q, S]):
+    data: Mapping[Q, Mapping[S, Q]]
+
+    @override
+    def __call__(self, state: Q, symbol: S) -> Q:
+        return self.data[state][symbol]
+
+
+@dataclass
+class NonDeterministicTransitionRelation[Q: Hashable, S: Hashable](NonDeterministicTransitions[Q, S]):
+    data: Mapping[Q, Mapping[S, AbstractSet[Q]]]
+
+    @override
+    def __call__(self, state: Q, symbol: S) -> AbstractSet[Q]:
+        return self.data[state][symbol]
+
+
+@dataclass
+class UniversalTransitionRelation[Q: Hashable, S: Hashable](UniversalTransitions[Q, S]):
+    data: Mapping[Q, Mapping[S, AbstractSet[Q]]]
+
+    @override
+    def __call__(self, state: Q, symbol: S) -> AbstractSet[Q]:
+        return self.data[state][symbol]
+
+
+@dataclass
+class AlternatingTransitionRelation[Q: Hashable, S: Hashable](AlternatingTransitions[Q, S]):
+    data: Mapping[Q, Mapping[S, BoolExpr[Q]]]
+
+    @override
+    def __call__(self, state: Q, symbol: S) -> BoolExpr[Q]:
+        return self.data[state][symbol]
+
 
 __all__ = [
     "Domain",

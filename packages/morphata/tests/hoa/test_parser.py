@@ -1,9 +1,9 @@
 from pathlib import Path
 
-import morphata.hoaparser as hoa
+import morphata.hoa as hoa
 import pytest
 
-EXAMPLES_DIR = Path(__file__).parent / "examples"
+EXAMPLES_DIR = Path(__file__).parent
 
 
 @pytest.fixture(scope="function", params=list(EXAMPLES_DIR.glob("*.hoa")))
