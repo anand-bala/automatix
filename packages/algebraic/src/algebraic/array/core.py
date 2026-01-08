@@ -33,7 +33,7 @@ class AlgebraicArray[K: Semiring](quax.ArrayValue):
     corresponding semiring.
     """
 
-    data: Shaped[Array, "..."]
+    data: Shaped[Array, "..."] = eqx.field(converter=jnp.asarray)
     semiring: K
 
     _vdot: None | VdotFn = eqx.field(default=None, kw_only=True, static=True)
@@ -112,10 +112,13 @@ class AlgebraicArray[K: Semiring](quax.ArrayValue):
         return eqx.tree_at(lambda arr: arr.data, self, data)
 
     @property
-    def at(self) -> _IndexUpdateHelper:
+    def at(self) -> _IndexUpdateHelper[K]:
         from ._index_update import _IndexUpdateHelper
 
         return _IndexUpdateHelper(self)
+
+    def __matmul__(self, other: AlgebraicArray[K]) -> AlgebraicArray[K]:
+        return quax.quaxify(jnp.matmul)(self, other)  # type: ignore[arg-type,return-value]
 
 
 @overload
@@ -220,9 +223,11 @@ def _(
     out_sharding: jax.sharding.Sharding | jax.sharding.PartitionSpec | None = None,
 ) -> AlgebraicArray:
     """Reduce array using semiring addition along specified axes."""
+    # Cast zero to match data dtype
+    zero_typed = jnp.asarray(a.semiring.zero, dtype=a.data.dtype)
     result_data = jax.lax.reduce(
         a.data,
-        a.semiring.zero,
+        zero_typed,
         a.semiring.add,
         axes,
     )
@@ -237,9 +242,11 @@ def _(
     out_sharding: jax.sharding.Sharding | jax.sharding.PartitionSpec | None = None,
 ) -> AlgebraicArray:
     """Reduce array using semiring multiplication along specified axes."""
+    # Cast one to match data dtype
+    one_typed = jnp.asarray(a.semiring.one, dtype=a.data.dtype)
     result_data = jax.lax.reduce(
         a.data,
-        a.semiring.one,
+        one_typed,
         a.semiring.mul,
         axes,
     )
@@ -481,9 +488,11 @@ def _(
         products = semiring.mul(lhs_expanded, rhs_expanded)
 
         # Sum along contract dimension using semiring addition
+        # Cast zero to match products dtype
+        zero_typed = jnp.asarray(semiring.zero, dtype=products.dtype)
         result = jax.lax.reduce(
             products,
-            semiring.zero,
+            zero_typed,
             semiring.add,
             (3,),  # Reduce along contract dimension
         )
@@ -509,9 +518,11 @@ def _(
         products = semiring.mul(lhs_expanded, rhs_expanded)
 
         # Sum along contract dimension
+        # Cast zero to match products dtype
+        zero_typed = jnp.asarray(semiring.zero, dtype=products.dtype)
         result = jax.lax.reduce(
             products,
-            semiring.zero,
+            zero_typed,
             semiring.add,
             (2,),  # Reduce along contract dimension
         )

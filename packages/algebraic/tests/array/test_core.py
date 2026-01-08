@@ -106,6 +106,34 @@ class TestDotGeneralWithJNP:
         assert isinstance(result, AlgebraicArray)
         assert jnp.allclose(result.data, expected)
 
+    def test_matmul_boolean_algebra(self) -> None:
+        """Test @ operator with boolean algebra (regression test for dtype issue).
+
+        This test ensures that matmul works with boolean dtypes, which previously
+        failed due to dtype mismatch between semiring.zero (float32) and data (bool).
+        """
+        bool_alg = boolean_algebra(mode="logic")
+
+        # Create boolean matrices
+        a_data = jnp.array([[True, False], [False, True]])
+        b_data = jnp.array([[True, True], [False, True]])
+
+        a = AlgebraicArray(a_data, bool_alg)
+        b = AlgebraicArray(b_data, bool_alg)
+
+        # Compute using @ operator
+        result = a @ b
+
+        # Expected: (A @ B)[i,j] = OR_k(A[i,k] AND B[k,j])
+        # result[0,0] = (T AND T) OR (F AND F) = T
+        # result[0,1] = (T AND T) OR (F AND T) = T
+        # result[1,0] = (F AND T) OR (T AND F) = F
+        # result[1,1] = (F AND T) OR (T AND T) = T
+        expected = jnp.array([[True, True], [False, True]])
+
+        assert isinstance(result, AlgebraicArray)
+        assert jnp.array_equal(result.data, expected)
+
     def test_tensordot_counting_semiring(self) -> None:
         """Test jnp.tensordot with AlgebraicArray using counting semiring."""
         semiring = counting_semiring()
