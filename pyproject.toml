@@ -18,7 +18,7 @@ dependencies = [
   "networkx",
   "types-networkx",
   "attrs>=25.4.0",
-  "logic-asts>=1.1.4",
+  "logic-asts>=1.2.0",
 ]
 
 [dependency-groups]

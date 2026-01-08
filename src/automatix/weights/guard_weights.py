@@ -11,7 +11,6 @@ import jax
 import jax.numpy as jnp
 import logic_asts.base as exprs
 from algebraic import Semiring
-from algebraic.tensor_algebra.jax import JaxBiModule as BiModule
 from jaxtyping import Array, Num, Scalar, ScalarLike
 
 from automatix.spec import Guard
@@ -35,7 +34,7 @@ class AbstractPredicate[S: Semiring](eqx.Module, strict=True):
         Disjunction of predicates (uses semiring addition).
     """
 
-    algebra: eqx.AbstractVar[BiModule[S]]
+    algebra: eqx.AbstractVar[S]
 
     @abstractmethod
     def __call__(self, x: Num[Array, "..."]) -> Scalar:
@@ -66,7 +65,7 @@ class Predicate[S: Semiring](AbstractPredicate[S]):
         The predicate function mapping Array -> Scalar (weight).
     """
 
-    algebra: BiModule[S]
+    algebra: S
     fn: Callable[[Num[Array, "..."]], Scalar]
 
     @eqx.filter_jit
@@ -86,17 +85,15 @@ class And[S: Semiring](AbstractPredicate[S]):
     For MinPlus, this is addition of weights.
     """
 
-    algebra: BiModule[S]
+    algebra: S
     args: list[AbstractPredicate]
 
     @eqx.filter_jit
     def __call__(self, x: Num[Array, "..."]) -> Scalar:
         weights: list[Scalar] = [arg(x) for arg in self.args]
         weights_array = jnp.asarray(weights)
-        if self.algebra.prod is not None:
-            return self.algebra.prod(weights_array, axis=None)
-        else:
-            return cast(Scalar, jax.lax.reduce(weights_array, self.algebra.ones(()), self.algebra.mul, (0,)))
+        one_typed = jnp.asarray(self.algebra.one, dtype=weights_array.dtype)
+        return cast(Scalar, jax.lax.reduce(weights_array, one_typed, self.algebra.mul, (0,)))
 
 
 class Or[S: Semiring](AbstractPredicate[S]):
@@ -112,17 +109,15 @@ class Or[S: Semiring](AbstractPredicate[S]):
 
     """
 
-    algebra: BiModule[S]
+    algebra: S
     args: list[AbstractPredicate]
 
     @eqx.filter_jit
     def __call__(self, x: Num[Array, "..."]) -> Scalar:
         weights: list[Scalar] = [arg(x) for arg in self.args]
         weights_array = jnp.asarray(weights)
-        if self.algebra.sum is not None:
-            return self.algebra.sum(weights_array, axis=None)
-        else:
-            return cast(Scalar, jax.lax.reduce(weights_array, self.algebra.zeros(()), self.algebra.add, (0,)))
+        zero_typed = jnp.asarray(self.algebra.zero, dtype=weights_array.dtype)
+        return cast(Scalar, jax.lax.reduce(weights_array, zero_typed, self.algebra.add, (0,)))
 
 
 class ExprWeightFn[S: Semiring, AtomicPredicate: Hashable](eqx.Module):
@@ -136,7 +131,7 @@ class ExprWeightFn[S: Semiring, AtomicPredicate: Hashable](eqx.Module):
 
     Attributes
     ----------
-    algebra : BiModule[S]
+    algebra : S
         The semiring algebra for composing predicates.
     atoms : dict[str, Predicate]
         Predicates for positive atoms.
@@ -144,7 +139,7 @@ class ExprWeightFn[S: Semiring, AtomicPredicate: Hashable](eqx.Module):
         Predicates for negated atoms.
     """
 
-    algebra: BiModule[S]
+    algebra: S
     atoms: dict[str, Predicate]
     neg_atoms: dict[str, Predicate]
 
@@ -159,7 +154,7 @@ class ExprWeightFn[S: Semiring, AtomicPredicate: Hashable](eqx.Module):
         # self.cache.update((~exprs.Variable(atom), pred) for atom, pred in self.neg_atoms.items())
 
         self.cache.update(
-            (expr, Predicate(self.algebra, lambda _: self.algebra.zeros(())))
+            (expr, Predicate(self.algebra, lambda _: jnp.asarray(self.algebra.zero)))
             for expr in (
                 "0",
                 "FALSE",
@@ -169,7 +164,7 @@ class ExprWeightFn[S: Semiring, AtomicPredicate: Hashable](eqx.Module):
             )
         )
         self.cache.update(
-            (expr, Predicate(self.algebra, lambda _: self.algebra.ones(())))
+            (expr, Predicate(self.algebra, lambda _: jnp.asarray(self.algebra.one)))
             for expr in (
                 "1",
                 "TRUE",
@@ -201,10 +196,10 @@ class ExprWeightFn[S: Semiring, AtomicPredicate: Hashable](eqx.Module):
                 case exprs.Literal(value):
                     self.cache[subexpr_str] = (
                         # Broadcastable ONE for True
-                        Predicate(self.algebra, lambda _: self.algebra.ones(()))
+                        Predicate(self.algebra, lambda _: jnp.asarray(self.algebra.one))
                         if value
                         # Broadcastable ZERO for False
-                        else Predicate(self.algebra, lambda _: self.algebra.zeros(()))
+                        else Predicate(self.algebra, lambda _: jnp.asarray(self.algebra.zero))
                     )
                 case exprs.Variable(name):
                     assert isinstance(name, str)

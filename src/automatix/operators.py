@@ -12,10 +12,11 @@ from collections.abc import Callable
 import equinox as eqx
 import jax.numpy as jnp
 from algebraic import Semiring
-from algebraic.tensor_algebra.jax import JaxBiModule
-from jaxtyping import Array, Num
+from algebraic.array import AlgebraicArray
+from algebraic.array.core import ones, zeros
+from jaxtyping import Array, Num, Shaped
+from morphata.examples.nfa import NFA
 
-from morphata.automata.nfa import NFA
 from automatix.spec import WeightFunction
 
 
@@ -29,19 +30,19 @@ class MatrixOperator[S: Semiring, In](eqx.Module):
     - A function computing transition matrices for each input
     """
 
-    initial_weights: Num[Array, " q"]
-    final_weights: Num[Array, " q"]
-    cost_transitions: Callable[[Num[Array, "..."]], Num[Array, "q q"]]
+    initial_weights: Shaped[AlgebraicArray, " q"]
+    final_weights: Shaped[AlgebraicArray, " q"]
+    cost_transitions: Callable[[Num[Array, "..."]], Shaped[AlgebraicArray, "q q"]]
 
     @classmethod
     def make(
         cls,
         aut: NFA[In],
-        algebra: JaxBiModule[S],
+        semiring: S,
         *,
         weight_function: WeightFunction[Num[Array, "..."], In],
-        initial_weights: None | Num[Array, " {len(aut)}"] = None,
-        final_weights: None | Num[Array, " {len(aut)}"] = None,
+        initial_weights: None | Shaped[AlgebraicArray, " q"] = None,
+        final_weights: None | Shaped[AlgebraicArray, " q"] = None,
     ) -> MatrixOperator:
         """Create an automaton operator from an NFA and weight function.
 
@@ -56,10 +57,10 @@ class MatrixOperator[S: Semiring, In](eqx.Module):
 
         aut : NFA
             The nondeterministic finite automaton defining guards and transitions.
-        algebra : Semiring
-            The algebra for output values (e.g., Boolean, Tropical, MaxMin).
+        semiring : Semiring
+            The semiring for output values (e.g., Boolean, Tropical, MaxMin).
         weight_function : WeightFunction
-            A function mapping (input_symbol, guard) to algebra values.
+            A function mapping (input_symbol, guard) to semiring values.
             Implements lambda(x, Delta) from weighted automata theory.
         initial_weights : Optional[Array], optional
             Initial state weights. If None, set to 1 at initial locations.
@@ -80,11 +81,11 @@ class MatrixOperator[S: Semiring, In](eqx.Module):
 
         if initial_weights is None:
             initial_weights = (
-                algebra.zeros(aut.num_locations).at[jnp.array(list(aut.initial_state))].set(algebra.ones(1).item())
+                zeros(aut.num_locations, semiring).at[jnp.array(list(aut.initial_state))].set(ones(1, semiring).data.item())
             )
         if final_weights is None:
             final_weights = (
-                algebra.zeros(aut.num_locations).at[jnp.array(list(aut.final_locations))].set(algebra.ones(1).item())
+                zeros(aut.num_locations, semiring).at[jnp.array(list(aut.final_locations))].set(ones(1, semiring).data.item())
             )
 
         assert initial_weights.shape == (n_q,)
@@ -98,7 +99,7 @@ class MatrixOperator[S: Semiring, In](eqx.Module):
 
         # idx, guards = tuple(zip(*(((src, dst), guard) for src, dst, guard in aut.transitions)))
 
-        def cost_transitions(x: Num[Array, "..."]) -> Num[Array, "q q"]:
+        def cost_transitions(x: Num[Array, "..."]) -> Shaped[AlgebraicArray, "q q"]:
             """Compute transition matrix for input x using weight_function.
 
             Parameters
@@ -108,12 +109,12 @@ class MatrixOperator[S: Semiring, In](eqx.Module):
 
             Returns
             -------
-            Array
+            AlgebraicArray
                 q x q weighted transition matrix where element [i,j] is
                 weight_function(x, guard_{i,j}).
             """
 
-            matrix = algebra.zeros((n_q, n_q))
+            matrix = zeros((n_q, n_q), semiring)
             for (src, dst), guard in transitions.items():
                 # Apply weight function: lambda(x, guard)
                 weight = guard(x)  # type: ignore[no-untyped-call]

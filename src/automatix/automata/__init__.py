@@ -2,6 +2,7 @@
 
 Provides NFA and STREL automata.
 """
+
 import automatix.automata.nfa as nfa
 import automatix.automata.strel as strel
 

@@ -5,9 +5,9 @@ import jax.nn
 import jax.numpy as jnp
 import logic_asts as logic
 import pytest
+import quax
 from algebraic import Semiring
-from algebraic.tensor_algebra import jax as absalg
-from algebraic.tensor_algebra.jax import JaxBiModule as BiModule
+from algebraic.semirings import counting_semiring, max_min_algebra, tropical_semiring
 from jaxtyping import Array, Num, Scalar
 from typing_extensions import TypeAlias
 
@@ -67,7 +67,7 @@ def test_signed_dist_to_box() -> None:
     print(dists)
 
 
-def make_box_predicate[S: Semiring](algebra: BiModule[S], box: Box) -> tuple[Predicate, Predicate]:
+def make_box_predicate[S: Semiring](algebra: S, box: Box) -> tuple[Predicate, Predicate]:
     """Make the predicate for being inside and outside a box."""
 
     @jax.jit
@@ -83,7 +83,7 @@ def make_box_predicate[S: Semiring](algebra: BiModule[S], box: Box) -> tuple[Pre
     return Predicate(algebra, inside), Predicate(algebra, outside)
 
 
-def make_circle_predicate[S: Semiring](algebra: BiModule[S], circle: Circle) -> tuple[Predicate, Predicate]:
+def make_circle_predicate[S: Semiring](algebra: S, circle: Circle) -> tuple[Predicate, Predicate]:
     """Make the predicates for being inside and outside a circle"""
 
     @jax.jit
@@ -109,16 +109,16 @@ def parse_guard(expr: str) -> Guard[str]:
 
 @pytest.fixture(
     params=[
-        absalg.counting_semiring(),
-        absalg.tropical_semiring(minplus=False),
-        absalg.max_min_algebra(),
-        absalg.tropical_semiring(minplus=True),
+        counting_semiring(),
+        tropical_semiring(minplus=False),
+        max_min_algebra(),
+        tropical_semiring(minplus=True),
     ],
     ids=["CountingSemiring", "MaxPlusSemiring", "MaxMinSemiring", "MinPlusSemiring"],
 )
 def sequential_aut[S: Semiring](
     request: pytest.FixtureRequest,
-) -> tuple[NFA[str], dict[str, Predicate], dict[str, Predicate], BiModule[S]]:
+) -> tuple[NFA[str], dict[str, Predicate], dict[str, Predicate], S]:
     aut: NFA[str] = NFA()
     aut.add_location(0, initial=True)
     aut.add_location(1)
@@ -133,8 +133,8 @@ def sequential_aut[S: Semiring](
     aut.add_transition(2, 3, guard=parse_guard("orange"))
     aut.add_transition(3, 3, guard=logic.Literal(True))
 
-    algebra: BiModule[S] = request.param
-    assert isinstance(algebra, BiModule)
+    algebra: S = request.param
+    assert isinstance(algebra, Semiring)
 
     in_red, out_red = make_box_predicate(algebra, RED_BOX)
     in_green, out_green = make_box_predicate(algebra, GREEN_BOX)
@@ -146,7 +146,7 @@ def sequential_aut[S: Semiring](
 
 
 def test_expr_weight_fn[S: Semiring](
-    sequential_aut: tuple[NFA[str], dict[str, Predicate], dict[str, Predicate], BiModule[S]],
+    sequential_aut: tuple[NFA[str], dict[str, Predicate], dict[str, Predicate], S],
 ) -> None:
     aut, atoms, neg_atoms, algebra = sequential_aut
     weight_fn = ExprWeightFn[S, str](
@@ -162,9 +162,9 @@ def test_expr_weight_fn[S: Semiring](
     )
 
     assert operator.initial_weights.shape == (4,)
-    assert operator.initial_weights[0] == algebra.ones(()).item()
+    assert operator.initial_weights.data[0] == jnp.asarray(algebra.one)
     assert operator.final_weights.shape == (4,)
-    assert operator.final_weights[3] == algebra.ones(()).item()
+    assert operator.final_weights.data[3] == jnp.asarray(algebra.one)
 
     transitions = jax.jit(operator.cost_transitions)
 
@@ -179,9 +179,18 @@ def test_expr_weight_fn[S: Semiring](
 
     assert transitions(trajectory[0]).shape == (4, 4)
 
-    deltas = jax.vmap(transitions)(trajectory)
+    deltas = quax.quaxify(jax.vmap(transitions))(trajectory)
     assert deltas.shape == (n_timesteps, 4, 4)
 
-    weights, _ = jax.lax.scan(lambda x, y: (algebra.matmul(x, y), None), operator.initial_weights.reshape(1, -1), deltas)
-    weight = algebra.vdot(weights.squeeze(), operator.final_weights)
-    assert weight.size == 1
+    # Use quax.quaxify to wrap scan for AlgebraicArray support
+    # Reshape the initial weights to (1, n) for matrix multiplication
+    init_weights_reshaped = operator.initial_weights[jnp.newaxis, :]
+    weights, _ = quax.quaxify(jax.lax.scan)(
+        lambda x, y: (x @ y, None),
+        init_weights_reshaped,
+        deltas
+    )
+    # vdot as matmul: (1, n) @ (n,) with sum
+    # weights has shape (1, n), squeeze it to (n,) by indexing
+    weight = (weights[0] @ operator.final_weights).sum()
+    assert weight.data.size == 1

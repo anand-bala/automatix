@@ -9,7 +9,7 @@ This test module covers:
 
 import jax.numpy as jnp
 import logic_asts as logic
-from algebraic.tensor_algebra.jax import tropical_semiring
+from algebraic.semirings import tropical_semiring
 from jaxtyping import Array, Scalar, ScalarLike
 
 from automatix import Guard
@@ -19,7 +19,7 @@ from automatix.operators import MatrixOperator
 type InputSymbol = Array
 type SemiringValue = Array | Scalar | ScalarLike
 
-MaxPlusSemiring = tropical_semiring(minplus=False)
+maxplus = tropical_semiring(minplus=False)
 
 
 def parse_guard(expr: str) -> Guard[str]:
@@ -94,7 +94,7 @@ class TestAutomatonOperatorIntegration:
         # Create automaton operator
         operator = MatrixOperator.make(
             aut,
-            MaxPlusSemiring,
+            maxplus,
             weight_function=weight_fn,
         )
 
@@ -107,8 +107,8 @@ class TestAutomatonOperatorIntegration:
         transitions = operator.cost_transitions(x)
         assert transitions.shape == (2, 2)
         # Should have transitions at (0,1) and (1,1)
-        assert transitions[0, 1] == 1.0
-        assert transitions[1, 1] == 1.0
+        assert transitions.data[0, 1] == 1.0
+        assert transitions.data[1, 1] == 1.0
 
     def test_automaton_with_input_dependent_weights(self) -> None:
         """Test automaton where weights depend on input values."""
@@ -123,18 +123,18 @@ class TestAutomatonOperatorIntegration:
 
         operator = MatrixOperator.make(
             aut,
-            MaxPlusSemiring,
+            maxplus,
             weight_function=input_weight,
         )
 
         # Test with different inputs
         x1 = jnp.array([2.0])
         transitions1 = operator.cost_transitions(x1)
-        assert transitions1[0, 1] == 2.0
+        assert transitions1.data[0, 1] == 2.0
 
         x2 = jnp.array([5.0])
         transitions2 = operator.cost_transitions(x2)
-        assert transitions2[0, 1] == 5.0
+        assert transitions2.data[0, 1] == 5.0
 
     def test_automaton_with_multiple_transitions(self) -> None:
         """Test automaton with multiple guards and transitions."""
@@ -153,16 +153,16 @@ class TestAutomatonOperatorIntegration:
 
         operator = MatrixOperator.make(
             aut,
-            MaxPlusSemiring,
+            maxplus,
             weight_function=constant_weight,
         )
 
         x = jnp.array([3.0])
         transitions = operator.cost_transitions(x)
         assert transitions.shape == (3, 3)
-        assert transitions[0, 1] == 1.0
-        assert transitions[0, 2] == 1.0
-        assert transitions[1, 2] == 1.0
+        assert transitions.data[0, 1] == 1.0
+        assert transitions.data[0, 2] == 1.0
+        assert transitions.data[1, 2] == 1.0
 
 
 class TestWeightFunctionSignature:
@@ -183,7 +183,7 @@ class TestWeightFunctionSignature:
         # Should not raise
         operator = MatrixOperator.make(
             aut,
-            MaxPlusSemiring,
+            maxplus,
             weight_function=valid_wf,
         )
         assert operator is not None
@@ -203,12 +203,12 @@ class TestWeightFunctionSignature:
         aut.add_transition(0, 1, guard=logic.Variable("a"))
 
         # Both should work
-        op1 = MatrixOperator.make(aut, MaxPlusSemiring, weight_function=float_weight)
-        op2 = MatrixOperator.make(aut, MaxPlusSemiring, weight_function=int_weight)
+        op1 = MatrixOperator.make(aut, maxplus, weight_function=float_weight)
+        op2 = MatrixOperator.make(aut, maxplus, weight_function=int_weight)
 
         x = jnp.array([1.0])
-        assert op1.cost_transitions(x)[0, 1] == 3.14
-        assert op2.cost_transitions(x)[0, 1] == 42
+        assert op1.cost_transitions(x).data[0, 1] == 3.14
+        assert op2.cost_transitions(x).data[0, 1] == 42
 
 
 class TestWeightFunctionWithDifferentGuardAPTypes:
@@ -229,7 +229,7 @@ class TestWeightFunctionWithDifferentGuardAPTypes:
 
         operator = MatrixOperator.make(
             aut,
-            MaxPlusSemiring,
+            maxplus,
             weight_function=weight_fn,
         )
 
@@ -250,7 +250,7 @@ class TestWeightFunctionWithDifferentGuardAPTypes:
 
         operator = MatrixOperator.make(
             aut,
-            MaxPlusSemiring,
+            maxplus,
             weight_function=weight_fn,
         )
 
@@ -275,12 +275,12 @@ class TestWeightFunctionClosures:
 
         operator = MatrixOperator.make(
             aut,
-            MaxPlusSemiring,
+            maxplus,
             weight_function=scaled_weight,
         )
 
         x = jnp.array([1.0])
-        assert operator.cost_transitions(x)[0, 1] == 2.5
+        assert operator.cost_transitions(x).data[0, 1] == 2.5
 
     def test_weight_function_with_object_state(self) -> None:
         """Weight functions can be methods capturing object state."""
@@ -300,9 +300,9 @@ class TestWeightFunctionClosures:
 
         operator = MatrixOperator.make(
             aut,
-            MaxPlusSemiring,
+            maxplus,
             weight_function=gen,
         )
 
         x = jnp.array([3.0])
-        assert operator.cost_transitions(x)[0, 1] == 30.0
+        assert operator.cost_transitions(x).data[0, 1] == 30.0

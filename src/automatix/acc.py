@@ -2,6 +2,7 @@
 
 Defines acceptance condition types including Büchi, co-Büchi, Rabin, Streett, and Muller.
 """
+
 from __future__ import annotations
 
 from collections.abc import Hashable

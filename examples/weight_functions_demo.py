@@ -15,10 +15,19 @@ Examples shown:
 
 import jax.numpy as jnp
 import logic_asts.base as logic
-from automatix.algebra.backends.jax_ import MaxPlusSemiring
-from automatix.automata.finite_word import NFA, make_automaton_operator
+from algebraic.semirings import tropical_semiring
+from morphata.examples.nfa import NFA
 
-from automatix.weights import Guard, InputSymbol, SemiringValue, WeightFunction
+from automatix.operators import MatrixOperator
+from automatix.spec import Guard, WeightFunction
+from jaxtyping import Array, Num
+
+# Type aliases for clarity
+InputSymbol = Num[Array, "..."]
+SemiringValue = float
+
+# Create semiring instance (MaxPlus tropical semiring)
+maxplus = tropical_semiring(minplus=False)
 
 
 def example_1_constant_weight_function() -> None:
@@ -47,9 +56,9 @@ def example_1_constant_weight_function() -> None:
     print(f"  Final: {aut.final_locations}")
 
     # Create automaton operator with weight function
-    operator = make_automaton_operator(
+    operator = MatrixOperator.make(
         aut,
-        MaxPlusSemiring,
+        maxplus,
         weight_function=constant_weight,
     )
 
@@ -83,9 +92,9 @@ def example_2_input_dependent_weights() -> None:
     aut.add_transition(0, 1, guard="a")
     aut.add_transition(1, 2, guard="b")
 
-    operator = make_automaton_operator(
+    operator = MatrixOperator.make(
         aut,
-        MaxPlusSemiring,
+        maxplus,
         weight_function=input_norm_weight,
     )
 
@@ -106,7 +115,7 @@ def example_2_input_dependent_weights() -> None:
         print("  Non-zero transitions:")
         for i in range(transitions.shape[0]):
             for j in range(transitions.shape[1]):
-                if transitions[i, j] != MaxPlusSemiring.zeros(1).item():
+                if transitions.data[i, j] != maxplus.zero:
                     print(f"    ({i}, {j}) -> {transitions[i, j]:.1f}")
 
 
@@ -136,9 +145,9 @@ def example_3_guard_dependent_weights() -> None:
     aut.add_transition(0, 1, guard="a")  # Parsed as atom/variable
     aut.add_transition(1, 2, guard=logic.Literal(True))  # Literal
 
-    operator = make_automaton_operator(
+    operator = MatrixOperator.make(
         aut,
-        MaxPlusSemiring,
+        maxplus,
         weight_function=guard_type_weight,
     )
 
@@ -147,8 +156,8 @@ def example_3_guard_dependent_weights() -> None:
 
     print("\nWeight function: lambda(x, guard) = 0.5 if guard is Literal else 1.0")
     print("\nTransition weights:")
-    print(f"  (0, 1) -> {transitions[0, 1]:.1f} (atom guard)")
-    print(f"  (1, 2) -> {transitions[1, 2]:.1f} (literal guard)")
+    print(f"  (0, 1) -> {transitions.data[0, 1]:.1f} (atom guard)")
+    print(f"  (1, 2) -> {transitions.data[1, 2]:.1f} (literal guard)")
 
 
 def example_4_combined_input_guard_weights() -> None:
@@ -174,9 +183,9 @@ def example_4_combined_input_guard_weights() -> None:
     aut.add_location(1, final=True)
     aut.add_transition(0, 1, guard="a")
 
-    operator = make_automaton_operator(
+    operator = MatrixOperator.make(
         aut,
-        MaxPlusSemiring,
+        maxplus,
         weight_function=combined_weight,
     )
 
@@ -195,7 +204,7 @@ def example_4_combined_input_guard_weights() -> None:
         expected = norm * 1.0  # guard "a" is not a Literal
         print(f"\n  Input x = {x}")
         print(f"  ||x|| = {norm:.1f}")
-        print(f"  Weight (0, 1) = {transitions[0, 1]:.1f}")
+        print(f"  Weight (0, 1) = {transitions.data[0, 1]:.1f}")
         print(f"  Expected = {expected:.1f}")
 
 
@@ -225,7 +234,7 @@ def example_5_closure_weight_function() -> None:
 
     # Create operators with different scale factors
     scales = [0.5, 1.0, 2.0]
-    operators = [make_automaton_operator(aut, MaxPlusSemiring, weight_function=make_scaled_weight(s)) for s in scales]
+    operators = [MatrixOperator.make(aut, maxplus, weight_function=make_scaled_weight(s)) for s in scales]
 
     x = jnp.array([3.0, 4.0])
     norm = float(jnp.linalg.norm(x))
@@ -235,7 +244,7 @@ def example_5_closure_weight_function() -> None:
 
     for scale, operator in zip(scales, operators):
         transitions = operator.cost_transitions(x)
-        weight = transitions[0, 1]
+        weight = transitions.data[0, 1]
         print(f"\n  Scale factor: {scale}")
         print(f"  Weight (0, 1) = {weight:.1f}")
         print(f"  Expected = {scale * norm:.1f}")
@@ -273,9 +282,9 @@ def example_6_learnable_weights() -> None:
     aut.add_transition(0, 1, guard="a")
     aut.add_transition(1, 2, guard="b")
 
-    operator = make_automaton_operator(
+    operator = MatrixOperator.make(
         aut,
-        MaxPlusSemiring,
+        maxplus,
         weight_function=learned_weight,
     )
 
@@ -287,8 +296,8 @@ def example_6_learnable_weights() -> None:
         print(f"  '{guard_str}' -> {weight}")
 
     print("\nTransitions in automaton:")
-    print(f"  (0, 1) with guard 'a' -> weight {transitions[0, 1]}")
-    print(f"  (1, 2) with guard 'b' -> weight {transitions[1, 2]}")
+    print(f"  (0, 1) with guard 'a' -> weight {transitions.data[0, 1]}")
+    print(f"  (1, 2) with guard 'b' -> weight {transitions.data[1, 2]}")
 
 
 def main() -> None:

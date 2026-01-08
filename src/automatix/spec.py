@@ -13,20 +13,13 @@ from typing import Protocol, runtime_checkable
 from jaxtyping import Array, ScalarLike
 
 # Import and re-export base interfaces from morphata
-from morphata.spec import (
-    AbstractAutomaton as _BaseAutomaton,
-    Guard,
-    SizedAutomaton as _BaseSizedAutomaton,
-)
+from morphata.spec import BoolExpr as Guard
 
 import automatix.acc as acc
 
 # Re-export morphata base interfaces for backward compatibility
-# These are the pure structural interfaces without weighted semantics
 __all__ = [
     "Guard",
-    "AbstractAutomaton",
-    "SizedAutomaton",
     "WeightFunction",
     "AcceptanceCondition",
 ]
@@ -43,11 +36,6 @@ type AcceptanceCondition[Q: Hashable] = (
     | acc.Streett[Q]
     | acc.Muller[Q]
 )
-
-# Re-export morphata interfaces
-# Note: These don't use automatix.AcceptanceCondition, they use morphata.spec.FiniteAcceptance
-AbstractAutomaton = _BaseAutomaton
-SizedAutomaton = _BaseSizedAutomaton
 
 
 @runtime_checkable
