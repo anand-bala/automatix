@@ -10,7 +10,6 @@ from types import ModuleType
 from typing import Mapping, Sequence, TypeAlias
 
 import networkx as nx
-from morphata.examples.strel import STRELAutomaton
 
 N_TRIALS = 7
 N_REPEATS = 10

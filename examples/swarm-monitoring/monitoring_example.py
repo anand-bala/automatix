@@ -13,7 +13,6 @@ from typing import Mapping, MutableSequence, Sequence, TypeAlias
 import logic_asts
 import networkx as nx
 import numpy as np
-from morphata.examples.strel import STRELAutomaton
 from logic_asts import strel
 from pydantic import BaseModel, Field, model_validator
 from typing_extensions import Self

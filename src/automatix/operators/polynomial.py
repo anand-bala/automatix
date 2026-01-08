@@ -73,7 +73,7 @@ def boolexpr_to_polynomial(
                 raise ValueError(f"Invalid state variable: {q}, expected integer or 'x_i' format")
 
             if not (0 <= q < num_vars):
-                raise ValueError(f"Invalid state variable: {q}, expected 0..{num_vars-1}")
+                raise ValueError(f"Invalid state variable: {q}, expected 0..{num_vars - 1}")
             result = RankDecomposition.variable(q, num_vars, algebra)
 
         elif isinstance(e, logic.And):
@@ -199,9 +199,7 @@ class PolynomialOperator(eqx.Module, Generic[Symbol]):
             Boolean value: True if any accepting state is reachable
         """
         # Build characteristic point: 1 for accepting states, 0 for others
-        point = {
-            i: self.algebra.one if i in self.accepting_states else self.algebra.zero for i in range(self.num_states)
-        }
+        point = {i: self.algebra.one if i in self.accepting_states else self.algebra.zero for i in range(self.num_states)}
 
         return poly.evaluate(point)
 
@@ -307,7 +305,9 @@ def _infer_num_states(aut) -> int:
     else:
         # Try to infer from initial state and acceptance
         # This is a fallback for symbolic domains
-        raise NotImplementedError("Cannot infer number of states from non-enumerable domain. " "Please provide num_states explicitly.")
+        raise NotImplementedError(
+            "Cannot infer number of states from non-enumerable domain. Please provide num_states explicitly."
+        )
 
 
 def _extract_accepting_states(acceptance) -> set[int]:

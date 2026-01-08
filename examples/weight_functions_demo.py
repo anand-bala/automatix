@@ -16,11 +16,11 @@ Examples shown:
 import jax.numpy as jnp
 import logic_asts.base as logic
 from algebraic.semirings import tropical_semiring
+from jaxtyping import Array, Num
 from morphata.examples.nfa import NFA
 
 from automatix.operators import MatrixOperator
 from automatix.spec import Guard, WeightFunction
-from jaxtyping import Array, Num
 
 # Type aliases for clarity
 InputSymbol = Num[Array, "..."]

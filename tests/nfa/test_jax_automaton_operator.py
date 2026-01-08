@@ -185,11 +185,7 @@ def test_expr_weight_fn[S: Semiring](
     # Use quax.quaxify to wrap scan for AlgebraicArray support
     # Reshape the initial weights to (1, n) for matrix multiplication
     init_weights_reshaped = operator.initial_weights[jnp.newaxis, :]
-    weights, _ = quax.quaxify(jax.lax.scan)(
-        lambda x, y: (x @ y, None),
-        init_weights_reshaped,
-        deltas
-    )
+    weights, _ = quax.quaxify(jax.lax.scan)(lambda x, y: (x @ y, None), init_weights_reshaped, deltas)
     # vdot as matmul: (1, n) @ (n,) with sum
     # weights has shape (1, n), squeeze it to (n,) by indexing
     weight = (weights[0] @ operator.final_weights).sum()
