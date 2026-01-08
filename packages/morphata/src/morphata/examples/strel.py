@@ -15,9 +15,10 @@ import logic_asts.strel as strel
 import networkx as nx
 from logic_asts.base import BaseExpr as PosBoolExpr
 from logic_asts.strel import STRELExpr
-from typing_extensions import final, overload, override
+from typing_extensions import overload, override
 
-from morphata.spec import AbstractAutomaton, FiniteAcceptance
+import morphata
+from morphata.acceptance import Finite
 
 type Q = tuple[int, int]
 type State = PosBoolExpr[Q]
@@ -27,6 +28,39 @@ if TYPE_CHECKING:
     type Input = nx.Graph[int]
 else:
     type Input = nx.Graph
+
+
+class STRELDomain(morphata.Domain[Q, Input]):
+    """Domain for STREL automata with symbolic states and graph inputs."""
+
+    @property
+    def states(self) -> Iterable[Q] | None:
+        """States are symbolic (not enumerable)."""
+        return None
+
+    @property
+    def symbols(self) -> Iterable[Input] | None:
+        """Symbols are graphs (not enumerable)."""
+        return None
+
+
+def strel_to_automata[AP: Hashable](
+    expr: STRELExpr[AP],
+    dist_attr: str,
+    label_fn: Callable[[Input, Location, AP], bool],
+    num_locations: int = 0,
+    ego_location: int | Sequence[int] | None = None,
+) -> morphata.Automaton[Q, Input]:
+    """Convert a STREL expression into an automaton"""
+
+    transition_fn = STRELAutomaton(expr, dist_attr, label_fn, num_locations, ego_location)
+
+    return morphata.Automaton[Q, Input](
+        domain=STRELDomain(),
+        initial=transition_fn.initial_state,
+        delta=transition_fn,
+        acceptance=transition_fn.acceptance_condition,
+    )
 
 
 def _as_strel[AP: Hashable](expr: logic.Expr) -> STRELExpr[AP]:
@@ -39,7 +73,6 @@ def _as_poly[AP: Hashable](expr: logic.Expr) -> State:
     return typing.cast(State, expr)
 
 
-@final
 class _NodeMap[AP: Hashable](MutableMapping[STRELExpr[AP], int]):
     """Bidirectional mapping between STREL expressions and integer indices."""
 
@@ -92,9 +125,12 @@ class _NodeMap[AP: Hashable](MutableMapping[STRELExpr[AP], int]):
         return len(self.forward)
 
 
-@final
-class STRELAutomaton[AP: Hashable](AbstractAutomaton[Input, bool, State, Q]):
-    """An alternating finite automaton for STREL with acceptance semantics."""
+class STRELAutomaton[AP: Hashable](morphata.AlternatingTransitions[Q, Input]):
+    """An alternating finite automaton for STREL with acceptance semantics.
+
+    This is an example implementation showing how to build alternating automata
+    for spatio-temporal specifications.
+    """
 
     def __init__(
         self,
@@ -138,17 +174,19 @@ class STRELAutomaton[AP: Hashable](AbstractAutomaton[Input, bool, State, Q]):
     """Property for getting/setting ego locations."""
 
     @property
-    @override
     def initial_state(self) -> State:
         """The initial state is the conjunction of the root expression node at all ego locations"""
         i = 0
         assert self._expr_map.get_expr(i) == self._expr, "0 should always be the root node for STRELAutomaton"
-        return strel.And(tuple(strel.Variable((i, loc)) for loc in self.ego_locations))
+        variables = tuple(strel.Variable((i, loc)) for loc in self.ego_locations)
+        if len(variables) == 1:
+            return variables[0]
+        return strel.And(variables)
 
     @property
-    def acceptance_condition(self) -> FiniteAcceptance[Q]:
+    def acceptance_condition(self) -> Finite[Q]:
         """Acceptance condition based on STREL semantics."""
-        return FiniteAcceptance(
+        return Finite(
             accepting=frozenset(
                 {
                     (i, loc)
@@ -167,7 +205,7 @@ class STRELAutomaton[AP: Hashable](AbstractAutomaton[Input, bool, State, Q]):
     def delta(self, input_symbol: Input, expr: STRELExpr[AP], loc: Location) -> State:
         """Get the successor state representation for this specific state `Q`"""
 
-        _recurse = functools.partial(self.delta, input_symbol=input_symbol)
+        _recurse = functools.partial(self.delta, input_symbol)
 
         def var(expr: logic.Expr, loc: Location) -> logic.Variable[Q]:
             expr_idx = self._expr_map.add_node(_as_strel(expr))
@@ -226,33 +264,11 @@ class STRELAutomaton[AP: Hashable](AbstractAutomaton[Input, bool, State, Q]):
                 raise TypeError(f"Unknown expression type {type(expr)}")
         raise TypeError(f"Unknown expression type {type(expr)}")
 
-    @override
-    def __call__(self, input_symbol: Input, state: State) -> tuple[bool, State]:
-        from logic_asts.base import simple_eval
-
-        idx: int
-        loc: Location
-        cache = dict[State, State]()
-        for expr in state.iter_subtree():
-            match expr:
-                case logic.Literal():
-                    cache[expr] = expr
-                case logic.Variable(q):
-                    assert isinstance(q, tuple)
-                    idx, loc = q
-                    q_expr = self._expr_map.get_expr(idx)
-                    assert q_expr is not None
-                    cache[expr] = self.delta(input_symbol, q_expr, loc)
-                case logic.Or(args):
-                    cache[expr] = functools.reduce(lambda a, b: a | b, (cache[_as_poly(arg)] for arg in args))
-                case logic.And(args):
-                    cache[expr] = functools.reduce(lambda a, b: a & b, (cache[_as_poly(arg)] for arg in args))
-                case _:
-                    raise TypeError(f"State expr can only be positive boolean expressions, got {type(expr)}")
-
-        ret = cache[state]
-        accepting_p = simple_eval(ret, self.acceptance_condition.accepting)
-        return accepting_p, ret
+    def __call__(self, state: Q, symbol: Input) -> State:
+        expr_idx, loc = state
+        expr = self._expr_map.get_expr(expr_idx)
+        assert expr is not None
+        return self.delta(symbol, expr, loc)
 
     def _expand_reach(self, input: Input, phi: strel.Reach, loc: Location) -> State:
         d1 = phi.interval.start or 0.0
@@ -287,7 +303,7 @@ class STRELAutomaton[AP: Hashable](AbstractAutomaton[Input, bool, State, Q]):
         # Make the symbolic expressions for each path, with the terminal one being for the rhs
         arg = typing.cast(STRELExpr[AP], phi.arg)
         expr: State
-        for path in nx.all_simple_paths(input, source=loc, target=targets):  # type: ignore[call-overload]
+        for path in nx.all_simple_paths(input, source=loc, target=targets):  # type: ignore[call-overload,var-annotated]
             # print(f"{path=}")
             # Path expr checks if all locations satisfy arg
             expr = logic.Literal(False)

@@ -1,20 +1,32 @@
 """Morphata: Flexible automata representations for regular and omega-regular languages.
 
 This package provides:
-- Graph-based automaton implementations (NFA, STREL)
-- HOA format parser
-- Acceptance condition expressions
-- Base interfaces for automata structures
+- Pure structural automaton interfaces (Automaton, Domain, TransitionRelation)
+- Acceptance condition expressions (morphata.acceptance)
+- HOA format parser (morphata.hoaparser)
+- Example implementations (morphata.examples)
 """
 
-from morphata.automata import NFA, STRELAutomaton
-from morphata.spec import AbstractAutomaton, FiniteAcceptance, Guard, SizedAutomaton
+from morphata.spec import (
+    AcceptanceCondition,
+    AlternatingTransitions,
+    Automaton,
+    DeterministicTransitions,
+    Domain,
+    InitialState,
+    NonDeterministicTransitions,
+    TransitionRelation,
+    UniversalTransitions,
+)
 
 __all__ = [
-    "NFA",
-    "STRELAutomaton",
-    "AbstractAutomaton",
-    "SizedAutomaton",
-    "Guard",
-    "FiniteAcceptance",
+    "Domain",
+    "InitialState",
+    "AcceptanceCondition",
+    "TransitionRelation",
+    "DeterministicTransitions",
+    "NonDeterministicTransitions",
+    "UniversalTransitions",
+    "AlternatingTransitions",
+    "Automaton",
 ]

@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import typing
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -40,25 +40,24 @@ import logic_asts.base as guard
 from lark import Lark, Token, Transformer, v_args
 from typing_extensions import override
 
-from morphata.acceptance import (
-    AcceptanceCondition,
-    AccExpr,
-    Fin,
-    Final,
-    GenericCondition,
-    Inf,
-    Literal,
-)
+from .acc_expr import AccExpr, Fin, Final, Inf, Literal
 
 type LabelExpr = guard.BaseExpr[int]
+type StateExpr = guard.BaseExpr[int]
 
 
 @dataclass(frozen=True, eq=True, kw_only=True)
 class Header:
     """HOA file header containing automaton metadata."""
 
-    acc: AcceptanceCondition
+    num_acceptance_sets: int
+    """Number of labeled sets in the acceptance expression"""
+    acc_expr: AccExpr
+    """Acceptance expression"""
+    acc_name: str | None
     """Acceptance condition specification"""
+    acc_props: Iterable[bool | int | str] | None
+    """properties of the acceptance condition"""
     name: str | None = None
     """Automaton name"""
     num_states: int | None = None
@@ -96,7 +95,7 @@ class Transition:
     """HOA transition representation."""
 
     dst: list[int]
-    """Destination state(s)"""
+    """A potential conjunction of destination states"""
     label: LabelExpr | None = None
     """Transition label expression"""
     acc_set: list[int] | None = None
@@ -169,31 +168,37 @@ class _AstTransformer(Transformer[Token, ParsedAutomaton]):
         self._initial_states: list[list[int]] = []
         self._predicates: list[str] = []
 
-        self._num_accept_sets: int
-        self._acc: AccExpr
+        self.num_accept_sets: int
+        self.acc: AccExpr
 
         self._acc_name: tuple[str, list[bool | int | str] | None] | None = None
         self._name: str | None = None
 
     @v_args(inline=True)
     def automaton(self, header: Header, body: dict[State, list[Transition]]) -> ParsedAutomaton:
+        if header.num_states is not None:
+            assert header.num_states == len(body)
+        else:
+            header = replace(header, num_states=len(body))
         aut = ParsedAutomaton(header, body)
 
         return aut
 
     def header(self, _: list[Any]) -> Header:
-        if not hasattr(self, "_acc") or not hasattr(self, "_num_accept_sets"):
+        if not hasattr(self, "acc") or not hasattr(self, "num_accept_sets"):
             raise MissingHeaderError("Acceptance")
+        acc_name: str | None
+        acc_props: Iterable[bool | int | str] | None
         if self._acc_name is not None:
-            acc_name: str
-            acc_props: Iterable[bool | int | str] | None
             acc_name, acc_props = self._acc_name
-            acc = AcceptanceCondition.from_name(acc_name, *(acc_props or ()))
-            assert acc.to_expr() == self._acc
         else:
-            acc = GenericCondition(self._num_accept_sets, self._acc)
+            acc_name = None
+            acc_props = None
         return Header(
-            acc=acc,
+            num_acceptance_sets=self.num_accept_sets,
+            acc_expr=self.acc,
+            acc_name=acc_name,
+            acc_props=acc_props,
             name=self._name,
             num_states=self._num_states,
             initial=self._initial_states,
@@ -238,10 +243,10 @@ class _AstTransformer(Transformer[Token, ParsedAutomaton]):
 
     @v_args(inline=True)
     def automaton_acc(self, num_sets: int, condition: AccExpr) -> None:
-        if hasattr(self, "_acc") or hasattr(self, "_num_accept_sets"):
+        if hasattr(self, "acc") or hasattr(self, "num_accept_sets"):
             raise DuplicateHeaderError("Acceptance")
-        self._num_accept_sets = num_sets
-        self._acc = condition
+        self.num_accept_sets = num_sets
+        self.acc = condition
 
     @v_args(inline=True)
     def acc_name(self, name: str, props: list[bool | int | str] | None) -> None:

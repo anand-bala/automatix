@@ -7,97 +7,96 @@ by automatix for weighted automata semantics.
 
 from __future__ import annotations
 
+import functools
+import typing as ty
 from abc import ABC, abstractmethod
-from collections.abc import Hashable, Iterator
-from collections.abc import Set as AbstractSet
-from dataclasses import dataclass
+from collections.abc import Hashable, Iterable
 
-import logic_asts.base as exprs
+import logic_asts.base as logic
+from attrs import frozen
 
-type Guard[AtomicPredicate] = exprs.BaseExpr[AtomicPredicate]
-"""Guard expression over atomic predicates.
+type BoolExpr[Var] = logic.BaseExpr[Var]
 
-Guards are boolean expressions used to label transitions in automata.
-They are evaluated against input symbols to determine which transitions
-are enabled.
-"""
+State = ty.TypeVar("State", bound=Hashable)
+Symbol = ty.TypeVar("Symbol", contravariant=True)
 
 
-class AbstractAutomaton[In, Out, StateRep, Q: Hashable](ABC):
-    """Base interface for automaton-like transition systems.
+class AcceptanceCondition(ABC, ty.Generic[State]):
+    """Base class for finite and omega-regular acceptance conditions"""
 
-    This provides the minimal interface for any automaton-like system:
-    an initial state and a transition function. Specific automaton types
-    can add their own acceptance_condition property as needed.
+    @classmethod
+    @abstractmethod
+    def is_omega_regular(cls) -> bool:
+        """Determines if the concrete `AcceptanceCondition` is ω-regular or not."""
 
-    Type Parameters
-    ---------------
-    In : type
-        Input alphabet type
-    Out : type
-        Output type (e.g., bool for acceptance)
-    StateRep : type
-        Runtime state representation (e.g., frozenset[int] for NFA)
-    Q : Hashable
-        Underlying location/state space type
+
+class Domain(ABC, ty.Generic[State, Symbol]):
+    """Capability-based domain.
+
+    Returning `None` means that the property of the domain is not enumerable or is
+    symbolic.
     """
 
     @property
     @abstractmethod
-    def initial_state(self) -> StateRep:
-        """The initial state of the automaton."""
+    def states(self) -> Iterable[State] | None:
+        return None
 
+    @property
     @abstractmethod
-    def __call__(self, input_symbol: In, state: StateRep) -> tuple[Out, StateRep]:
-        """Transition function.
-
-        Takes an input symbol and current state, returns output and next state.
-
-        Parameters
-        ----------
-        input_symbol : In
-            The input symbol to process
-        state : StateRep
-            The current state
-
-        Returns
-        -------
-        tuple[Out, StateRep]
-            Output value and successor state
-        """
+    def symbols(self) -> Iterable[Symbol] | None:
+        return None
 
 
-class SizedAutomaton[In, Out, StateRep, Q: Hashable](AbstractAutomaton[In, Out, StateRep, Q]):
-    """Automaton with a finite, a priori known state space.
-
-    Sized automata have a fixed number of states known at construction time.
-    This allows for efficient matrix-based representations and operations.
-    """
-
-    @abstractmethod
-    def __len__(self) -> int:
-        """Number of states in the automaton."""
-
-    @abstractmethod
-    def __iter__(self) -> Iterator[Q]:
-        """Iterate over all states in the automaton."""
+type InitialState[State] = State | Iterable[State] | BoolExpr[State]
 
 
-@dataclass(frozen=True)
-class FiniteAcceptance[Q: Hashable]:
-    """Finite-word acceptance condition with concrete accepting states.
+@ty.runtime_checkable
+class TransitionRelation(ty.Protocol[State, Symbol]):
+    def __call__(self, state: State, symbol: Symbol) -> State | Iterable[State] | BoolExpr[State]: ...
 
-    This is a minimal acceptance condition for graph-based automata.
-    A run is accepting if it ends in a state that is in the accepting set.
 
-    This differs from morphata.acceptance.Finite which is an expression-based
-    representation for HOA parsing. This class is for runtime checking.
+@ty.runtime_checkable
+class DeterministicTransitions(TransitionRelation[State, Symbol], ty.Protocol):
+    def __call__(self, state: State, symbol: Symbol) -> State: ...
 
-    Parameters
-    ----------
-    accepting : AbstractSet[Q]
-        Set of accepting states
-    """
 
-    accepting: AbstractSet[Q]
-    """Set of states that are accepting (final states)"""
+@ty.runtime_checkable
+class NonDeterministicTransitions(TransitionRelation[State, Symbol], ty.Protocol):
+    def __call__(self, state: State, symbol: Symbol) -> Iterable[State]: ...
+
+
+@ty.runtime_checkable
+class UniversalTransitions(TransitionRelation[State, Symbol], ty.Protocol):
+    def __call__(self, state: State, symbol: Symbol) -> Iterable[State]: ...
+
+
+@ty.runtime_checkable
+class AlternatingTransitions(TransitionRelation[State, Symbol], ty.Protocol):
+    def __call__(self, state: State, symbol: Symbol) -> BoolExpr[State]: ...
+
+    def step_run(self, run_state: BoolExpr[State], symbol: Symbol) -> BoolExpr[State]:
+        """Given the formula representing the current state of the run tree, compute the successor states in the run tree given the input symbol."""
+        cache: dict[BoolExpr[State], BoolExpr[State]] = dict()
+        for expr in run_state.iter_subtree():
+            match expr:
+                case logic.Literal():
+                    cache[expr] = expr
+                case logic.Variable(q):
+                    cache[expr] = self.__call__(ty.cast(State, q), symbol)
+                case logic.Or(args):
+                    cache[expr] = functools.reduce(lambda a, b: a | b, (cache[ty.cast(BoolExpr[State], arg)] for arg in args))
+                case logic.And(args):
+                    cache[expr] = functools.reduce(lambda a, b: a & b, (cache[ty.cast(BoolExpr[State], arg)] for arg in args))
+                case _:
+                    raise TypeError(f"run_state expr can only be positive boolean expressions, got {type(expr)}")
+
+        return cache[run_state]
+
+
+@frozen
+class Automaton(ty.Generic[State, Symbol]):
+    domain: Domain[State, Symbol]
+    initial: InitialState[State]
+    delta: TransitionRelation[State, Symbol]
+    acceptance: AcceptanceCondition[State]

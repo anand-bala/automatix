@@ -5,12 +5,11 @@ These tests focus on basic structural properties without weighted semantics.
 
 import pytest
 from logic_asts import base, ltl
+from morphata.acceptance import Finite
+from morphata.examples.nfa import NFA
 
-from morphata.automata.nfa import NFA
-from morphata.spec import FiniteAcceptance
 
-
-def test_nfa_creation():
+def test_nfa_creation() -> None:
     """Test basic NFA creation and properties."""
     nfa = NFA[str]()
 
@@ -19,7 +18,7 @@ def test_nfa_creation():
     assert nfa.initial_state == frozenset()
 
 
-def test_nfa_add_locations():
+def test_nfa_add_locations() -> None:
     """Test adding locations to NFA."""
     nfa = NFA[str]()
 
@@ -33,7 +32,7 @@ def test_nfa_add_locations():
     assert nfa.final_locations == frozenset({1})
 
 
-def test_nfa_duplicate_location_error():
+def test_nfa_duplicate_location_error() -> None:
     """Test that adding duplicate location raises error."""
     nfa = NFA[str]()
     nfa.add_location(0)
@@ -42,7 +41,7 @@ def test_nfa_duplicate_location_error():
         nfa.add_location(0)
 
 
-def test_nfa_add_transitions():
+def test_nfa_add_transitions() -> None:
     """Test adding transitions with guards."""
     nfa = NFA[str]()
     nfa.add_location(0, initial=True)
@@ -65,7 +64,7 @@ def test_nfa_add_transitions():
     assert nfa.guards(0, 1) == guard_a
 
 
-def test_nfa_duplicate_transition_error():
+def test_nfa_duplicate_transition_error() -> None:
     """Test that adding duplicate transition raises error."""
     nfa = NFA[str]()
     nfa.add_location(0)
@@ -78,18 +77,18 @@ def test_nfa_duplicate_transition_error():
         nfa.add_transition(0, 1, guard)
 
 
-def test_nfa_acceptance_condition():
-    """Test acceptance condition is FiniteAcceptance."""
+def test_nfa_acceptance_condition() -> None:
+    """Test acceptance condition is Finite."""
     nfa = NFA[str]()
     nfa.add_location(0, initial=True)
     nfa.add_location(1, final=True)
 
     acc = nfa.acceptance_condition
-    assert isinstance(acc, FiniteAcceptance)
+    assert isinstance(acc, Finite)
     assert acc.accepting == frozenset({1})
 
 
-def test_nfa_transitions_iterable():
+def test_nfa_transitions_iterable() -> None:
     """Test transitions property returns all transitions."""
     nfa = NFA[str]()
     nfa.add_location(0)
@@ -108,7 +107,7 @@ def test_nfa_transitions_iterable():
     assert (1, 2, guard2) in transitions
 
 
-def test_nfa_call_basic():
+def test_nfa_call_basic() -> None:
     """Test basic NFA transition function call."""
     nfa = NFA[str]()
     nfa.add_location(0, initial=True)
@@ -129,7 +128,7 @@ def test_nfa_call_basic():
     assert accepting is False
 
 
-def test_nfa_temporal_guard_error():
+def test_nfa_temporal_guard_error() -> None:
     """Test that guards with temporal operators are rejected."""
     nfa = NFA[str]()
     nfa.add_location(0)
@@ -139,4 +138,4 @@ def test_nfa_temporal_guard_error():
     temporal_guard = ltl.Next(base.Variable("a"))
 
     with pytest.raises(ValueError, match="temporal operators"):
-        nfa.add_transition(0, 1, temporal_guard)
+        nfa.add_transition(0, 1, temporal_guard)  # type: ignore[arg-type]
