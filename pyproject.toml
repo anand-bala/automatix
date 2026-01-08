@@ -6,19 +6,19 @@ version = "0.4.0"
 requires-python = ">=3.12"
 
 dependencies = [
-  "typing-extensions",
   "jax>=0.8",
   "jaxtyping>=0.3",
   "equinox>=0.12",
-  "numpy",
   "optree>=0.17.0",
   "bitarray>=3.8.0",
-  "algebraic",
-  "morphata",
-  "networkx",
-  "types-networkx",
   "attrs>=25.4.0",
+  "networkx",
+  "numpy",
+  "typing-extensions",
+  "types-networkx",
   "logic-asts>=1.2.0",
+  "algebraic>=1.0.0",
+  "morphata>=1.0.0",
 ]
 
 [dependency-groups]
