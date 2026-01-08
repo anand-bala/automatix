@@ -118,7 +118,7 @@ class SparsePolynomial[K: Lattice](eqx.Module, Mapping[frozenbitarray, Array | S
         >>> from algebraic.semirings import boolean_algebra
         >>> import jax.numpy as jnp
         >>> num_vars = 2
-        >>> algebra = boolean_algebra('ste')
+        >>> algebra = boolean_algebra(mode='logic')
         >>> x_0 = SparsePolynomial.variable(0, num_vars, algebra)
         >>> x_1 = SparsePolynomial.variable(1, num_vars, algebra)
         >>> p = x_0 * x_1  # x_0 AND x_1
@@ -126,9 +126,9 @@ class SparsePolynomial[K: Lattice](eqx.Module, Mapping[frozenbitarray, Array | S
         >>> e1.isscalar()
         True
         >>> e1[(0,0)]
-        Array(True, dtype=bool)
+        Array(True, dtype=bool...)
         >>> p.evaluate(dict(enumerate(jnp.array([True, False]))))['00']
-        Array(False, dtype=bool)
+        Array(False, dtype=bool...)
         """
 
         if isinstance(point, Mapping):
