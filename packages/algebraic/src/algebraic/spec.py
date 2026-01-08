@@ -8,12 +8,11 @@ must follow. These are pure interfaces with no implementation.
 
 from __future__ import annotations
 
-from abc import abstractmethod
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from typing import Literal, Protocol, runtime_checkable
 
 import equinox as eqx
-from jaxtyping import Array, Num, Scalar, ScalarLike
+from jaxtyping import Array, Num, Scalar
 
 type Axis = int | Sequence[int]
 type MaybeAxis = None | Axis
@@ -156,88 +155,3 @@ class BooleanAlgebra(DeMorganAlgebra):
     def implication(self, a: Scalar | Array, b: Scalar | Array) -> Scalar | Array:
         r"""Boolean implication ($a \to b$ = $\neg a \lor b$)."""
         return self.add(self.complement(a), b)
-
-
-class PolynomialSemiring[PolynomialRepr, K: Semiring](eqx.Module):
-    """
-    A polynomial semiring is formed from the set of polynomials with one or more
-    indeterminants with coefficients in the underlying semiring (`algebra`).
-
-    In general, such polynomials are defined over rings or fields, but they generalize
-    well to semirings, especially in the context of automata.
-
-    The variables of the polynomial are indexed by integers up to `degree`.
-    """
-
-    algebra: K
-    """The underlying algebra to define the polynomial on. Must be a semiring or a specialization of a semiring"""
-    degree: int = eqx.field(static=True)
-    """Maximum degree of the multilinear polynomial."""
-
-    def __post_init__(self) -> None:  # noqa: B027
-        pass
-
-    @property
-    def zero(self) -> PolynomialRepr:
-        return self.constant(self.algebra.zero)
-
-    @property
-    def one(self) -> PolynomialRepr:
-        return self.constant(self.algebra.one)
-
-    # @property
-    # def add(self) -> BinaryOp:
-    #     return self._add
-
-    # @property
-    # def mul(self) -> BinaryOp[PolynomialRepr]:
-    #     return self._mul
-
-    @abstractmethod
-    def variable(self, i: int, coefficient: None | ScalarLike | Array = None) -> PolynomialRepr:
-        """Create polynomial representing a single variable x_i."""
-
-    @abstractmethod
-    def constant(self, value: ScalarLike | Array) -> PolynomialRepr:
-        """Create a constant polynomial"""
-
-    @abstractmethod
-    def _add(self, a: PolynomialRepr, b: PolynomialRepr) -> PolynomialRepr:
-        """Add two polynomials with respect to their underlying algebra"""
-
-    @abstractmethod
-    def _mul(self, a: PolynomialRepr, b: PolynomialRepr) -> PolynomialRepr:
-        """Multiply two polynomials with respect to their underlying algebra"""
-
-    @abstractmethod
-    def evaluate(self, poly: PolynomialRepr, point: Mapping[int, ScalarLike | Array]) -> PolynomialRepr:
-        """Evaluate polynomial at a point."""
-
-    @abstractmethod
-    def compose(
-        self,
-        poly: PolynomialRepr,
-        replacements: Mapping[int, PolynomialRepr],
-    ) -> PolynomialRepr:
-        """Compose polynomial with multiple substitutions.
-
-        Returns p(x_1 <- q_1, ..., x_n <- q_n) where only specified indices are replaced.
-
-        Note
-        ----
-        The composition should be performed simultaneuously. If not, this is a bug.
-        """
-
-
-class MultilinearPolynomialAlgebra[PolynomialRepr, K: BoundedDistributiveLattice](PolynomialSemiring[PolynomialRepr, K]):
-    """
-    A multilinear polynomial over multiple variables/indeterminants has the maximum
-    power of each indeterminant to be 1, i.e., each term is linear with respect to each
-    variable in the term.
-
-    Thus, to algebraically represent these, we need to guarantee that multiplication of
-    two identical variables are idempotent so as to maintain the "square-free"
-    monomials.
-
-    Otherwise, these polynomials are identical to the usual.
-    """

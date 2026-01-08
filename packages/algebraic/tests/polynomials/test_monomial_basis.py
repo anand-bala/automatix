@@ -224,7 +224,7 @@ class TestMonomialBasisMultiplication:
         """Test multiplication with random polynomials."""
         from algebraic.polynomials.jax import MonomialBasisAlgebra
         from algebraic.polynomials.sparse import SparsePolynomialAlgebra
-        from algebraic.tensor_algebra.jax import max_min_algebra
+        from algebraic.semirings import max_min_algebra
 
         module = max_min_algebra()
         algebra = module.algebra

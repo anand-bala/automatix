@@ -3,7 +3,7 @@ import typing
 import jax
 import jax.numpy as jnp
 import pytest
-from algebraic.kernels.jax import (
+from algebraic.kernels import (
     smooth_boolean_and,
     smooth_boolean_or,
     smooth_boolean_sum,
