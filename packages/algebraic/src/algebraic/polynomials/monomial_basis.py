@@ -95,67 +95,107 @@ class MonomialBasis[K: Lattice](eqx.Module):
 
         allclose = quax.quaxify(jnp.allclose)
 
-        n = self.num_vars
-        result_coeffs = alge.zeros((2,) * n, self.algebra)
-        for a_idx in range(2**n):
-            a_bits = tuple(ba_utils.int2ba(a_idx, length=n))
-            a_val = self.coeffs[a_bits]
-            assert isinstance(a_val, AlgebraicArray)
-
-            for b_idx in range(2**n):
-                b_bits = tuple(ba_utils.int2ba(b_idx, length=n))
-                b_val = other.coeffs[b_bits]
-                assert isinstance(b_val, AlgebraicArray)
-
-                # For multilinear: product monomial is S union T (bitwise OR)
-                result_bits = tuple(a_bits[i] | b_bits[i] for i in range(n))
-
-                # Accumulate coefficient
-                product = a_val * b_val
-                new_coeff = result_coeffs[result_bits] + product
-
-                is_bottom = jnp.allclose(new_coeff.data, self.algebra.zero)
-                result_with_new_coeffs = result_coeffs.at[result_bits].set(new_coeff.data)
-                # don't add new_coeff if it is bottom
-                result_coeffs = quax.quaxify(jnp.select)([is_bottom, ~is_bottom], [result_coeffs, result_with_new_coeffs])
-
-        # """
-        # This implementation performs the OR-convolution dimension by dimension.
-        # At each iteration d, the variable x_d is contracted by combining the
-        # slices where i_d in {0, 1} according to:
-
-        #     c_0 = a_0 * b_0
-        #     c_1 = a_0 * b_1 + a_1 * b_0 + a_1 * b_1
-
-        # where a_k and b_k denote the coefficients with x_d = k. The operation is
-        # local to the chosen axis and preserves the overall tensor shape.
-
-        # Axes of B are moved within the loop to align the variable being contracted,
-        # while the accumulated result maintains a fixed axis-to-variable mapping.
-        # All arithmetic (addition and multiplication) is delegated to the
-        # underlying scalar semiring (e.g. via quax), making the function fully
-        # JIT-compilable and backend-agnostic.
-        # """
-        # moveaxis = quax.quaxify(jnp.moveaxis)
-        # stack = quax.quaxify(jnp.stack)
-
         # n = self.num_vars
-        # result_coeffs = self.coeffs
-        # for axis in range(n):
-        #     # Move active axis to the front
-        #     a = moveaxis(result_coeffs, axis, 0)  # type: ignore[arg-type]
-        #     b = moveaxis(other.coeffs, axis, 0)  # type: ignore[arg-type]
+        # result_coeffs = alge.zeros((2,) * n, self.algebra)
+        # for a_idx in range(2**n):
+        #     a_bits = tuple(ba_utils.int2ba(a_idx, length=n))
+        #     a_val = self.coeffs[a_bits]
+        #     assert isinstance(a_val, AlgebraicArray)
 
-        #     a0, a1 = a[0], a[1]
-        #     b0, b1 = b[0], b[1]
-        #     c = stack(
-        #         (
-        #             a0 * b0,
-        #             a0 * b1 + a1 * b0 + a1 * b1,
-        #         ),
-        #         axis=0,
-        #     )
-        #     result_coeffs = moveaxis(c, 0, axis)  # type: ignore[assignment]
+        #     for b_idx in range(2**n):
+        #         b_bits = tuple(ba_utils.int2ba(b_idx, length=n))
+        #         b_val = other.coeffs[b_bits]
+        #         assert isinstance(b_val, AlgebraicArray)
+
+        #         # For multilinear: product monomial is S union T (bitwise OR)
+        #         result_bits = tuple(a_bits[i] | b_bits[i] for i in range(n))
+
+        #         # Accumulate coefficient
+        #         product = a_val * b_val
+        #         new_coeff = result_coeffs[result_bits] + product
+
+        #         is_bottom = jnp.allclose(new_coeff.data, self.algebra.zero)
+        #         result_with_new_coeffs = result_coeffs.at[result_bits].set(new_coeff.data)
+        #         # don't add new_coeff if it is bottom
+        #         result_coeffs = quax.quaxify(jnp.select)([is_bottom, ~is_bottom], [result_coeffs, result_with_new_coeffs])
+
+        """
+        This implementation performs the OR-convolution dimension by dimension.
+        At each iteration d, the variable x_d is contracted by combining the
+        slices where i_d in {0, 1} according to:
+
+            c_0 = a_0 * b_0
+            c_1 = a_0 * b_1 + a_1 * b_0 + a_1 * b_1
+
+        where a_k and b_k denote the coefficients with x_d = k. The operation is
+        local to the chosen axis and preserves the overall tensor shape.
+
+        Axes of B are moved within the loop to align the variable being contracted,
+        while the accumulated result maintains a fixed axis-to-variable mapping.
+        All arithmetic (addition and multiplication) is delegated to the
+        underlying scalar semiring (e.g. via quax), making the function fully
+        JIT-compilable and backend-agnostic.
+        """
+        # Use einsum to compute multilinear polynomial multiplication
+        # For 2 variables: result[i,j] = sum over k,l of self[k,l] * other[i|k, j|l]
+        # where | is bitwise OR (multilinear: x*x = x)
+        #
+        # We compute this axis-by-axis using outer products
+
+        n = self.num_vars
+
+        # Start with the outer product in all dimensions
+        # Reshape to allow broadcasting: self -> [..., 1] and other -> [1, ...]
+        result_shape = tuple([2] * n)
+
+        # Compute full outer product by reshaping and broadcasting
+        # self.coeffs has shape (2, 2, ..., 2) with n dimensions
+        # We want outer product, so reshape self to (2,2,...,2,1,1,...,1) and other to (1,1,...,1,2,2,...,2)
+        a_shape = result_shape + tuple([1] * n)
+        b_shape = tuple([1] * n) + result_shape
+
+        jnp_reshape = quax.quaxify(jnp.reshape)
+        a_expanded = jnp_reshape(self.coeffs, a_shape)
+        b_expanded = jnp_reshape(other.coeffs, b_shape)
+
+        # Outer product: shape (2,2,...,2, 2,2,...,2) with 2n dimensions
+        outer = a_expanded * b_expanded
+
+        # Now reduce using OR logic for multilinear: x_i * x_i = x_i
+        # For each variable axis, combine (0,0)->0, (0,1)->1, (1,0)->1, (1,1)->1
+        # After each iteration, one dimension is removed, so axis n is always the "other" axis
+        result_coeffs = outer
+        for axis_idx in range(n):
+            # After i iterations, we've reduced from 2n to 2n-i dimensions
+            # Axis axis_idx from self is still at position axis_idx
+            # Axis axis_idx from other is now at position n (after i axes have been removed)
+
+            # Get slices for this variable: (0,0), (0,1), (1,0), (1,1)
+            num_dims = result_coeffs.shape.__len__()
+
+            slices_00 = [slice(None)] * num_dims
+            slices_00[axis_idx] = 0
+            slices_00[n] = 0
+
+            slices_01 = [slice(None)] * num_dims
+            slices_01[axis_idx] = 0
+            slices_01[n] = 1
+
+            slices_10 = [slice(None)] * num_dims
+            slices_10[axis_idx] = 1
+            slices_10[n] = 0
+
+            slices_11 = [slice(None)] * num_dims
+            slices_11[axis_idx] = 1
+            slices_11[n] = 1
+
+            # Build reduced tensor
+            # new[..., 0, ...] = result[..., 0, 0, ...]  (only 0|0 = 0)
+            # new[..., 1, ...] = result[..., 0, 1, ...] + result[..., 1, 0, ...] + result[..., 1, 1, ...]
+            c0 = result_coeffs[tuple(slices_00)]
+            c1 = result_coeffs[tuple(slices_01)] + result_coeffs[tuple(slices_10)] + result_coeffs[tuple(slices_11)]
+
+            result_coeffs = quax.quaxify(jnp.stack)([c0, c1], axis=axis_idx)
 
         return MonomialBasis(result_coeffs)
 

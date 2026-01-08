@@ -13,15 +13,22 @@ if TYPE_CHECKING:
     from algebraic.array.core import AlgebraicArray, Semiring
 
 
-class _IndexUpdateRef[K: Semiring](eqx.Module):
+class _IndexUpdateRef[K: Semiring]:
     """Helper class for functional index updates with semiring operations.
 
     This class provides methods like set, add, multiply that return a new
     AlgebraicArray with the indexed elements updated using semiring operations.
+
+    This is a transient builder object that is not a PyTree - it only exists
+    to provide the .at[idx].set() syntax and is consumed within a single expression.
     """
 
     array: AlgebraicArray[K]
-    indices: Any = eqx.field(static=True)  # Indices don't participate in differentiation
+    indices: Any
+
+    def __init__(self, array: AlgebraicArray[K], indices: Any) -> None:
+        self.array = array
+        self.indices = indices
 
     def set(self, values: Any) -> AlgebraicArray[K]:  # noqa: ANN401
         """Set the indexed elements to the given values.
@@ -152,14 +159,18 @@ class _IndexUpdateRef[K: Semiring](eqx.Module):
         return eqx.tree_at(lambda arr: arr.data, self.array, new_data)
 
 
-class _IndexUpdateHelper[K: Semiring](eqx.Module):
+class _IndexUpdateHelper[K: Semiring]:
     """Helper class to provide the .at[idx] syntax for AlgebraicArray.
 
-    This class is registered as an equinox Module to ensure it works
-    properly with JAX transformations like jit, vmap, and grad.
+    This is a transient builder object that is not a PyTree - it only exists
+    to provide the .at[idx] syntax and is consumed within a single expression.
+    Similar to JAX's native array.at[idx] which is also not a PyTree.
     """
 
     array: AlgebraicArray[K]
+
+    def __init__(self, array: AlgebraicArray[K]) -> None:
+        self.array = array
 
     def __getitem__(self, indices: Any) -> _IndexUpdateRef[K]:  # noqa: ANN401
         """Return an _IndexUpdateRef for the given indices.
