@@ -18,16 +18,17 @@ endif
 dev: $(_DEV_TARGETS) | .venv
 .PHONY: dev
 
-ruff-check:
+fmt:
 	uv run --frozen ruff format
 	uv run --frozen ruff check --fix --exit-non-zero-on-fix .
 .PHONY: fmt
 
 type-check:
+	uv run --frozen ty check
 	uv run --frozen zmypy
 .PHONY: type-check
 
-lint: ruff-check type-check
+lint: fmt type-check
 .PHONY: lint
 
 test:
