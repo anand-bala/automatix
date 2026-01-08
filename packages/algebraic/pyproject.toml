@@ -1,6 +1,6 @@
 [project]
 name = "algebraic"
-version = "0.1.0"
+version = "1.0.0"
 description = "Abstract algebric structures for GPU-efficient computation"
 readme = "README.md"
 authors = [{ name = "Anand Balakrishnan", email = "anandbala1597@gmail.com" }]
