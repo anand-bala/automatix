@@ -1,0 +1,59 @@
+automaton: header "--BODY--" body "--END--"
+
+header: format_version header_item*
+format_version: "HOA:" IDENTIFIER
+?header_item: "States:" INT                                     -> num_states
+             | "Start:" state_conj                              -> initial_states
+             | "AP:" INT ESCAPED_STRING*                                -> predicates
+             | "Alias:" ANAME label_expr                        -> alias
+             | "Acceptance:" INT acceptance_cond                -> automaton_acc
+             | "acc-name:" IDENTIFIER acc_props -> acc_name
+             | "tool:" ESCAPED_STRING ESCAPED_STRING?                           -> tool
+             | "name:" ESCAPED_STRING                                   -> name
+             | "properties:" IDENTIFIER*                        -> properties
+             | HEADERNAME (BOOLEAN|INT|ESCAPED_STRING|IDENTIFIER)*
+
+body: transitions*
+transitions: state_name edge*
+state_name       : "State:" [label] INT [ESCAPED_STRING] [acc_sig]
+edge             : [label] state_conj [acc_sig]
+acc_sig          : "{" INT* "}"
+acc_props        : (BOOLEAN|INT|IDENTIFIER)*
+?label            : "[" label_expr "]"
+
+state_conj: INT ("&" INT)*
+
+?label_expr: (BOOLEAN | INT | ANAME) -> label_atom
+          | "!" label_expr -> label_not
+          | "(" label_expr ")"
+          | label_expr "&" label_expr -> label_and
+          | label_expr "|" label_expr -> label_or
+
+
+?acceptance_cond: BOOLEAN -> acc_bool
+               | "Fin" "(" acc_set ")" -> acc_fin
+               | "Inf" "(" acc_set ")" -> acc_inf
+               | "(" acceptance_cond ")"
+               | acceptance_cond "&" acceptance_cond -> acc_and
+               | acceptance_cond "|" acceptance_cond -> acc_or
+
+acc_set: [INVERT] INT
+INVERT: "!"
+
+HEADERNAME: CNAME ":"
+ANAME: "@" ("_"|LETTER|DIGIT)+
+IDENTIFIER: CNAME
+BOOLEAN: "t" | "f"
+
+CNAME: ("_"|LETTER) ("-"|"_"|LETTER|DIGIT)*
+
+%import common.ESCAPED_STRING
+%import common.INT
+%import common.WS
+%import common.C_COMMENT
+%import common.DIGIT
+%import common.LETTER
+
+%ignore WS
+%ignore C_COMMENT
+
