@@ -145,7 +145,6 @@ def monomial_helper():
         def from_sparse(self, sparse_poly):
             # Convert sparse to monomial by enumerating all monomials
             import algebraic.array.core as alge
-            from bitarray.util import int2ba
 
             coeffs = alge.zeros((2,) * self.num_vars, self.algebra)
             for monomial, coeff in sparse_poly.items():
@@ -155,9 +154,10 @@ def monomial_helper():
             return MonomialBasis(coeffs)
 
         def to_sparse(self, poly):
+            from itertools import product
+
             from algebraic.polynomials.sparse import SparsePolynomial
             from bitarray import frozenbitarray
-            from itertools import product
 
             result = {}
             # Enumerate all 2^n possible indices

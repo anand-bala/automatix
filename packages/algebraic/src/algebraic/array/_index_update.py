@@ -6,7 +6,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import equinox as eqx
-import jax.lax as lax
 import jax.numpy as jnp
 
 if TYPE_CHECKING:

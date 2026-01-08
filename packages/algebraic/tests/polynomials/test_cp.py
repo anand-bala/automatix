@@ -9,7 +9,6 @@ import jax.numpy as jnp
 import pytest
 import quax
 from algebraic.polynomials.rank_decomp import RankDecomposition
-from algebraic.polynomials.sparse import SparsePolynomial
 
 
 class TestRankDecompositionConversion:

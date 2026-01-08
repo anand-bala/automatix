@@ -493,4 +493,3 @@ class TestAlgebraicArrayBasics:
         aval = a.aval()
         assert aval.shape == (2, 2)
         assert aval.dtype == jnp.float32 or aval.dtype == jnp.float64
-
