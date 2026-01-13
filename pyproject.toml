@@ -17,7 +17,7 @@ dependencies = [
   "typing-extensions",
   "types-networkx",
   "logic-asts>=1.2.0",
-  "algebraic>=1.0.0",
+  "algebraic-jax>=1.0.0",
   "morphata>=1.0.0",
 ]
 
@@ -31,7 +31,7 @@ dev = [
   "isort",
   "mypy",
   "pytest>=9.0.0",
-  "pytest-xdist>=3.8.0",
+  "pytest-mypy>=1.0.1",
   "ruff",
   "sympy>=1.14.0",
   "ty",
@@ -49,7 +49,7 @@ module-name = "automatix"
 members = ["packages/*"]
 
 [tool.uv.sources]
-algebraic = { workspace = true }
+algebraic-jax = { workspace = true }
 morphata = { workspace = true }
 
 [tool.mypy]
@@ -57,7 +57,7 @@ strict = true
 show_error_codes = true
 warn_unreachable = true
 # files = ["tests/", "src/", "packages/"]
-packages = ["automatix", "algebraic", "morphata", "sparx"]
+packages = ["automatix", "algebraic-jax", "morphata", "sparx"]
 
 [[tool.mypy.overrides]]
 module = ["dd", "dd.*"]
