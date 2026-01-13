@@ -6,7 +6,7 @@ from jaxtyping import Array, Shaped
 from typing_extensions import overload
 
 import algebraic.kernels as kernels
-from algebraic.spec import BinaryOp, BooleanAlgebra, DeMorganAlgebra, MaybeAxis, Semiring
+from algebraic.spec import BinaryOp, BooleanAlgebra, DeMorganAlgebra, MaybeAxis, Semiring, Shape
 from algebraic.spec import BoundedDistributiveLattice as Lattice
 
 
@@ -19,11 +19,17 @@ def counting_semiring() -> Semiring:
     def multiply(x1: Shaped[Array, "*#n"], x2: Shaped[Array, "*#n"]) -> Shaped[Array, "*#n"]:
         return x1 * x2
 
+    def zeros(shape: Shape) -> Array:
+        return jnp.zeros(shape)
+
+    def ones(shape: Shape) -> Array:
+        return jnp.ones(shape)
+
     return Semiring(
         add=add,
         mul=multiply,
-        zero=jnp.asarray(0.0),
-        one=jnp.asarray(1.0),
+        zeros=zeros,
+        ones=ones,
     )
 
 
@@ -82,6 +88,12 @@ def max_min_algebra(
     zero = jnp.asarray(0.0 if only == "positive" else -jnp.inf)
     one = jnp.asarray(-0.0 if only == "negative" else jnp.inf)
 
+    def zeros(shape: Shape) -> Array:
+        return jnp.full(shape, zero)
+
+    def ones(shape: Shape) -> Array:
+        return jnp.full(shape, one)
+
     def add(x1: Shaped[Array, "*#n"], x2: Shaped[Array, "*#n"]) -> Shaped[Array, "*#n"]:
         return add_kernel(x1, x2)
 
@@ -96,16 +108,16 @@ def max_min_algebra(
         return DeMorganAlgebra(
             add=add,
             mul=multiply,
-            zero=zero,
-            one=one,
+            zeros=zeros,
+            ones=ones,
             complement=complement,
         )
     else:
         return Lattice(
             add=add,
             mul=multiply,
-            zero=zero,
-            one=one,
+            zeros=zeros,
+            ones=ones,
         )
 
 
@@ -160,6 +172,12 @@ def tropical_semiring(*, minplus: bool = True, smooth: bool = False, temperature
         zero = jnp.asarray(-jnp.inf)
         one = jnp.asarray(-0.0)
 
+    def zeros(shape: Shape) -> Array:
+        return jnp.full(shape, zero)
+
+    def ones(shape: Shape) -> Array:
+        return jnp.full(shape, one)
+
     def add(x1: Shaped[Array, "*#n"], x2: Shaped[Array, "*#n"]) -> Shaped[Array, "*#n"]:
         return add_kernel(x1, x2)
 
@@ -175,8 +193,8 @@ def tropical_semiring(*, minplus: bool = True, smooth: bool = False, temperature
     return Semiring(
         add=add,
         mul=multiply,
-        zero=zero,
-        one=one,
+        zeros=zeros,
+        ones=ones,
         properties={"idempotent_add", "commutative", "simple"},
     )
 
@@ -207,6 +225,12 @@ def boolean_algebra(
     zero = jnp.asarray(0.0)
     one = jnp.asarray(1.0)
 
+    def zeros(shape: Shape) -> Array:
+        return jnp.full(shape, zero)
+
+    def ones(shape: Shape) -> Array:
+        return jnp.full(shape, one)
+
     match mode:
         case "logic":
             add = jnp.logical_or
@@ -228,16 +252,16 @@ def boolean_algebra(
                 return kernels.smooth_boolean_not(a, temperature)
 
         case "ste":
-            add = jnp.max
-            mul = jnp.min
+            add = jnp.maximum
+            mul = jnp.minimum
 
             def neg(a: Array) -> Array:
                 return 1 - a
         case _:
             raise ValueError(f"Unknown mode: {mode}. Use 'logic', 'soft', 'smooth', or 'ste'.")
     return BooleanAlgebra(
-        zero=zero,
-        one=one,
+        zeros=zeros,
+        ones=ones,
         add=add,
         mul=mul,
         complement=neg,

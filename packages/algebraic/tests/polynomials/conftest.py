@@ -1,5 +1,5 @@
 """Shared fixtures and utilities for polynomial tests."""
-# ruff: noqa: ANN201, ANN202
+# ruff: noqa: ANN001, ANN201, ANN202, ANN204
 # mypy: disable-error-code="no-untyped-call,no-untyped-def,import-not-found"
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
 import pytest
+import quax
 from hypothesis import strategies as st
 from hypothesis.extra.numpy import arrays
 
@@ -99,7 +100,7 @@ class SparseHelper:
 # Polynomial helper fixtures (no longer "algebra" wrappers)
 # These are just convenience helpers for creating polynomials in tests
 @pytest.fixture
-def sparse_helper() -> SparseHelper:
+def sparse_helper():
     """Helper for creating SparsePolynomial instances."""
 
     def _factory(algebra, num_vars):
@@ -143,32 +144,10 @@ def monomial_helper():
             return poly.compose(replacements)
 
         def from_sparse(self, sparse_poly):
-            # Convert sparse to monomial by enumerating all monomials
-            import algebraic.array.core as alge
-
-            coeffs = alge.zeros((2,) * self.num_vars, self.algebra)
-            for monomial, coeff in sparse_poly.items():
-                # Convert bitarray to index tuple
-                idx = tuple(int(bit) for bit in monomial)
-                coeffs = coeffs.at[idx].set(coeff)
-            return MonomialBasis(coeffs)
+            return MonomialBasis.from_sparse(sparse_poly)
 
         def to_sparse(self, poly):
-            from itertools import product
-
-            from algebraic.polynomials.sparse import SparsePolynomial
-            from bitarray import frozenbitarray
-
-            result = {}
-            # Enumerate all 2^n possible indices
-            for idx in product([0, 1], repeat=self.num_vars):
-                coeff = poly.coeffs[idx]
-                # Only include non-zero coefficients - compare .data to avoid JIT issues
-                if not jnp.allclose(coeff.data, self.algebra.zero):
-                    monomial = frozenbitarray(idx)
-                    result[monomial] = coeff.data  # Store the raw data
-
-            return SparsePolynomial(self.algebra, self.num_vars, result)
+            return poly.to_sparse()
 
     def _factory(algebra, num_vars):
         return MonomialHelper(algebra, num_vars)

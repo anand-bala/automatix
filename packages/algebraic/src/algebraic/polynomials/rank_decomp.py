@@ -1,13 +1,14 @@
 # mypy: disable-error-code="no-any-return,no-untyped-call"
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Mapping
 
 import equinox as eqx
 import jax.numpy as jnp
 import quax
 from bitarray import frozenbitarray
-from jaxtyping import Array, Scalar, Shaped
+from jaxtyping import Array, ArrayLike, Scalar, Shaped
 
 import algebraic.array.core as alge
 from algebraic.array.core import AlgebraicArray
@@ -27,7 +28,7 @@ class RankDecomposition[K: Lattice](eqx.Module):
     """
 
     factors: Shaped[AlgebraicArray, "rank degree num_vars_p_1"]
-    algebra: K
+    algebra: K = eqx.field(static=True)
     max_rank: int = eqx.field(static=True)
     """Maximum rank for CP decomposition (controls memory usage)"""
     max_degree: int = eqx.field(static=True)
@@ -37,22 +38,33 @@ class RankDecomposition[K: Lattice](eqx.Module):
 
     def __init__(
         self,
-        factors: Shaped[AlgebraicArray, "rank degree num_vars_p_1"],
+        factors: Shaped[AlgebraicArray | ArrayLike, "rank degree num_vars_p_1"],
         max_rank: int | None = None,
         max_degree: int | None = None,
         max_replacement_degree: int | None = None,
+        *,
+        algebra: None | K = None,
     ) -> None:
         super().__init__()
-        self.factors = factors
-        self.algebra = factors.semiring
+        if isinstance(factors, AlgebraicArray):
+            if algebra is not None and not eqx.tree_equal(algebra, factors.semiring):
+                raise ValueError("Provided algebra for RankDecomposition != algebra of AlgebraicArray factors")
+            algebra = factors.semiring
+            factors = factors.data
+        elif algebra is None:
+            raise ValueError("Must provide algebra if not using AlgebraicArray")
+        assert algebra is not None
+
+        self.factors = AlgebraicArray(factors, algebra)
+        self.algebra = self.factors.semiring
         self.max_rank = max_rank if max_rank is not None else 100
 
-        num_vars = factors.shape[0]
+        num_vars = self.factors.shape[0]
         self.max_degree = max_degree if max_degree is not None else num_vars
         self.max_replacement_degree = max_replacement_degree if max_replacement_degree is not None else self.max_degree
 
     def _replace_factors(self, factors: Shaped[AlgebraicArray, "rank degree num_vars_p_1"]) -> RankDecomposition[K]:
-        return eqx.tree_at(lambda t: t.factors, self, factors)
+        return dataclasses.replace(self, factors=factors)
 
     @property
     def rank(self) -> int:
@@ -228,7 +240,7 @@ class RankDecomposition[K: Lattice](eqx.Module):
         """
         # Core multiplication (Khatri-Rao product)
         new_factors = self._multiply_arrays(self.factors, other.factors)
-        result = eqx.tree_at(lambda t: t.factors, self, new_factors)
+        result = dataclasses.replace(self, factors=new_factors)
 
         # Filter out zero components (rank-1 components with any all-zero factor)
         result = result._remove_zero_components()
@@ -316,7 +328,7 @@ class RankDecomposition[K: Lattice](eqx.Module):
                     new_factors_data = new_factors.data.at[r, k2, :].set(
                         jnp.where(is_duplicate, identity.data, new_factors[r, k2, :].data)
                     )
-                    new_factors = eqx.tree_at(lambda t: t.data, new_factors, new_factors_data)
+                    new_factors = dataclasses.replace(new_factors, data=new_factors_data)
                     # new_factors = new_factors.at[r, k2, :].set(where(is_duplicate, identity, new_factors[r, k2, :]))
 
         return self._replace_factors(new_factors)
@@ -352,7 +364,7 @@ class RankDecomposition[K: Lattice](eqx.Module):
             new_factors_data = new_factors.data.at[r, :, :].set(
                 jnp.where(should_zero, zero_component.data, new_factors[r, :, :].data)
             )
-            new_factors = eqx.tree_at(lambda t: t.data, new_factors, new_factors_data)
+            new_factors = dataclasses.replace(new_factors, data=new_factors_data)
             # new_factors = new_factors.at[r, :, :].set(jnp.where(should_zero, zero_component, new_factors[r, :, :]))
 
         return self._replace_factors(new_factors)
@@ -437,9 +449,11 @@ class RankDecomposition[K: Lattice](eqx.Module):
         # Full evaluation: substitute all variables
         rank, d, _ = self.factors.shape
 
-        # Build selector vector: [1, point[0], point[1], ..., point[n-1]]
+        # Build selector vector: [algebra.one, point[0], point[1], ..., point[n-1]]
+        # Use algebra.one (multiplicative identity) for constant selection
         one_array = alge.ones((1,), self.algebra)
-        selector = quax.quaxify(jnp.concatenate)([one_array, points])  # Shape: (n+1,)
+        points_array = AlgebraicArray(points, self.algebra)
+        selector = quax.quaxify(jnp.concatenate)([one_array, points_array])  # Shape: (n+1,)
 
         # For each rank-1 component
         result = alge.zeros((), self.algebra)
@@ -614,7 +628,10 @@ class RankDecomposition[K: Lattice](eqx.Module):
             for r in range(self.rank):
                 component = self.algebra.one
                 for k in range(self.degree):
-                    component = self.algebra.mul(component, self.factors[r, k, assignment[k]])
+                    factor_value = self.factors[r, k, assignment[k]]
+                    # Extract .data from AlgebraicArray if needed
+                    factor_data = factor_value.data if isinstance(factor_value, AlgebraicArray) else factor_value
+                    component = self.algebra.mul(component, factor_data)
                 coeff = self.algebra.add(coeff, component)
 
             # Add to sparse (accumulate if monomial already exists)
@@ -664,12 +681,20 @@ class RankDecomposition[K: Lattice](eqx.Module):
             vars_in_monomial = [i for i, bit in enumerate(monomial) if bit]
 
             # Fill in factors for this rank-1 component
-            for k, var_idx in enumerate(vars_in_monomial):
-                if k < max_degree:
-                    factors = factors.at[r, k, var_idx + 1].set(coeff if k == 0 else algebra.one)
+            if len(vars_in_monomial) == 0:
+                # Constant monomial: store coefficient in first dimension's constant position
+                factors = factors.at[r, 0, 0].set(coeff)
+                # Pad remaining dimensions with constant=1 (identity for multiplication)
+                for k in range(1, max_degree):
+                    factors = factors.at[r, k, 0].set(algebra.one)
+            else:
+                # Variable monomial: distribute coefficient and variables across dimensions
+                for k, var_idx in enumerate(vars_in_monomial):
+                    if k < max_degree:
+                        factors = factors.at[r, k, var_idx + 1].set(coeff if k == 0 else algebra.one)
 
-            # Pad remaining dimensions with constant=1
-            for k in range(len(vars_in_monomial), max_degree):
-                factors = factors.at[r, k, 0].set(algebra.one)
+                # Pad remaining dimensions with constant=1
+                for k in range(len(vars_in_monomial), max_degree):
+                    factors = factors.at[r, k, 0].set(algebra.one)
 
         return RankDecomposition(factors)

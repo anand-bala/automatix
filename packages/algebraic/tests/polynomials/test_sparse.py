@@ -1,5 +1,6 @@
 """Comprehensive tests for SparsePolynomial implementation (baseline)."""
 # ruff: noqa: ANN201, ANN001
+# mypy: disable-error-code="no-untyped-call,no-untyped-def,import-not-found"
 
 from __future__ import annotations
 

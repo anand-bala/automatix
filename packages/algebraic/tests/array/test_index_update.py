@@ -6,16 +6,24 @@ import pytest
 import quax
 from algebraic.array.core import AlgebraicArray
 from algebraic.semirings import counting_semiring, tropical_semiring
-from algebraic.spec import Ring
+from algebraic.spec import Ring, Shape
+from jaxtyping import Array, Shaped
 
 
 def ring_spec() -> Ring:
     """Create a standard ring (integers) for testing."""
+
+    def zeros(shape: Shape) -> Shaped[Array, " {shape}"]:
+        return jnp.zeros(shape, dtype=jnp.int32)
+
+    def ones(shape: Shape) -> Shaped[Array, " {shape}"]:
+        return jnp.ones(shape, dtype=jnp.int32)
+
     return Ring(
         add=lambda x, y: x + y,
         mul=lambda x, y: x * y,
-        zero=jnp.asarray(0.0),
-        one=jnp.asarray(1.0),
+        zeros=zeros,
+        ones=ones,
         additive_inverse=lambda x: -x,
     )
 

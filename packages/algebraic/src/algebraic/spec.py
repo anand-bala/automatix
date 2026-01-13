@@ -9,10 +9,12 @@ must follow. These are pure interfaces with no implementation.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from functools import cached_property
 from typing import Literal, Protocol, runtime_checkable
 
 import equinox as eqx
-from jaxtyping import Array, Num, Scalar
+import jax.numpy as jnp
+from jaxtyping import Array, Num, Scalar, Shaped
 
 type Axis = int | Sequence[int]
 type MaybeAxis = None | Axis
@@ -22,6 +24,11 @@ type UnaryOp = Callable[[Scalar | Array], Scalar | Array]
 type BinaryOp = Callable[[Scalar | Array, Scalar | Array], Scalar | Array]
 type VdotFn = Callable[[Num[Array, " n"], Num[Array, " n"]], Num[Array, ""]]
 type MatmulFn = Callable[[Num[Array, "n k"], Num[Array, "k m"]], Num[Array, "n m"]]
+
+
+@runtime_checkable
+class IdentityFn(Protocol):
+    def __call__(self, shape: Shape) -> Shaped[Array, " {shape}"]: ...
 
 
 @runtime_checkable
@@ -68,11 +75,25 @@ class Semiring(AlgebraicStructure):
     mul: BinaryOp = eqx.field(static=True)
     """Semiring multiplication (otimes)"""
 
-    zero: Scalar | Array
+    zeros: IdentityFn = eqx.field(static=True)
     """Additive identity of the semiring"""
 
-    one: Scalar | Array
+    ones: IdentityFn = eqx.field(static=True)
     """Multiplicative identity of the semiring"""
+
+    @cached_property
+    def zero(self) -> Scalar:
+        return self.zeros(())
+
+    @cached_property
+    def one(self) -> Scalar:
+        return self.ones(())
+
+    def __check_init__(self) -> None:
+        if not jnp.isscalar(self.zero):
+            raise ValueError("Semiring `zero` should be a scalar")
+        if not jnp.isscalar(self.zero):
+            raise ValueError("Semiring `zero` should be a scalar")
 
 
 class BoundedDistributiveLattice(Semiring):

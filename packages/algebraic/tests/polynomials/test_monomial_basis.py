@@ -1,17 +1,21 @@
 """Tests for MonomialBasis representation against SparsePolynomial baseline."""
 
 # ruff: noqa: ANN201, ANN001
+# mypy: disable-error-code="no-untyped-call,no-untyped-def,import-not-found"
 
 from __future__ import annotations
 
+import hypothesis
 import jax.numpy as jnp
 import pytest
 import quax
+from algebraic import AlgebraicArray
 from algebraic.polynomials.monomial_basis import MonomialBasis
 from algebraic.polynomials.sparse import SparsePolynomial
 from bitarray import frozenbitarray
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from jaxtyping import Array
 
 allclose = quax.quaxify(jnp.allclose)
 
@@ -112,16 +116,15 @@ class TestMonomialBasisAddition:
         for key in sum_sparse.keys():
             assert allclose(sum_sparse[key], sum_monomial_as_sparse[key])
 
-    @pytest.mark.skip(reason="Too slow - hypothesis test disabled temporarily")
-    @given(st.integers(2, 3))
-    @settings(max_examples=2, deadline=500)
-    def test_add_with_hypothesis(self, degree):
+    # @pytest.mark.skip(reason="Too slow - hypothesis test disabled temporarily")
+    @given(degree=st.integers(2, 3))
+    @settings(max_examples=2, deadline=None, suppress_health_check=[hypothesis.HealthCheck.function_scoped_fixture])
+    def test_add_with_hypothesis(self, degree, sparse_helper, monomial_helper, maxmin_algebra):
         """Test addition with random polynomials using hypothesis."""
 
-        module = max_min_algebra()
-        algebra = module.algebra
-        sparse_alg = SparsePolynomialAlgebra(algebra=algebra, degree=degree)
-        monomial_alg = MonomialBasisAlgebra(num_vars=degree, module=module)
+        module = maxmin_algebra
+        sparse_alg = sparse_helper(module, degree)
+        monomial_alg = monomial_helper(module, degree)
 
         # Create two random simple polynomials
         x_0 = sparse_alg.variable(0)
@@ -208,7 +211,7 @@ class TestMonomialBasisMultiplication:
         test_point = {0: jnp.array(3.0), 1: jnp.array(2.0)}
 
         result_sparse = list(sparse_alg.evaluate(prod_sparse, test_point).values())[0]
-        result_monomial = prod_monomial.coeffs[tuple([0] * 2)]  # Constant term after evaluation
+        _result_monomial = prod_monomial.coeffs[tuple([0] * 2)]  # Constant term after evaluation
 
         # Evaluate monomial at the test point
         point_array = jnp.array([3.0, 2.0])
@@ -217,19 +220,15 @@ class TestMonomialBasisMultiplication:
 
         assert allclose(result_sparse, result_monomial_val)
 
-    @pytest.mark.skip(reason="Too slow - hypothesis test disabled temporarily")
-    @given(st.integers(2, 3))
-    @settings(max_examples=2, deadline=1000)
-    def test_multiply_with_hypothesis(self, degree):
+    # @pytest.mark.skip(reason="Too slow - hypothesis test disabled temporarily")
+    @given(degree=st.integers(2, 3))
+    @settings(max_examples=2, deadline=None, suppress_health_check=[hypothesis.HealthCheck.function_scoped_fixture])
+    def test_multiply_with_hypothesis(self, degree, sparse_helper, monomial_helper, maxmin_algebra):
         """Test multiplication with random polynomials."""
-        from algebraic.polynomials.jax import MonomialBasisAlgebra
-        from algebraic.polynomials.sparse import SparsePolynomialAlgebra
-        from algebraic.semirings import max_min_algebra
 
-        module = max_min_algebra()
-        algebra = module.algebra
-        sparse_alg = SparsePolynomialAlgebra(algebra=algebra, degree=degree)
-        monomial_alg = MonomialBasisAlgebra(num_vars=degree, module=module)
+        algebra = maxmin_algebra
+        sparse_alg = sparse_helper(algebra, degree)
+        monomial_alg = monomial_helper(algebra, degree)
 
         # Create two simple polynomials
         x_0 = sparse_alg.variable(0)
@@ -250,11 +249,19 @@ class TestMonomialBasisMultiplication:
         point = jrandom.uniform(key, shape=(degree,), minval=-5.0, maxval=5.0)
         point_dict = {i: point[i] for i in range(degree)}
 
-        result_sparse = list(sparse_alg.evaluate(prod_sparse, point_dict).values())[0]
-        result_monomial = monomial_alg.evaluate(prod_monomial, point)
-        monomial_value = result_monomial.coeffs[tuple([0] * degree)]
+        result_sparse = sparse_alg.evaluate(prod_sparse, point_dict)
+        assert isinstance(result_sparse, SparsePolynomial)
+        assert len(result_sparse) == 1
+        assert list(result_sparse.keys())[0] == frozenbitarray(degree)
+        sparse_value: Array = result_sparse[frozenbitarray(degree)]
+        assert isinstance(sparse_value, Array)
 
-        assert allclose(result_sparse, monomial_value, rtol=1e-5)
+        result_monomial = monomial_alg.evaluate(prod_monomial, point)
+        assert isinstance(result_monomial, MonomialBasis)
+        monomial_value = result_monomial.coeffs[tuple([0] * degree)]
+        assert isinstance(monomial_value, AlgebraicArray)
+
+        assert allclose(sparse_value, monomial_value, rtol=1e-5)
 
 
 class TestMonomialBasisEvaluation:

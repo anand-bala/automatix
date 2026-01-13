@@ -4,11 +4,21 @@
 from __future__ import annotations
 
 import equinox as eqx
+import hypothesis
 import jax
 import jax.numpy as jnp
+import jax.random as jrandom
 import pytest
 import quax
+from algebraic import AlgebraicArray
 from algebraic.polynomials.rank_decomp import RankDecomposition
+from algebraic.polynomials.sparse import SparsePolynomial
+from bitarray import frozenbitarray
+from hypothesis import given, settings
+from hypothesis import strategies as st
+from jaxtyping import Array
+
+allclose = quax.quaxify(jnp.allclose)
 
 
 class TestRankDecompositionConversion:
@@ -84,6 +94,50 @@ class TestRankDecompositionAddition:
         rank_value = result_rank.factors[0, 0, 0].data
 
         assert quax.quaxify(jnp.allclose)(result_sparse, rank_value)
+
+    @given(degree=st.integers(2, 7))
+    @settings(max_examples=10, deadline=None, suppress_health_check=[hypothesis.HealthCheck.function_scoped_fixture])
+    def test_add_with_hypothesis(self, degree, sparse_helper, rank_helper, maxmin_algebra):
+        """Test addition with random polynomials using hypothesis."""
+
+        module = maxmin_algebra
+        sparse_alg = sparse_helper(module, degree)
+        rank_alg = rank_helper(module, degree)
+
+        # Create two random simple polynomials
+        x_0 = sparse_alg.variable(0)
+        x_1 = sparse_alg.variable(1) if degree > 1 else sparse_alg.variable(0)
+
+        p1_sparse = sparse_alg.add(x_0, sparse_alg.constant(jnp.array(2.0)))
+        p2_sparse = sparse_alg.add(x_1, sparse_alg.constant(jnp.array(3.0)))
+
+        # Convert to rank decomposition
+        p1_rank = RankDecomposition.from_sparse(p1_sparse)
+        p2_rank = RankDecomposition.from_sparse(p2_sparse)
+
+        # Add in both representations
+        sum_sparse = sparse_alg.add(p1_sparse, p2_sparse)
+        sum_rank = rank_alg.add(p1_rank, p2_rank)
+
+        # Test by evaluation at a random point
+        key = jrandom.PRNGKey(42)
+        point = jrandom.uniform(key, shape=(degree,), minval=-5.0, maxval=5.0)
+        point_dict = {i: point[i] for i in range(degree)}
+
+        # Evaluate sparse
+        result_sparse = sparse_alg.evaluate(sum_sparse, point_dict)
+        assert isinstance(result_sparse, SparsePolynomial)
+
+        # Evaluate rank decomposition
+        result_rank = rank_alg.evaluate(sum_rank, point)
+        assert isinstance(result_rank, RankDecomposition)
+        # Convert to sparse repr and check equality
+        sparse_repr = RankDecomposition.to_sparse(result_rank)
+
+        assert set(result_sparse.keys()) == set(sparse_repr.keys())
+        for monom in result_sparse.keys():
+            if not allclose(result_sparse[monom], sparse_repr[monom]):
+                raise AssertionError(f"{result_sparse[monom]=} != {sparse_repr[monom]=} at {monom}")
 
 
 class TestRankDecompositionMultiplication:
@@ -185,6 +239,46 @@ class TestRankDecompositionMultiplication:
 
         array_equal = quax.quaxify(jnp.array_equal)
         assert array_equal(eval_result.factors[0, 0, 0].data, jnp.array(False))
+
+    @given(degree=st.integers(2, 7))
+    @settings(max_examples=10, deadline=None, suppress_health_check=[hypothesis.HealthCheck.function_scoped_fixture])
+    def test_multiply_with_hypothesis(self, degree, sparse_helper, rank_helper, maxmin_algebra):
+        """Test multiplication with random polynomials."""
+
+        algebra = maxmin_algebra
+        sparse_alg = sparse_helper(algebra, degree)
+        rank_alg = rank_helper(algebra, degree)
+
+        # Create two simple polynomials
+        x_0 = sparse_alg.variable(0)
+        x_1 = sparse_alg.variable(1) if degree > 1 else sparse_alg.variable(0)
+
+        # Convert to rank decomposition
+        x_0_rank = RankDecomposition.from_sparse(x_0)
+        x_1_rank = RankDecomposition.from_sparse(x_1)
+
+        # Multiply
+        prod_sparse = sparse_alg.mul(x_0, x_1)
+        prod_rank = rank_alg.mul(x_0_rank, x_1_rank)
+
+        # Test by evaluation
+        key = jrandom.PRNGKey(123)
+        point = jrandom.uniform(key, shape=(degree,), minval=-5.0, maxval=5.0)
+        point_dict = {i: point[i] for i in range(degree)}
+
+        result_sparse = sparse_alg.evaluate(prod_sparse, point_dict)
+        assert isinstance(result_sparse, SparsePolynomial)
+        assert len(result_sparse) == 1
+        assert list(result_sparse.keys())[0] == frozenbitarray(degree)
+        sparse_value: Array = result_sparse[frozenbitarray(degree)]
+        assert isinstance(sparse_value, Array)
+
+        result_rank = rank_alg.evaluate(prod_rank, point)
+        assert isinstance(result_rank, RankDecomposition)
+        rank_value = result_rank.factors[0, 0, 0]
+        assert isinstance(rank_value, AlgebraicArray)
+
+        assert allclose(sparse_value, rank_value, rtol=1e-5)
 
 
 class TestRankDecompositionEvaluation:

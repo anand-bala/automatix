@@ -1,7 +1,9 @@
 # mypy: disable-error-code="no-any-return,no-untyped-call"
 from __future__ import annotations
 
+import dataclasses
 import math
+import typing
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -15,13 +17,16 @@ import quax
 from jaxtyping import Array, ArrayLike, DTypeLike, Scalar, Shaped
 from typing_extensions import final, overload, override
 
-from algebraic.spec import MatmulFn, Shape, VdotFn
-from algebraic.spec import Semiring as BaseSemiring
-
-type Semiring = BaseSemiring[Scalar | Array]
+from algebraic.spec import MatmulFn, Semiring, Shape, VdotFn
 
 if TYPE_CHECKING:
     from ._index_update import _IndexUpdateHelper
+
+
+def _as_array(data: Shaped[ArrayLike | AlgebraicArray, "*shape"]) -> Shaped[Array, "*shape"]:
+    if isinstance(data, AlgebraicArray):
+        data = data.data
+    return jnp.asarray(data)
 
 
 @final
@@ -33,11 +38,27 @@ class AlgebraicArray[K: Semiring](quax.ArrayValue):
     corresponding semiring.
     """
 
-    data: Shaped[Array, "..."] = eqx.field(converter=jnp.asarray)
-    semiring: K
+    data: Shaped[Array, "..."]
+    semiring: K = eqx.field(static=True)
 
-    _vdot: None | VdotFn = eqx.field(default=None, kw_only=True, static=True)
-    _matmul: None | MatmulFn = eqx.field(default=None, kw_only=True, static=True)
+    _vdot: None | VdotFn = eqx.field(static=True)
+    _matmul: None | MatmulFn = eqx.field(static=True)
+
+    def __init__(
+        self,
+        data: Shaped[ArrayLike | AlgebraicArray[K], "..."],
+        semiring: K,
+        *,
+        _vdot: None | VdotFn = None,
+        _matmul: None | MatmulFn = None,
+    ) -> None:
+        data = _as_array(data)
+        if not eqx.is_array(data):
+            raise TypeError(f"AlgebraicArray has non-Array data: {type(data)=}")
+        self.data = data
+        self.semiring = semiring
+        self._vdot = _vdot
+        self._matmul = _matmul
 
     @override
     def aval(self) -> jax.core.ShapedArray:
@@ -60,31 +81,36 @@ class AlgebraicArray[K: Semiring](quax.ArrayValue):
         special semiring handling (like reshaping, indexing, broadcasting, etc.).
         """
         # Extract data from AlgebraicArray arguments
-        unwrapped_args: list[Array | quax.ArrayValue] = []
-        algebraic_array_arg = None
+        unwrapped_args: list[ArrayLike | AlgebraicArray] = []
+        semiring: K | None = None
         for arg in values:
-            if isinstance(arg, AlgebraicArray):
+            if eqx.is_array_like(arg):
+                unwrapped_args.append(typing.cast(ArrayLike, arg))
+            elif isinstance(arg, AlgebraicArray):
                 unwrapped_args.append(arg.data)
-                if algebraic_array_arg is None:
-                    algebraic_array_arg = arg
+                assert isinstance(arg.semiring, Semiring)
+                semiring = typing.cast(
+                    K,
+                    arg.semiring,
+                )
+            elif isinstance(arg, quax.Value):
+                raise ValueError("`AlgebraicArray` cannot be used in conjuction with other Quax types.")
             else:
-                unwrapped_args.append(arg)  # type: ignore[arg-type]
+                raise AssertionError()  # should never happen
 
         # Call the primitive with unwrapped data
         result = primitive.bind(*unwrapped_args, **params)
 
         # If we had an AlgebraicArray input, wrap the result(s)
-        if algebraic_array_arg is not None:
+        if semiring is not None:
             if primitive.multiple_results:
                 # Primitive returns multiple values - wrap each array result
                 # TODO: verify if this is correct.
-                return tuple(
-                    eqx.tree_at(lambda arr: arr.data, algebraic_array_arg, r) if eqx.is_array_like(r) else r for r in result
-                )
-            else:
+                return [AlgebraicArray(r, semiring) if eqx.is_array_like(r) else r for r in result]
+            elif eqx.is_array(result):
                 # Single result - wrap it
-                return eqx.tree_at(lambda arr: arr.data, algebraic_array_arg, result)
-
+                return AlgebraicArray(result, semiring)
+        # return as is
         return result
 
     def __add__(self, other: AlgebraicArray[K]) -> AlgebraicArray[K]:
@@ -109,7 +135,7 @@ class AlgebraicArray[K: Semiring](quax.ArrayValue):
 
     def __getitem__(self, idx: Any) -> AlgebraicArray[K]:  # noqa: ANN401
         data = self.data[idx]
-        return eqx.tree_at(lambda arr: arr.data, self, data)
+        return dataclasses.replace(self, data=data)
 
     @property
     def at(self) -> _IndexUpdateHelper[K]:
@@ -119,6 +145,10 @@ class AlgebraicArray[K: Semiring](quax.ArrayValue):
 
     def __matmul__(self, other: AlgebraicArray[K]) -> AlgebraicArray[K]:
         return quax.quaxify(jnp.matmul)(self, other)  # type: ignore[arg-type,return-value]
+
+    def item(self) -> Scalar:
+        """Return the scalar value in the array if and only if there is only 1 value"""
+        return self.data.item()
 
 
 @overload
@@ -151,7 +181,7 @@ def _(lhs: AlgebraicArray, rhs: AlgebraicArray) -> AlgebraicArray:
             f"Cannot add AlgebraicArrays with different semirings. lhs semiring: {lhs.semiring}, rhs semiring: {rhs.semiring}"
         )
     result_data = lhs.semiring.add(lhs.data, rhs.data)
-    return eqx.tree_at(lambda arr: arr.data, lhs, result_data)
+    return dataclasses.replace(lhs, data=result_data)
 
 
 @quax.register(lax.mul_p)
@@ -163,7 +193,7 @@ def _(lhs: AlgebraicArray, rhs: AlgebraicArray) -> AlgebraicArray:
             f"lhs semiring: {lhs.semiring}, rhs semiring: {rhs.semiring}"
         )
     result_data = lhs.semiring.mul(lhs.data, rhs.data)
-    return eqx.tree_at(lambda arr: arr.data, lhs, result_data)
+    return dataclasses.replace(lhs, data=result_data)
 
 
 @quax.register(lax.sub_p)
@@ -185,7 +215,7 @@ def _(lhs: AlgebraicArray, rhs: AlgebraicArray) -> AlgebraicArray:
     # Compute: lhs + (-rhs)
     neg_rhs = lhs.semiring.additive_inverse(rhs.data)
     result_data = lhs.semiring.add(lhs.data, neg_rhs)
-    return eqx.tree_at(lambda arr: arr.data, lhs, result_data)
+    return dataclasses.replace(lhs, data=result_data)
 
 
 @quax.register(lax.neg_p)
@@ -196,12 +226,12 @@ def _(a: AlgebraicArray) -> AlgebraicArray:
     # Try additive_inverse first (for Rings)
     if hasattr(semiring, "additive_inverse"):
         result_data = semiring.additive_inverse(a.data)
-        return eqx.tree_at(lambda arr: arr.data, a, result_data)
+        return dataclasses.replace(a, data=result_data)
 
     # Try complement (for Boolean/DeMorgan/Heyting/Stone algebras)
     if hasattr(semiring, "complement"):
         result_data = semiring.complement(a.data)
-        return eqx.tree_at(lambda arr: arr.data, a, result_data)
+        return dataclasses.replace(a, data=result_data)
 
     raise TypeError(
         f"Negation requires either additive_inverse (Ring) or complement (Boolean algebra). "
@@ -212,7 +242,7 @@ def _(a: AlgebraicArray) -> AlgebraicArray:
 @quax.register(lax.transpose_p)
 def _(a: AlgebraicArray, *, permutation: Sequence[int]) -> AlgebraicArray:
     data = lax.transpose(a.data, permutation=permutation)
-    return eqx.tree_at(lambda arr: arr.data, a, data)
+    return dataclasses.replace(a, data=data)
 
 
 @quax.register(lax.reduce_sum_p)
@@ -231,7 +261,7 @@ def _(
         a.semiring.add,
         axes,
     )
-    return eqx.tree_at(lambda arr: arr.data, a, result_data)
+    return dataclasses.replace(a, data=result_data)
 
 
 @quax.register(lax.reduce_prod_p)
@@ -250,7 +280,7 @@ def _(
         a.semiring.mul,
         axes,
     )
-    return eqx.tree_at(lambda arr: arr.data, a, result_data)
+    return dataclasses.replace(a, data=result_data)
 
 
 @quax.register(lax.cumsum_p)
@@ -258,7 +288,7 @@ def _(a: AlgebraicArray, *, axis: int, reverse: bool) -> AlgebraicArray:
     """Cumulative sum using semiring addition."""
     # Use associative_scan with semiring.add
     result_data = lax.associative_scan(a.semiring.add, a.data, axis=axis, reverse=reverse)
-    return eqx.tree_at(lambda arr: arr.data, a, result_data)
+    return dataclasses.replace(a, data=result_data)
 
 
 @quax.register(lax.cumprod_p)
@@ -266,7 +296,7 @@ def _(a: AlgebraicArray, *, axis: int, reverse: bool) -> AlgebraicArray:
     """Cumulative product using semiring multiplication."""
     # Use associative_scan with semiring.mul
     result_data = lax.associative_scan(a.semiring.mul, a.data, axis=axis, reverse=reverse)
-    return eqx.tree_at(lambda arr: arr.data, a, result_data)
+    return dataclasses.replace(a, data=result_data)
 
 
 @quax.register(lax.scatter_add_p)
@@ -320,7 +350,7 @@ def _(
         unique_indices=unique_indices,
         mode=mode,
     )
-    return eqx.tree_at(lambda arr: arr.data, operand, result_data)
+    return dataclasses.replace(operand, data=result_data)
 
 
 @quax.register(lax.scatter_mul_p)
@@ -374,7 +404,7 @@ def _(
         unique_indices=unique_indices,
         mode=mode,
     )
-    return eqx.tree_at(lambda arr: arr.data, operand, result_data)
+    return dataclasses.replace(operand, data=result_data)
 
 
 @quax.register(lax.dot_general_p)
@@ -416,7 +446,7 @@ def _(
         and rhs_contract[0] == 0
     ):
         result_data = lhs._vdot(lhs.data, rhs.data)
-        return eqx.tree_at(lambda arr: arr.data, lhs, result_data)
+        return dataclasses.replace(lhs, data=result_data)
 
     # Check for special case: matrix multiplication (matmul)
     # matmul applies when: 2D arrays, standard matmul pattern, no batch dims
@@ -432,7 +462,7 @@ def _(
         and rhs_contract[0] == 0
     ):
         result_data = lhs._matmul(lhs.data, rhs.data)
-        return eqx.tree_at(lambda arr: arr.data, lhs, result_data)
+        return dataclasses.replace(lhs, data=result_data)
 
     # General case: implement using semiring operations
     lhs_data = lhs.data
@@ -534,4 +564,4 @@ def _(
         else:
             result = result.squeeze()
 
-    return eqx.tree_at(lambda arr: arr.data, lhs, result)
+    return dataclasses.replace(lhs, data=result)

@@ -3,16 +3,21 @@
 
 from __future__ import annotations
 
+import dataclasses
 import operator
 import typing
 from collections.abc import Mapping
 
+import bitarray.util as ba_utils
 import equinox as eqx
+import jax
 import jax.numpy as jnp
 import quax
-from jaxtyping import Array, Scalar, Shaped
+from bitarray import frozenbitarray
+from jaxtyping import Array, ArrayLike, Scalar, Shaped
 
 import algebraic.array.core as alge
+import algebraic.polynomials.sparse as sparse_poly
 from algebraic.array.core import AlgebraicArray
 from algebraic.spec import BoundedDistributiveLattice as Lattice
 
@@ -25,10 +30,19 @@ class MonomialBasis[K: Lattice](eqx.Module):
     """
 
     coeffs: Shaped[AlgebraicArray[K], "*2"]
-    algebra: K
+    algebra: K = eqx.field(static=True)
 
-    def __init__(self, coeffs: Shaped[AlgebraicArray[K], "*2"]) -> None:
-        self.coeffs = coeffs
+    def __init__(self, coeffs: Shaped[AlgebraicArray[K] | ArrayLike, "*2"], algebra: None | K = None) -> None:
+        if isinstance(coeffs, AlgebraicArray):
+            if algebra is not None and not eqx.tree_equal(algebra, coeffs.semiring):
+                raise ValueError("Provided algebra for RankDecomposition != algebra of AlgebraicArray coeffs")
+            algebra = coeffs.semiring
+            coeffs = coeffs.data
+        elif algebra is None:
+            raise ValueError("Must provide algebra if not using AlgebraicArray")
+        assert algebra is not None
+
+        self.coeffs = AlgebraicArray(coeffs, algebra)
         self.algebra = self.coeffs.semiring
 
     def __check_init__(self) -> None:
@@ -83,15 +97,19 @@ class MonomialBasis[K: Lattice](eqx.Module):
         assert isinstance(other, MonomialBasis)
         # Check if either is scalar: easy case
         if self.num_vars == 0 or other.num_vars == 0:
-            coeffs = quax.quaxify(operator.mul)(self.coeffs, other.coeffs)
+            coeffs = self.coeffs * other.coeffs
             return MonomialBasis(coeffs)
         # Now we deal with the case where there are variables
         if self.num_vars != other.num_vars:
             raise ValueError(
                 "Multiplying two polynomials with unequal number of variables not supported unless one of them is a scalar/constant polynomial. Pad the polynomial representation to indicate the correct number of variables."
             )
+        result_coeffs = _multiply_recursive(self.coeffs, other.coeffs)
 
-        allclose = quax.quaxify(jnp.allclose)
+        # @eqx.filter_jit
+        # @quax.quaxify
+        # def set_at(dest: AlgebraicArray[K], at: tuple[int, ...], val: AlgebraicArray[K]) -> AlgebraicArray[K]:
+        #     return dest.at[at].set(val)
 
         # n = self.num_vars
         # result_coeffs = alge.zeros((2,) * n, self.algebra)
@@ -111,89 +129,97 @@ class MonomialBasis[K: Lattice](eqx.Module):
         #         # Accumulate coefficient
         #         product = a_val * b_val
         #         new_coeff = result_coeffs[result_bits] + product
+        #         assert isinstance(new_coeff, AlgebraicArray)
 
         #         is_bottom = jnp.allclose(new_coeff.data, self.algebra.zero)
+
         #         result_with_new_coeffs = result_coeffs.at[result_bits].set(new_coeff.data)
+        #         result_with_new_coeffs = set_at(result_coeffs, result_bits, new_coeff)
         #         # don't add new_coeff if it is bottom
-        #         result_coeffs = quax.quaxify(jnp.select)([is_bottom, ~is_bottom], [result_coeffs, result_with_new_coeffs])
+        #         result_coeffs = quax.quaxify(jnp.select)([is_bottom, ~is_bottom], [result_coeffs, result_with_new_coeffs])  # type: ignore[arg-type]
 
-        """
-        This implementation performs the OR-convolution dimension by dimension.
-        At each iteration d, the variable x_d is contracted by combining the
-        slices where i_d in {0, 1} according to:
+        # """
+        # This implementation performs the OR-convolution dimension by dimension.
+        # At each iteration d, the variable x_d is contracted by combining the
+        # slices where i_d in {0, 1} according to:
 
-            c_0 = a_0 * b_0
-            c_1 = a_0 * b_1 + a_1 * b_0 + a_1 * b_1
+        #     c_0 = a_0 * b_0
+        #     c_1 = a_0 * b_1 + a_1 * b_0 + a_1 * b_1
 
-        where a_k and b_k denote the coefficients with x_d = k. The operation is
-        local to the chosen axis and preserves the overall tensor shape.
+        # where a_k and b_k denote the coefficients with x_d = k. The operation is
+        # local to the chosen axis and preserves the overall tensor shape.
 
-        Axes of B are moved within the loop to align the variable being contracted,
-        while the accumulated result maintains a fixed axis-to-variable mapping.
-        All arithmetic (addition and multiplication) is delegated to the
-        underlying scalar semiring (e.g. via quax), making the function fully
-        JIT-compilable and backend-agnostic.
-        """
-        # Use einsum to compute multilinear polynomial multiplication
-        # For 2 variables: result[i,j] = sum over k,l of self[k,l] * other[i|k, j|l]
-        # where | is bitwise OR (multilinear: x*x = x)
-        #
-        # We compute this axis-by-axis using outer products
+        # Axes of B are moved within the loop to align the variable being contracted,
+        # while the accumulated result maintains a fixed axis-to-variable mapping.
+        # All arithmetic (addition and multiplication) is delegated to the
+        # underlying scalar semiring (e.g. via quax), making the function fully
+        # JIT-compilable and backend-agnostic.
+        # """
+        # # Use einsum to compute multilinear polynomial multiplication
+        # # For 2 variables: result[i,j] = sum over k,l of self[k,l] * other[i|k, j|l]
+        # # where | is bitwise OR (multilinear: x*x = x)
+        # #
+        # # We compute this axis-by-axis using outer products
 
-        n = self.num_vars
+        # n = self.num_vars
 
-        # Start with the outer product in all dimensions
-        # Reshape to allow broadcasting: self -> [..., 1] and other -> [1, ...]
-        result_shape = tuple([2] * n)
+        # # Start with the outer product in all dimensions
+        # # Reshape to allow broadcasting: self -> [..., 1] and other -> [1, ...]
+        # result_shape = tuple([2] * n)
 
-        # Compute full outer product by reshaping and broadcasting
-        # self.coeffs has shape (2, 2, ..., 2) with n dimensions
-        # We want outer product, so reshape self to (2,2,...,2,1,1,...,1) and other to (1,1,...,1,2,2,...,2)
-        a_shape = result_shape + tuple([1] * n)
-        b_shape = tuple([1] * n) + result_shape
+        # # Compute full outer product by reshaping and broadcasting
+        # # self.coeffs has shape (2, 2, ..., 2) with n dimensions
+        # # We want outer product, so reshape self to (2,2,...,2,1,1,...,1) and other to (1,1,...,1,2,2,...,2)
+        # a_shape = result_shape + tuple([1] * n)
+        # b_shape = tuple([1] * n) + result_shape
 
-        jnp_reshape = quax.quaxify(jnp.reshape)
-        a_expanded = jnp_reshape(self.coeffs, a_shape)
-        b_expanded = jnp_reshape(other.coeffs, b_shape)
+        # jnp_reshape = quax.quaxify(jnp.reshape)
+        # a_expanded = jnp_reshape(self.coeffs, a_shape)  # type: ignore[invalid-argument-type]
+        # b_expanded = jnp_reshape(other.coeffs, b_shape)  # type: ignore[invalid-argument-type]
 
-        # Outer product: shape (2,2,...,2, 2,2,...,2) with 2n dimensions
-        outer = a_expanded * b_expanded
+        # # Outer product: shape (2,2,...,2, 2,2,...,2) with 2n dimensions
+        # outer = a_expanded * b_expanded
+        # assert isinstance(outer, AlgebraicArray)
+        # assert outer.shape == ((2,) * (2 * n))
 
-        # Now reduce using OR logic for multilinear: x_i * x_i = x_i
-        # For each variable axis, combine (0,0)->0, (0,1)->1, (1,0)->1, (1,1)->1
-        # After each iteration, one dimension is removed, so axis n is always the "other" axis
-        result_coeffs = outer
-        for axis_idx in range(n):
-            # After i iterations, we've reduced from 2n to 2n-i dimensions
-            # Axis axis_idx from self is still at position axis_idx
-            # Axis axis_idx from other is now at position n (after i axes have been removed)
+        # # Now reduce using OR logic for multilinear: x_i * x_i = x_i
+        # # For each variable axis, combine (0,0)->0, (0,1)->1, (1,0)->1, (1,1)->1
+        # # After each iteration, one dimension is removed, so axis n is always the "other" axis
+        # result_coeffs = outer
+        # for axis_idx in range(n):
+        #     # After i iterations, we've reduced from 2n to 2n-i dimensions
+        #     # Axis axis_idx from self is still at position axis_idx
+        #     # Axis axis_idx from other is now at position n (after i axes have been removed)
 
-            # Get slices for this variable: (0,0), (0,1), (1,0), (1,1)
-            num_dims = result_coeffs.shape.__len__()
+        #     # Get slices for this variable: (0,0), (0,1), (1,0), (1,1)
+        #     num_dims = len(result_coeffs.shape)
 
-            slices_00 = [slice(None)] * num_dims
-            slices_00[axis_idx] = 0
-            slices_00[n] = 0
+        #     slices_00 = [slice(None)] * num_dims
+        #     slices_00[axis_idx] = 0
+        #     slices_00[n] = 0
 
-            slices_01 = [slice(None)] * num_dims
-            slices_01[axis_idx] = 0
-            slices_01[n] = 1
+        #     slices_01 = [slice(None)] * num_dims
+        #     slices_01[axis_idx] = 0
+        #     slices_01[n] = 1
 
-            slices_10 = [slice(None)] * num_dims
-            slices_10[axis_idx] = 1
-            slices_10[n] = 0
+        #     slices_10 = [slice(None)] * num_dims
+        #     slices_10[axis_idx] = 1
+        #     slices_10[n] = 0
 
-            slices_11 = [slice(None)] * num_dims
-            slices_11[axis_idx] = 1
-            slices_11[n] = 1
+        #     slices_11 = [slice(None)] * num_dims
+        #     slices_11[axis_idx] = 1
+        #     slices_11[n] = 1
 
-            # Build reduced tensor
-            # new[..., 0, ...] = result[..., 0, 0, ...]  (only 0|0 = 0)
-            # new[..., 1, ...] = result[..., 0, 1, ...] + result[..., 1, 0, ...] + result[..., 1, 1, ...]
-            c0 = result_coeffs[tuple(slices_00)]
-            c1 = result_coeffs[tuple(slices_01)] + result_coeffs[tuple(slices_10)] + result_coeffs[tuple(slices_11)]
+        #     # Build reduced tensor
+        #     # new[..., 0, ...] = result[..., 0, 0, ...]  (only 0|0 = 0)
+        #     # new[..., 1, ...] = result[..., 0, 1, ...] + result[..., 1, 0, ...] + result[..., 1, 1, ...]
+        #     c0 = result_coeffs[tuple(slices_00)]
+        #     c1 = result_coeffs[tuple(slices_01)] + result_coeffs[tuple(slices_10)] + result_coeffs[tuple(slices_11)]
 
-            result_coeffs = quax.quaxify(jnp.stack)([c0, c1], axis=axis_idx)
+        #     assert isinstance(c0, AlgebraicArray)
+        #     assert isinstance(c1, AlgebraicArray)
+        #     result_coeffs = quax.quaxify(jnp.stack)([c0, c1], axis=axis_idx)
+        #     assert isinstance(result_coeffs, AlgebraicArray)
 
         return MonomialBasis(result_coeffs)
 
@@ -231,7 +257,7 @@ class MonomialBasis[K: Lattice](eqx.Module):
         # This is what we would do in a binary decision diagram.
         repl_keys: list[int] = list(sorted(replacements.keys()))
 
-        @quax.quaxify
+        # @quax.quaxify
         def _compose(poly: MonomialBasis[K], at: int) -> MonomialBasis[K]:
             """Recursive implementation of composition.
 
@@ -245,26 +271,34 @@ class MonomialBasis[K: Lattice](eqx.Module):
             coeffs = poly.coeffs
             var_idx = repl_keys[at]
             # Extract slices of shape: (2,) * (n-1)
-            p_xi_0 = jnp.take(coeffs, 0, axis=var_idx)  # type: ignore[arg-type]
-            p_xi_1 = jnp.take(coeffs, 1, axis=var_idx)  # type: ignore[arg-type]
+            p_xi_0 = quax.quaxify(jnp.take)(coeffs, 0, axis=var_idx)  # type: ignore[arg-type]
+            p_xi_1 = quax.quaxify(jnp.take)(coeffs, 1, axis=var_idx)  # type: ignore[arg-type]
+            assert isinstance(p_xi_0, AlgebraicArray), f"{type(p_xi_0)=}"
+            assert isinstance(p_xi_1, AlgebraicArray), f"{type(p_xi_1)=}"
 
             # Lift the cofactors back to full shape by adding axis at var_idx
-            p_xi_0 = self._lift_tensor(p_xi_0, var_idx)  # type: ignore[arg-type,assignment]
-            p_xi_1 = self._lift_tensor(p_xi_1, var_idx)  # type: ignore[arg-type,assignment]
+            p_xi_0 = self._lift_tensor(p_xi_0, var_idx)
+            p_xi_1 = self._lift_tensor(p_xi_1, var_idx)
 
-            p_xi_0_poly = eqx.tree_at(lambda p: p.coeffs, poly, p_xi_0)
-            p_xi_1_poly = eqx.tree_at(lambda p: p.coeffs, poly, p_xi_1)
+            p_xi_0_poly: MonomialBasis[K] = dataclasses.replace(poly, coeffs=p_xi_0)
+            p_xi_1_poly: MonomialBasis[K] = dataclasses.replace(poly, coeffs=p_xi_1)
+            # p_xi_0_poly: MonomialBasis[K] = eqx.tree_at(lambda p: p.coeffs, poly, p_xi_0)
+            # p_xi_1_poly: MonomialBasis[K] = eqx.tree_at(lambda p: p.coeffs, poly, p_xi_1)
+            assert isinstance(p_xi_0_poly, MonomialBasis), f"{type(p_xi_0_poly)=}"
+            assert isinstance(p_xi_1_poly, MonomialBasis), f"{type(p_xi_1_poly)=}"
 
             # Recursively compose each cofactor
-            p_xi_0_poly = _compose(p_xi_0_poly, at + 1)  # type: ignore[arg-type]
-            p_xi_1_poly = _compose(p_xi_1_poly, at + 1)  # type: ignore[arg-type]
+            p_xi_0_poly = _compose(p_xi_0_poly, at + 1)
+            p_xi_1_poly = _compose(p_xi_1_poly, at + 1)
+            assert isinstance(p_xi_0_poly, MonomialBasis), f"{type(p_xi_0_poly)=}"
+            assert isinstance(p_xi_1_poly, MonomialBasis), f"{type(p_xi_1_poly)=}"
 
             # merge the cofactors with the replacement in place
             # Need to multiply replacement polynomial with p_xi_1_poly, then add p_xi_0_poly
             # var_repl = replacements[var_idx].coeffs
             var_replacement = replacements[var_idx]
             # var_repl_poly = MonomialBasis(var_repl)
-            prod = p_xi_1_poly.__mul__(var_replacement)
+            prod = p_xi_1_poly * var_replacement
             result = p_xi_0_poly + prod
             return result
 
@@ -283,3 +317,71 @@ class MonomialBasis[K: Lattice](eqx.Module):
         padding[insert_axis] = (0, 1)
 
         return jnp_pad(expanded, padding, constant_values=self.algebra.zero)  # type: ignore[return-value]
+
+    def to_sparse(self) -> sparse_poly.SparsePolynomial[K]:
+        from itertools import product
+
+        allclose = quax.quaxify(jnp.allclose)
+
+        result = {}
+        # Enumerate all 2^n possible indices
+        for idx in product([0, 1], repeat=self.num_vars):
+            coeff = self.coeffs[idx]
+            # Unwrap AlgebraicArray to get the raw JAX array
+            coeff_data = coeff.data
+            while isinstance(coeff_data, AlgebraicArray):
+                coeff_data = coeff_data.data
+            # Only include non-zero coefficients
+            if not allclose(coeff_data, self.algebra.zero):
+                monomial = frozenbitarray(idx)
+                result[monomial] = coeff_data  # Store the raw JAX array
+
+        return sparse_poly.SparsePolynomial(self.algebra, self.num_vars, result)
+
+    @classmethod
+    def from_sparse(cls, poly: sparse_poly.SparsePolynomial[K]) -> MonomialBasis[K]:
+        coeffs = alge.zeros((2,) * poly.num_vars, poly.algebra)
+        for monomial, coeff in poly.items():
+            # Convert bitarray to index tuple
+            idx = tuple(int(bit) for bit in monomial)
+            coeffs = coeffs.at[idx].set(coeff)
+        return MonomialBasis(coeffs)
+
+
+def _multiply_recursive[K: Lattice](
+    lhs: Shaped[AlgebraicArray, "*2"], rhs: Shaped[AlgebraicArray, "*2"]
+) -> Shaped[AlgebraicArray, "*2"]:
+    """A recursive function to compute the Horner's expansion multiplication."""
+    assert lhs.shape == rhs.shape
+    assert eqx.tree_equal(lhs.semiring, rhs.semiring)
+
+    n = len(lhs.shape)
+    return_shape = lhs.shape
+
+    stack = quax.quaxify(jnp.stack)
+    expected_shape_post_idx = (2,) * (n - 1)
+
+    # We want to split the lhs and rhs into the cofactors of the variable at the given level
+    lhs_0 = lhs[0, ...]  # 0 cofactor of LHS at x_i
+    lhs_1 = lhs[1, ...]  # 1 cofactor of LHS at x_i
+
+    rhs_0 = rhs[0, ...]  # 0 cofactor of RHS at x_i
+    rhs_1 = rhs[1, ...]  # 1 cofactor of RHS at x_i
+
+    assert lhs_0.shape == lhs_1.shape == rhs_0.shape == rhs_1.shape == expected_shape_post_idx
+
+    # Now we will use this formula for finding the cofactors of the resultant
+    # c_0 = a_0 * b_0
+    # c_1 = a_0 * b_1 + a_1 * b_0 + a_1 * b_1
+    if len(expected_shape_post_idx) == 0:
+        # Scalars! just deal with them as single variable things
+        ret_0 = lhs_0 * rhs_0
+        ret_1 = (lhs_0 * rhs_1) + (lhs_1 * rhs_0) + (lhs_1 * rhs_1)
+    else:
+        ret_0 = _multiply_recursive(lhs_0, rhs_0)
+        ret_1 = _multiply_recursive(lhs_0, rhs_1) + _multiply_recursive(lhs_1, rhs_0) + _multiply_recursive(lhs_1, rhs_1)
+    assert ret_0.shape == ret_1.shape == expected_shape_post_idx
+    # Put it back together
+    ret: AlgebraicArray[K] = stack([ret_0, ret_1], axis=0)  # type: ignore[arg-type]
+    assert ret.shape == return_shape
+    return ret
