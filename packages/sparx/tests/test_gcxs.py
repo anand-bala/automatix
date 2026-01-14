@@ -5,12 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 import jax.numpy as jnp
-import numpy as np
 import pytest
-
 from sparx._compressed.core import GCXS
 from sparx._coo.core import COO
-
 
 # ==============================================================================
 # Initialization Tests

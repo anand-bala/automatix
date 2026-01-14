@@ -7,9 +7,7 @@ from typing import Any
 import jax.numpy as jnp
 import numpy as np
 import pytest
-
 from sparx._coo.core import COO
-
 
 # ==============================================================================
 # Initialization Tests

@@ -431,7 +431,7 @@ def _(operands: tuple, *, dimension: int) -> COO:
     # Normalize dimension
     dimension = dimension if dimension >= 0 else ndim + dimension
 
-    for i, op in enumerate(operands[1:], 1):
+    for _i, op in enumerate(operands[1:], 1):
         if len(op.shape) != ndim:
             raise ValueError(f"All arrays must have same ndim: {ndim} != {len(op.shape)}")
         for d in range(ndim):
