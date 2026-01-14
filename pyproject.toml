@@ -57,7 +57,7 @@ strict = true
 show_error_codes = true
 warn_unreachable = true
 # files = ["tests/", "src/", "packages/"]
-packages = ["automatix", "algebraic-jax", "morphata", "sparx"]
+packages = ["automatix", "algebraic", "morphata", "sparx"]
 
 [[tool.mypy.overrides]]
 module = ["dd", "dd.*"]
