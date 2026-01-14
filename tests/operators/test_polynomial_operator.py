@@ -27,7 +27,7 @@ class TestBoolExprConversion:
         """Boolean algebra for tests."""
         return boolean_algebra()
 
-    def test_literal_true(self, algebra):
+    def test_literal_true(self, algebra) -> None:
         """Literal(True) -> one polynomial."""
         expr = logic.Literal(True)
         poly = boolexpr_to_polynomial(expr, num_vars=3, algebra=algebra)
@@ -38,7 +38,7 @@ class TestBoolExprConversion:
         scalar = extract_scalar(result, algebra)
         assert jnp.allclose(scalar, jnp.asarray(algebra.one))
 
-    def test_literal_false(self, algebra):
+    def test_literal_false(self, algebra) -> None:
         """Literal(False) -> zero polynomial."""
         expr = logic.Literal(False)
         poly = boolexpr_to_polynomial(expr, num_vars=3, algebra=algebra)
@@ -49,7 +49,7 @@ class TestBoolExprConversion:
         scalar = extract_scalar(result, algebra)
         assert jnp.allclose(scalar, jnp.asarray(algebra.zero))
 
-    def test_variable(self, algebra):
+    def test_variable(self, algebra) -> None:
         """Variable(q) -> x_q polynomial."""
         expr = logic.Variable(2)
         poly = boolexpr_to_polynomial(expr, num_vars=5, algebra=algebra)
@@ -67,7 +67,7 @@ class TestBoolExprConversion:
         scalar = extract_scalar(result, algebra)
         assert jnp.allclose(scalar, jnp.asarray(algebra.zero))
 
-    def test_and_operation(self, algebra):
+    def test_and_operation(self, algebra) -> None:
         """And(x, y) -> x * y."""
         # Use parse_expr to construct the expression
         expr = logic.parse_expr("x_0 & x_1")
@@ -88,7 +88,7 @@ class TestBoolExprConversion:
             expected_val = algebra.one if expected else algebra.zero
             assert jnp.allclose(scalar, jnp.asarray(expected_val)), f"Failed for {point_dict}"
 
-    def test_or_operation(self, algebra):
+    def test_or_operation(self, algebra) -> None:
         """Or(x, y) -> x + y."""
         # Use parse_expr to construct the expression
         expr = logic.parse_expr("x_0 | x_1")
@@ -109,14 +109,14 @@ class TestBoolExprConversion:
             expected_val = algebra.one if expected else algebra.zero
             assert jnp.allclose(scalar, jnp.asarray(expected_val)), f"Failed for {point_dict}"
 
-    def test_not_operator_raises_assertion(self, algebra):
+    def test_not_operator_raises_assertion(self, algebra) -> None:
         """Not operator should raise AssertionError."""
         expr = logic.parse_expr("! x_0")
 
         with pytest.raises(AssertionError, match="Not operator encountered"):
             boolexpr_to_polynomial(expr, num_vars=3, algebra=algebra)
 
-    def test_complex_expression(self, algebra):
+    def test_complex_expression(self, algebra) -> None:
         """Test complex expression: (x_0 AND x_1) OR x_2."""
         expr = logic.parse_expr("(x_0 & x_1) | x_2")
         poly = boolexpr_to_polynomial(expr, num_vars=3, algebra=algebra)
@@ -140,7 +140,7 @@ class TestBoolExprConversion:
         scalar = extract_scalar(result, algebra)
         assert jnp.allclose(scalar, jnp.asarray(algebra.one))
 
-    def test_invalid_state_index(self, algebra):
+    def test_invalid_state_index(self, algebra) -> None:
         """Invalid state index should raise ValueError."""
         expr = logic.Variable(10)  # Out of range
 
