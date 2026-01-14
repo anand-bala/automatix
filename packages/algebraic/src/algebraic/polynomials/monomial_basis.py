@@ -8,9 +8,7 @@ import operator
 import typing
 from collections.abc import Mapping
 
-import bitarray.util as ba_utils
 import equinox as eqx
-import jax
 import jax.numpy as jnp
 import quax
 from bitarray import frozenbitarray

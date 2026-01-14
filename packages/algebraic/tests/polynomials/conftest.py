@@ -376,7 +376,6 @@ def polynomials_equal_by_evaluation(
     bool
         True if polynomials evaluate to same values at all test points
     """
-    import quax
 
     allclose = quax.quaxify(jnp.allclose)
     array_equal = quax.quaxify(jnp.array_equal)
