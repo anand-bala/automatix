@@ -2,6 +2,7 @@
 # mypy: disable-error-code="no-any-return,no-untyped-call"
 
 from __future__ import annotations
+import typing
 
 import functools
 from collections import defaultdict
@@ -78,7 +79,7 @@ class SparsePolynomial[K: Lattice](eqx.Module, Mapping[frozenbitarray, Array | S
     def __add__(self, other: SparsePolynomial[K] | Scalar) -> SparsePolynomial[K]:
         # This will essentially merge the two polynomials by adding the monomial coefficients where they are common, or using the additive identity where one isn't available.
         if jnp.isscalar(other):
-            other = SparsePolynomial.constant(self.algebra, self.num_vars, other)
+            other = SparsePolynomial.constant(typing.cast(Scalar, other), self.num_vars, self.algebra)
         assert isinstance(other, SparsePolynomial)
         assert self.algebra == other.algebra
         assert self.num_vars == other.num_vars
@@ -98,7 +99,7 @@ class SparsePolynomial[K: Lattice](eqx.Module, Mapping[frozenbitarray, Array | S
         $(\sum_{S \in a} c_S x^S) \cdot (\sum_{T \in b} d_T x^T) = sum_{S,T} (c_S * d_T) x^{S \cup T}$
         """
         if jnp.isscalar(other):
-            other = SparsePolynomial.constant(self.algebra, self.num_vars, other)
+            other = SparsePolynomial.constant(typing.cast(Scalar, other), self.num_vars, self.algebra)
         assert isinstance(other, SparsePolynomial)
         assert self.algebra == other.algebra
         assert self.num_vars == other.num_vars
