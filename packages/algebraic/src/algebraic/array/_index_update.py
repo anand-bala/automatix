@@ -22,12 +22,9 @@ class _IndexUpdateRef[K: Semiring]:
     to provide the .at[idx].set() syntax and is consumed within a single expression.
     """
 
-    array: AlgebraicArray[K]
-    indices: Any
-
-    def __init__(self, array: AlgebraicArray[K], indices: Any) -> None:
-        self.array = array
-        self.indices = indices
+    def __init__(self, array: AlgebraicArray[K], indices: Any) -> None:  # noqa: ANN401
+        self.array: AlgebraicArray[K] = array
+        self.indices: Any = indices
 
     def set(self, values: Any) -> AlgebraicArray[K]:  # noqa: ANN401
         """Set the indexed elements to the given values.
