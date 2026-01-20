@@ -10,19 +10,19 @@ if nvidia_smi="$(type -p "nvidia-smi")" && [[ -n "$nvidia_smi" ]]; then
   cuda_major_version=$("$nvidia_smi" --version | awk 'BEGIN { FS = "[[:space:]]*:[[:space:]]*"}; /^CUDA Version/ {print int($2) };')
   if [[ -n "$cuda_major_version" ]]; then
     info "Detected CUDA version: $cuda_major_version"
-    make dev CUDA_VERSION="$cuda_major_version"
+    export CUDA_VERSION="$cuda_major_version"
   fi
 else
   info "Did not detect nvidia-smi, using non-GPU environment"
-  make dev
 fi
 
 if xhost_cmd="$(type -p "xhost")" && [[ -n "$xhost_cmd" ]]; then
   "$xhost_cmd" +si:localuser:"$(whoami)" >&/dev/null && {
-    info "Display present, setting XLA_PYTHON_CLIENT_MEM_FRACTION to 40%"
-    export XLA_PYTHON_CLIENT_MEM_FRACTION=".40"
+    info "Display present, setting XLA_PYTHON_CLIENT_MEM_FRACTION to 80%"
+    export XLA_PYTHON_CLIENT_MEM_FRACTION=".80"
   }
 fi
 
+uv run --dev just dev
 source ./.venv/bin/activate
 watch_file pyproject.toml

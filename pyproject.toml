@@ -33,6 +33,7 @@ dev = [
   "pytest>=9.0.0",
   "pytest-mypy>=1.0.1",
   "ruff",
+  "rust-just>=1.46.0",
   "sympy>=1.14.0",
   "ty",
   "zuban",
