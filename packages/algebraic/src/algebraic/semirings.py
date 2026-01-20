@@ -45,9 +45,9 @@ def max_min_algebra(
 @overload
 def max_min_algebra(
     *,
-    smooth: bool,
+    smooth: bool = False,
     only: Literal["negative", "positive"],
-    temperature: float,
+    temperature: float = 1.0,
 ) -> Lattice: ...
 
 
