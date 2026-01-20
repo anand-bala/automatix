@@ -70,8 +70,8 @@ def max_min_algebra(
         Temperature closer to infinity is closer to true max/min
 
     """
-    add_kernel: BinaryOp
-    mul_kernel: BinaryOp
+    add_kernel: BinaryOp | jnp.BinaryUfunc
+    mul_kernel: BinaryOp | jnp.BinaryUfunc
 
     if smooth:
 
@@ -140,8 +140,7 @@ def tropical_semiring(*, minplus: bool = True, smooth: bool = False, temperature
     temperature : float, default 1.0
         Temperature for the smooth approximation; closer to infinity is closer to true max/min
     """
-    add_kernel: BinaryOp
-    # sum_kernel: ReductionOp
+    add_kernel: BinaryOp | jnp.BinaryUfunc
     if smooth:
         if minplus:
 
@@ -160,10 +159,8 @@ def tropical_semiring(*, minplus: bool = True, smooth: bool = False, temperature
     else:
         if minplus:
             add_kernel = jnp.minimum
-            sum_kernel = jnp.min
         else:
             add_kernel = jnp.maximum
-            sum_kernel = jnp.max
 
     if minplus:
         zero = jnp.asarray(jnp.inf)
@@ -181,14 +178,8 @@ def tropical_semiring(*, minplus: bool = True, smooth: bool = False, temperature
     def add(x1: Shaped[Array, "*#n"], x2: Shaped[Array, "*#n"]) -> Shaped[Array, "*#n"]:
         return add_kernel(x1, x2)
 
-    def sum(a: Shaped[Array, " ..."], axis: MaybeAxis = None) -> Shaped[Array, " ..."]:
-        return sum_kernel(a, axis)
-
     def multiply(x1: Shaped[Array, "*#n"], x2: Shaped[Array, "*#n"]) -> Shaped[Array, "*#n"]:
         return x1 + x2
-
-    def prod(a: Shaped[Array, " ..."], axis: MaybeAxis = None) -> Shaped[Array, " ..."]:
-        return jnp.sum(a, axis=axis)
 
     return Semiring(
         add=add,
@@ -233,13 +224,26 @@ def boolean_algebra(
 
     match mode:
         case "logic":
-            add = jnp.logical_or
-            mul = jnp.logical_and
-            neg = jnp.logical_not
+
+            def add(a: Array, b: Array) -> Array:
+                return jnp.logical_or(a, b)
+
+            def mul(a: Array, b: Array) -> Array:
+                return jnp.logical_and(a, b)
+
+            def neg(a: Array) -> Array:
+                return jnp.logical_not(a)
         case "soft":
-            add = kernels.soft_boolean_or
-            mul = kernels.soft_boolean_and
-            neg = kernels.soft_boolean_not
+
+            def add(a: Array, b: Array) -> Array:
+                return kernels.soft_boolean_or(a, b)
+
+            def mul(a: Array, b: Array) -> Array:
+                return kernels.soft_boolean_and(a, b)
+
+            def neg(a: Array) -> Array:
+                return kernels.soft_boolean_not(a)
+
         case "smooth":
 
             def add(a: Array, b: Array) -> Array:
@@ -252,8 +256,12 @@ def boolean_algebra(
                 return kernels.smooth_boolean_not(a, temperature)
 
         case "ste" | "std-fuzzy":
-            add = jnp.maximum
-            mul = jnp.minimum
+
+            def add(a: Array, b: Array) -> Array:
+                return jnp.maximum(a, b)
+
+            def mul(a: Array, b: Array) -> Array:
+                return jnp.minimum(a, b)
 
             def neg(a: Array) -> Array:
                 return 1 - a

@@ -4,7 +4,7 @@ import equinox as eqx
 import jax.numpy as jnp
 import pytest
 import quax
-from algebraic.array.core import AlgebraicArray
+from algebraic import AlgebraicArray
 from algebraic.semirings import counting_semiring, tropical_semiring
 from algebraic.spec import Ring, Shape
 from jaxtyping import Array, Shaped

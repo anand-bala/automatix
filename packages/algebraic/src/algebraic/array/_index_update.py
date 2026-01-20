@@ -11,7 +11,7 @@ import jax.numpy as jnp
 from algebraic.spec import is_ring
 
 if TYPE_CHECKING:
-    from algebraic.array.core import AlgebraicArray, Semiring
+    from algebraic import AlgebraicArray, Semiring
 
 
 class _IndexUpdateRef[K: Semiring]:

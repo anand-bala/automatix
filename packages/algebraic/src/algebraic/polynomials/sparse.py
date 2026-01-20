@@ -1,10 +1,9 @@
 """Sparse polynomial representation using dictionary-based storage."""
-# mypy: disable-error-code="no-any-return,no-untyped-call"
 
 from __future__ import annotations
-import typing
 
 import functools
+import typing
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Mapping
 
@@ -91,7 +90,7 @@ class SparsePolynomial[K: Lattice](eqx.Module, Mapping[frozenbitarray, Array | S
             )
             for key in self.keys() | other.keys()
         }
-        return eqx.tree_at(lambda p: p.data, self, ret)
+        return SparsePolynomial(self.algebra, self.num_vars, dict(ret))
 
     def __mul__(self, other: SparsePolynomial[K] | Scalar) -> SparsePolynomial[K]:
         r"""Multiply two polynomials.
@@ -131,13 +130,12 @@ class SparsePolynomial[K: Lattice](eqx.Module, Mapping[frozenbitarray, Array | S
         >>> p.evaluate(dict(enumerate(jnp.array([True, False]))))['00']
         Array(False, dtype=bool...)
         """
-
         if isinstance(point, Mapping):
-            replacements = {i: SparsePolynomial.constant(val, self.num_vars, self.algebra) for i, val in point.items()}
+            replacements = {i: SparsePolynomial.constant(val, self.num_vars, self.algebra) for i, val in point.items()}  # ty: ignore[invalid-argument-type]
         else:
             assert eqx.is_array(point)
             replacements = {i: SparsePolynomial.constant(point[i], self.num_vars, self.algebra) for i in range(self.num_vars)}
-        return self.compose(replacements)
+        return self.compose(replacements)  # ty: ignore[invalid-argument-type]
 
     def compose(self, replacements: Mapping[int, SparsePolynomial[K]]) -> SparsePolynomial[K]:
         """Compose polynomial with multiple substitutions.
