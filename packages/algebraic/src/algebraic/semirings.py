@@ -200,19 +200,19 @@ def tropical_semiring(*, minplus: bool = True, smooth: bool = False, temperature
 
 
 def boolean_algebra(
-    mode: Literal["logic", "soft", "smooth", "ste"] = "soft",
+    mode: Literal["logic", "soft", "smooth", "ste", "std-fuzzy"] = "soft",
     temperature: float = 1.0,
 ) -> BooleanAlgebra:
     """Create a differentiable Boolean kernel.
 
     Parameters
     ----------
-    mode : {"logic", "soft", "smooth", "ste"}
+    mode : {"logic", "soft", "smooth", "ste", "std-fuzzy"}
         Differentiation mode:
         - "logic": non-differentiable
         - "soft": Soft Boolean using multiplication and addition (fastest, smoothest)
         - "smooth": Smooth Boolean using sigmoid with temperature
-        - "ste": Straight-Through Estimator (biased gradients, but works generally)
+        - "ste"|"std-fuzzy": Straight-Through Estimator or, equivalently, the standard fuzzy algebra
     temperature : float, optional
         Temperature parameter for "smooth" mode (default: 1.0)
 
@@ -251,7 +251,7 @@ def boolean_algebra(
             def neg(a: Array) -> Array:
                 return kernels.smooth_boolean_not(a, temperature)
 
-        case "ste":
+        case "ste" | "std-fuzzy":
             add = jnp.maximum
             mul = jnp.minimum
 
