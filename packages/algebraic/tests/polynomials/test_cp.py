@@ -10,13 +10,13 @@ import jax.numpy as jnp
 import jax.random as jrandom
 import pytest
 import quax
-from algebraic import AlgebraicArray
+from algebraic import AlgebraicArray, BooleanAlgebra
 from algebraic.polynomials.rank_decomp import RankDecomposition
 from algebraic.polynomials.sparse import SparsePolynomial
 from bitarray import frozenbitarray
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from jaxtyping import Array
+from jaxtyping import Array, Shaped
 
 allclose = quax.quaxify(jnp.allclose)
 
@@ -27,13 +27,13 @@ class TestRankDecompositionConversion:
     def test_from_sparse_constant(self, sparse_helper, rank_helper, bool_algebra):
         """Test converting constant from sparse to rank decomposition."""
         sparse_alg = sparse_helper(bool_algebra, 3)
-        rank_alg = rank_helper(bool_algebra, 3)
+        _rank_alg = rank_helper(bool_algebra, 3)
 
         # Create constant in sparse form
         p_sparse = sparse_alg.constant(jnp.array(True))
 
         # For now, test basic properties
-        p_rank = RankDecomposition.from_sparse(p_sparse)
+        _p_rank = RankDecomposition.from_sparse(p_sparse)
 
     def test_variable_creation(self, rank_helper, bool_algebra):
         """Test creating a single variable."""
@@ -455,7 +455,7 @@ class TestRankDecompositionJAXTransformations:
 
         # Create JIT-compiled evaluation function
         @jax.jit
-        def eval_fn(point):
+        def eval_fn(point: Shaped[Array, "2"]) -> RankDecomposition[BooleanAlgebra]:
             return rank_alg.evaluate(p, point)
 
         result = eval_fn(jnp.array([2.0, 3.0]))
@@ -484,7 +484,8 @@ class TestRankDecompositionJAXTransformations:
         x_1 = rank_alg.variable(1)
         p = rank_alg.mul(x_0, x_1)  # In tropical max-plus: x_0 + x_1
 
-        def fn(x):
+        # Create JIT-compiled evaluation function
+        def fn(x: Shaped[Array, "2"]) -> RankDecomposition[BooleanAlgebra]:
             return rank_alg.evaluate(p, x).factors[0, 0, 0].data
 
         # Compute gradient
