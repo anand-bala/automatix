@@ -17,7 +17,7 @@ import quax
 from jaxtyping import Array, ArrayLike, DTypeLike, Scalar, Shaped
 from typing_extensions import final, overload, override
 
-from algebraic.spec import MatmulFn, Semiring, Shape, VdotFn
+from algebraic.spec import MatmulFn, Semiring, Shape, VdotFn, has_complement, is_ring
 
 if TYPE_CHECKING:
     from ._index_update import _IndexUpdateHelper
@@ -206,7 +206,7 @@ def _(lhs: AlgebraicArray, rhs: AlgebraicArray) -> AlgebraicArray:
         )
 
     # Check if semiring has additive inverse (is a Ring)
-    if not hasattr(lhs.semiring, "additive_inverse"):
+    if not is_ring(lhs.semiring):
         raise TypeError(
             f"Subtraction requires a Ring with additive_inverse. "
             f"Semiring {type(lhs.semiring).__name__} does not support subtraction."
@@ -224,12 +224,12 @@ def _(a: AlgebraicArray) -> AlgebraicArray:
     semiring = a.semiring
 
     # Try additive_inverse first (for Rings)
-    if hasattr(semiring, "additive_inverse"):
+    if is_ring(semiring):
         result_data = semiring.additive_inverse(a.data)
         return dataclasses.replace(a, data=result_data)
 
     # Try complement (for Boolean/DeMorgan/Heyting/Stone algebras)
-    if hasattr(semiring, "complement"):
+    if has_complement(semiring):
         result_data = semiring.complement(a.data)
         return dataclasses.replace(a, data=result_data)
 

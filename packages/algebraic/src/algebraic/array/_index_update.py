@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any
 import equinox as eqx
 import jax.numpy as jnp
 
+from algebraic.spec import is_ring
+
 if TYPE_CHECKING:
     from algebraic.array.core import AlgebraicArray, Semiring
 
@@ -107,11 +109,12 @@ class _IndexUpdateRef[K: Semiring]:
         Raises:
             TypeError: If the semiring doesn't support subtraction.
         """
+        semiring = self.array.semiring
         # Check if semiring has additive inverse
-        if not hasattr(self.array.semiring, "additive_inverse"):
+        if not is_ring(semiring):
             raise TypeError(
                 f"Subtraction requires a Ring with additive_inverse. "
-                f"Semiring {type(self.array.semiring).__name__} does not support subtraction."
+                f"Semiring {type(semiring).__name__} does not support subtraction."
             )
 
         # Extract data if values is an AlgebraicArray
@@ -124,8 +127,8 @@ class _IndexUpdateRef[K: Semiring]:
         current = self.array.data[self.indices]
 
         # Compute: current + (-values)
-        neg_values = self.array.semiring.additive_inverse(values_data)
-        updated = self.array.semiring.add(current, neg_values)
+        neg_values = semiring.additive_inverse(values_data)
+        updated = semiring.add(current, neg_values)
 
         # Use scatter to update
         new_data = self.array.data.at[self.indices].set(updated)

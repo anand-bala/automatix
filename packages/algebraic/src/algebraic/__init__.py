@@ -9,6 +9,11 @@ from algebraic.spec import HeytingAlgebra as HeytingAlgebra
 from algebraic.spec import Ring as Ring
 from algebraic.spec import Semiring as Semiring
 from algebraic.spec import StoneAlgebra as StoneAlgebra
+from algebraic.spec import has_complement as has_complement
+from algebraic.spec import is_demorgan_algebra as is_demorgan_algebra
+from algebraic.spec import is_heyting_algebra as is_heyting_algebra
+from algebraic.spec import is_ring as is_ring
+from algebraic.spec import is_stone_algebra as is_stone_algebra
 
 __all__ = [
     "array",
@@ -22,4 +27,9 @@ __all__ = [
     "Ring",
     "Semiring",
     "StoneAlgebra",
+    "has_complement",
+    "is_demorgan_algebra",
+    "is_heyting_algebra",
+    "is_ring",
+    "is_stone_algebra",
 ]

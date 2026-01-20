@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from functools import cached_property
-from typing import Literal, Protocol, runtime_checkable
+from typing import Literal, Protocol, TypeGuard, runtime_checkable
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -60,10 +60,6 @@ class AlgebraicStructure(eqx.Module):
     def is_simple(self) -> bool:
         """Check if structure is simple (all properties hold)."""
         return "simple" in self.properties
-
-    def has_negation(self) -> bool:
-        """Check if structure has a negation operation."""
-        return getattr(self, "complement", None) is not None
 
 
 class Semiring(AlgebraicStructure):
@@ -171,8 +167,64 @@ class BooleanAlgebra(DeMorganAlgebra):
     1. De Morgan's Laws
     2. The law of excluded middle (`~x or x = 1`)
     3. The law of noncontradiction (`~x and x = 0`)
+
+    This, by extension, satisfies the contracts of `Ring`, `StoneAlgebra`, and `HeytingAlgebra`.
     """
+
+    def additive_inverse(self, a: Scalar | Array) -> Scalar | Array:
+        return self.complement(a)
 
     def implication(self, a: Scalar | Array, b: Scalar | Array) -> Scalar | Array:
         r"""Boolean implication ($a \to b$ = $\neg a \lor b$)."""
         return self.add(self.complement(a), b)
+
+
+# Type guards for runtime type narrowing
+
+
+def is_ring(algebra: object) -> TypeGuard[Ring]:
+    """Type guard to check if algebra is a Ring (has additive_inverse).
+
+    Returns True for Ring instances and BooleanAlgebra (which satisfies Ring contract).
+    """
+    return isinstance(algebra, (Ring, BooleanAlgebra))
+
+
+def is_demorgan_algebra(algebra: object) -> TypeGuard[DeMorganAlgebra]:
+    """Type guard to check if algebra is a DeMorgan algebra (has complement with De Morgan laws).
+
+    Returns True for DeMorganAlgebra instances (including BooleanAlgebra subclasses).
+    """
+    return isinstance(algebra, DeMorganAlgebra)
+
+
+def is_heyting_algebra(algebra: object) -> TypeGuard[HeytingAlgebra]:
+    """Type guard to check if algebra is a Heyting algebra (has implication).
+
+    Returns True for HeytingAlgebra instances and BooleanAlgebra (which satisfies Heyting contract).
+    """
+    return isinstance(algebra, (HeytingAlgebra, BooleanAlgebra))
+
+
+def is_stone_algebra(algebra: object) -> TypeGuard[StoneAlgebra]:
+    """Type guard to check if algebra is a Stone algebra (has pseudo-complement).
+
+    Returns True for StoneAlgebra, DeMorganAlgebra, and BooleanAlgebra instances.
+    """
+    return isinstance(algebra, (StoneAlgebra, DeMorganAlgebra))
+
+
+def is_boolean_algebra(algebra: object) -> TypeGuard[BooleanAlgebra]:
+    """Type guard to check if algebra is a Boolean algebra.
+
+    Returns True for BooleanAlgebra instances.
+    """
+    return isinstance(algebra, BooleanAlgebra)
+
+
+def has_complement(algebra: object) -> TypeGuard[DeMorganAlgebra | HeytingAlgebra | StoneAlgebra]:
+    """Type guard to check if algebra has a complement operation.
+
+    Returns True for algebras with complement: DeMorganAlgebra, HeytingAlgebra, StoneAlgebra, or BooleanAlgebra.
+    """
+    return isinstance(algebra, (DeMorganAlgebra, HeytingAlgebra, StoneAlgebra))
