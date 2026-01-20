@@ -32,6 +32,19 @@ for:
 
 ## Quick Start
 
+### Recommended Imports
+
+For the best experience with `algebraic`, use these imports:
+
+```python
+import algebraic.numpy as alge  # For array operations and creation
+from algebraic import jit, vmap  # For JAX transformations
+from algebraic.semirings import tropical_semiring, boolean_algebra  # For semirings
+```
+
+These provide a seamless interface that automatically handles `AlgebraicArray`
+integration with JAX without manual `quax.quaxify` calls.
+
 ### Basic Semiring Operations
 
 ```python
@@ -66,27 +79,29 @@ to use semiring semantics.
 It integrates seamlessly with JAX transformations like `jit`, `vmap`, and
 `grad`.
 
+**Recommended**:
+Use `algebraic.numpy` (imported as `alge`) for array creation and operations:
+
 ```python
-import jax.numpy as jnp
-from algebraic import AlgebraicArray
-from algebraic.semirings import tropical_semiring, boolean_algebra
+import algebraic.numpy as alge
+from algebraic.semirings import tropical_semiring
 
 # Create algebraic arrays with tropical semiring
 tropical = tropical_semiring(minplus=True)
-a = AlgebraicArray(jnp.array([1.0, 2.0, 3.0]), tropical)
-b = AlgebraicArray(jnp.array([4.0, 5.0, 6.0]), tropical)
+a = alge.array([1.0, 2.0, 3.0], tropical)
+b = alge.array([4.0, 5.0, 6.0], tropical)
 
 # Element-wise operations use semiring semantics
 c = a + b  # Tropical addition: [min(1,4), min(2,5), min(3,6)] = [1, 2, 3]
 d = a * b  # Tropical multiplication: [1+4, 2+5, 3+6] = [5, 7, 9]
 
-# Reductions use semiring operations
-total = a.sum()  # min(1, 2, 3) = 1
-product = a.prod()  # 1 + 2 + 3 = 6
+# Reductions use semiring operations (via algebraic.numpy)
+total = alge.sum(a)  # min(1, 2, 3) = 1
+product = alge.prod(a)  # 1 + 2 + 3 = 6
 
 # Matrix multiplication with @ operator
-A = AlgebraicArray(jnp.array([[1.0, 2.0], [3.0, 4.0]]), tropical)
-B = AlgebraicArray(jnp.array([[5.0, 6.0], [7.0, 8.0]]), tropical)
+A = alge.array([[1.0, 2.0], [3.0, 4.0]], tropical)
+B = alge.array([[5.0, 6.0], [7.0, 8.0]], tropical)
 C = A @ B  # Tropical matmul: C[i,j] = min_k(A[i,k] + B[k,j])
 # Result: [[6, 7], [8, 9]]
 ```
@@ -94,19 +109,18 @@ C = A @ B  # Tropical matmul: C[i,j] = min_k(A[i,k] + B[k,j])
 ### Boolean Algebra for Graph and Logic Operations
 
 ```python
-import jax.numpy as jnp
-from algebraic import AlgebraicArray
+import algebraic.numpy as alge
 from algebraic.semirings import boolean_algebra
 
 # Boolean algebra for reachability
 bool_alg = boolean_algebra(mode="logic")
 
 # Adjacency matrix: edge from i to j
-adj = AlgebraicArray(jnp.array([
+adj = alge.array([
     [False, True,  False],
     [False, False, True],
     [True,  False, False]
-]), bool_alg)
+], bool_alg)
 
 # Matrix multiplication computes 2-step reachability
 reach_2 = adj @ adj
@@ -122,7 +136,7 @@ for _ in range(3):
 ### Smooth Boolean Operations for Learning
 
 ```python
-from algebraic import AlgebraicArray
+import algebraic.numpy as alge
 from algebraic.semirings import boolean_algebra
 
 # Differentiable boolean operations for neural networks
@@ -130,8 +144,8 @@ smooth_bool = boolean_algebra(mode="smooth", temperature=10.0)
 soft_bool = boolean_algebra(mode="soft")
 
 # Example: Soft logical operations on continuous values
-x = AlgebraicArray(jnp.array([0.9, 0.8, 0.1]), soft_bool)
-y = AlgebraicArray(jnp.array([0.7, 0.3, 0.2]), soft_bool)
+x = alge.array([0.9, 0.8, 0.1], soft_bool)
+y = alge.array([0.7, 0.3, 0.2], soft_bool)
 
 # Soft AND: element-wise multiplication
 z_and = x * y  # [0.63, 0.24, 0.02]
@@ -142,20 +156,23 @@ z_or = x + y  # [0.97, 0.86, 0.28]
 
 ### JAX Transformations
 
-`AlgebraicArray` works seamlessly with JAX's transformation system. **Important**: Use `quax.quaxify` to wrap any JAX transformation (like `jit`, `vmap`, `grad`) when `AlgebraicArray` crosses JIT boundaries. This ensures that custom array types are properly handled during tracing and compilation.
+`AlgebraicArray` works seamlessly with JAX's transformation system.
+
+**Recommended**:
+Use the wrapped transformations from `algebraic` instead of manually using
+`quax.quaxify`:
 
 ```python
 import jax
-import jax.numpy as jnp
-import quax
-from algebraic import AlgebraicArray
+import jax.numpy as jnp  # For jnp.inf
+import algebraic.numpy as alge
+from algebraic import jit, vmap  # Use these instead of jax.jit/jax.vmap with quax.quaxify
 from algebraic.semirings import tropical_semiring, boolean_algebra
 
 tropical = tropical_semiring(minplus=True)
 
-# JIT compilation - wrap with quax.quaxify
-@quax.quaxify
-@jax.jit
+# JIT compilation - use algebraic.jit
+@jit
 def shortest_paths(dist_matrix):
     """Compute all-pairs shortest paths using tropical matrix multiplication."""
     n = dist_matrix.shape[0]
@@ -164,14 +181,15 @@ def shortest_paths(dist_matrix):
         result = result @ dist_matrix
     return result
 
-D = AlgebraicArray(jnp.array([[0., 1., jnp.inf],
-                                [jnp.inf, 0., 1.],
-                                [1., jnp.inf, 0.]]), tropical)
+D = alge.array([[0., 1., jnp.inf],
+                [jnp.inf, 0., 1.],
+                [1., jnp.inf, 0.]], tropical)
 shortest = shortest_paths(D)
 
-# Vectorization with vmap - works with batched AlgebraicArray!
+# Vectorization with vmap - use algebraic.vmap
 bool_alg = boolean_algebra(mode="soft")
 
+@vmap
 def process_graph(adj):
     """Process a single graph with AlgebraicArray."""
     result = adj
@@ -180,27 +198,33 @@ def process_graph(adj):
     return result
 
 # Create batched AlgebraicArray (shape: [batch, rows, cols])
-batch_adj = AlgebraicArray(jnp.array([
+batch_adj = alge.array([
     [[0.0, 1.0], [1.0, 0.0]],
     [[1.0, 0.0], [0.0, 1.0]]
-]), bool_alg)
+], bool_alg)
 
-# vmap over batch dimension using quax.quaxify
-batch_reach = quax.quaxify(jax.vmap(process_graph))(batch_adj)
+# vmap over batch dimension
+batch_reach = process_graph(batch_adj)
 
 # Automatic differentiation (with differentiable modes)
 smooth_bool = boolean_algebra(mode="smooth", temperature=10.0)
 
-@quax.quaxify
 @jax.grad
 def loss_fn(x):
     """Example: compute gradient of a soft boolean expression."""
-    result = (x * x).sum()  # Soft AND reduction
-    return result.data if isinstance(x, AlgebraicArray) else result
+    result = alge.sum(x * x)  # Soft AND reduction
+    # Extract underlying data for gradient computation
+    from algebraic import AlgebraicArray
+    return result.data if isinstance(result, AlgebraicArray) else result
 
-x = AlgebraicArray(jnp.array([0.9, 0.8, 0.7]), smooth_bool)
+x = alge.array([0.9, 0.8, 0.7], smooth_bool)
 gradient = loss_fn(x)
 ```
+
+**Note**:
+For operations on `AlgebraicArray` that need to be JIT-compiled or vectorized,
+use `from algebraic import jit, vmap` instead of `jax.jit` and `jax.vmap`.
+These wrappers automatically handle the `quax.quaxify` integration for you.
 
 ### Advanced Features
 
@@ -210,12 +234,11 @@ gradient = loss_fn(x)
 operations:
 
 ```python
-import jax.numpy as jnp
-from algebraic import AlgebraicArray
+import algebraic.numpy as alge
 from algebraic.semirings import tropical_semiring
 
 tropical = tropical_semiring(minplus=True)
-arr = AlgebraicArray(jnp.array([1.0, 2.0, 3.0, 4.0]), tropical)
+arr = alge.array([1.0, 2.0, 3.0, 4.0], tropical)
 
 # Functional updates (returns new array)
 new_arr = arr.at[1].set(0.5)  # Set index 1 to 0.5
