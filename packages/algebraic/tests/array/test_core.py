@@ -1,9 +1,11 @@
 """Tests for AlgebraicArray core functionality, especially dot_general_p overload."""
 
+import algebraic.numpy as anp
 import jax.numpy as jnp
 import pytest
 import quax
-from algebraic.array.core import AlgebraicArray, ones, zeros
+from algebraic.array import AlgebraicArray
+from algebraic.numpy import ones, zeros
 from algebraic.semirings import boolean_algebra, counting_semiring, tropical_semiring
 from algebraic.spec import Ring, Shape
 from jaxtyping import Array, Shaped
@@ -42,7 +44,7 @@ class TestDotGeneralWithJNP:
         b = AlgebraicArray(b_data, semiring)
 
         # Compute using jnp.vdot (should use our dot_general_p overload)
-        result = quax.quaxify(jnp.vdot)(a, b)  # type: ignore[arg-type]
+        result = anp.vdot(a, b)
 
         # Expected: 1*4 + 2*5 + 3*6 = 4 + 10 + 18 = 32
         expected = jnp.asarray(32.0)
@@ -62,7 +64,7 @@ class TestDotGeneralWithJNP:
         b = AlgebraicArray(b_data, semiring)
 
         # Compute using jnp.vdot
-        result = quax.quaxify(jnp.vdot)(a, b)  # type: ignore[arg-type]
+        result = anp.vdot(a, b)
 
         # Expected: max(1+4, 2+5, 3+6) = max(5, 7, 9) = 9
         expected = jnp.asarray(9.0)
@@ -82,7 +84,7 @@ class TestDotGeneralWithJNP:
         b = AlgebraicArray(b_data, semiring)
 
         # Compute using jnp.matmul
-        result = quax.quaxify(jnp.matmul)(a, b)  # type: ignore[arg-type]
+        result = anp.matmul(a, b)
 
         # Expected standard matrix multiplication
         expected = jnp.matmul(a_data, b_data)
@@ -102,7 +104,7 @@ class TestDotGeneralWithJNP:
         b = AlgebraicArray(b_data, semiring)
 
         # Compute using jnp.matmul
-        result = quax.quaxify(jnp.matmul)(a, b)  # type: ignore[arg-type]
+        result = anp.matmul(a, b)
 
         # Expected: result[i,j] = max(a[i,k] + b[k,j] for all k)
         # result[0,0] = max(1+5, 2+7) = max(6, 9) = 9
@@ -154,7 +156,7 @@ class TestDotGeneralWithJNP:
         b = AlgebraicArray(b_data, semiring)
 
         # Compute using jnp.tensordot (contract last axis of a with first axis of b)
-        result = quax.quaxify(jnp.tensordot)(a, b, axes=1)  # type: ignore[arg-type]
+        result = anp.tensordot(a, b, axes=1)
 
         # Expected standard tensordot
         expected = jnp.tensordot(a_data, b_data, axes=1)
@@ -175,7 +177,7 @@ class TestDotGeneralWithJNP:
         b = AlgebraicArray(b_data, semiring)
 
         # Compute using jnp.tensordot
-        result = quax.quaxify(jnp.tensordot)(a, b, axes=1)  # type: ignore[arg-type]
+        result = anp.tensordot(a, b, axes=1)
 
         # Expected: same as matmul for 2D case with axes=1
         # result[i,j] = max(a[i,k] + b[k,j] for all k)
@@ -196,7 +198,7 @@ class TestDotGeneralWithJNP:
         b = AlgebraicArray(b_data, semiring)
 
         # Contract axes [2, 1] of a with axes [0, 1] of b
-        result = quax.quaxify(jnp.tensordot)(a, b, axes=([2, 1], [0, 1]))  # type: ignore[arg-type]
+        result = anp.tensordot(a, b, axes=([2, 1], [0, 1]))
 
         # Expected
         expected = jnp.tensordot(a_data, b_data, axes=([2, 1], [0, 1]))
@@ -216,7 +218,7 @@ class TestDotGeneralWithJNP:
         b = AlgebraicArray(b_data, semiring)
 
         # Matrix multiplication using einsum
-        result = quax.quaxify(jnp.einsum)("ij,jk->ik", a, b)
+        result = anp.einsum("ij,jk->ik", a, b)
 
         expected = jnp.matmul(a_data, b_data)
 
@@ -231,7 +233,7 @@ class TestDotGeneralWithJNP:
         a = AlgebraicArray(a_data, semiring)
 
         # Trace: sum of diagonal elements
-        result = quax.quaxify(jnp.einsum)("ii->", a)
+        result = anp.einsum("ii->", a)
 
         # Expected: 1 + 5 + 9 = 15
         expected = jnp.asarray(15.0)
@@ -250,7 +252,7 @@ class TestDotGeneralWithJNP:
         b = AlgebraicArray(b_data, semiring)
 
         # Outer product
-        result = quax.quaxify(jnp.einsum)("i,j->ij", a, b)
+        result = anp.einsum("i,j->ij", a, b)
 
         expected = jnp.outer(a_data, b_data)
 
@@ -268,7 +270,7 @@ class TestDotGeneralWithJNP:
         b = AlgebraicArray(b_data, semiring)
 
         # Matrix multiplication using einsum
-        result = quax.quaxify(jnp.einsum)("ij,jk->ik", a, b)
+        result = anp.einsum("ij,jk->ik", a, b)
 
         # Expected: max-plus matrix multiplication
         expected = jnp.array([[9.0, 10.0], [11.0, 12.0]])
@@ -286,7 +288,7 @@ class TestDotGeneralWithJNP:
 
         # Should raise ValueError
         with pytest.raises(ValueError, match="different semirings"):
-            quax.quaxify(jnp.vdot)(a, b)  # type: ignore[arg-type]
+            anp.vdot(a, b)
 
     def test_batched_matmul(self) -> None:
         """Test batched matrix multiplication."""
@@ -300,7 +302,7 @@ class TestDotGeneralWithJNP:
         b = AlgebraicArray(b_data, semiring)
 
         # Batched matmul
-        result = quax.quaxify(jnp.einsum)("bij,bjk->bik", a, b)
+        result = anp.einsum("bij,bjk->bik", a, b)
 
         # Expected
         expected = jnp.einsum("bij,bjk->bik", a_data, b_data)
@@ -430,7 +432,7 @@ class TestCumulativeOperations:
         semiring = counting_semiring()
         a = AlgebraicArray(jnp.array([1.0, 2.0, 3.0, 4.0]), semiring)
 
-        result = quax.quaxify(jnp.cumsum)(a)
+        result = anp.cumsum(a)
 
         # Expected: [1, 1+2, 1+2+3, 1+2+3+4] = [1, 3, 6, 10]
         assert isinstance(result, AlgebraicArray)
@@ -441,7 +443,7 @@ class TestCumulativeOperations:
         semiring = tropical_semiring(minplus=False)
         a = AlgebraicArray(jnp.array([1.0, 5.0, 3.0, 7.0]), semiring)
 
-        result = quax.quaxify(jnp.cumsum)(a)
+        result = anp.cumsum(a)
 
         # Tropical addition is max, so cumsum becomes cumulative max
         # Expected: [1, max(1,5), max(1,5,3), max(1,5,3,7)] = [1, 5, 5, 7]
@@ -453,7 +455,7 @@ class TestCumulativeOperations:
         semiring = counting_semiring()
         a = AlgebraicArray(jnp.array([1.0, 2.0, 3.0, 4.0]), semiring)
 
-        result = quax.quaxify(jnp.cumprod)(a)
+        result = anp.cumprod(a)
 
         # Expected: [1, 1*2, 1*2*3, 1*2*3*4] = [1, 2, 6, 24]
         assert isinstance(result, AlgebraicArray)
@@ -464,7 +466,7 @@ class TestCumulativeOperations:
         semiring = tropical_semiring(minplus=False)
         a = AlgebraicArray(jnp.array([1.0, 5.0, 3.0, 7.0]), semiring)
 
-        result = quax.quaxify(jnp.cumprod)(a)
+        result = anp.cumprod(a)
 
         # Tropical multiplication is addition, so cumprod becomes cumulative sum
         # Expected: [1, 1+5, 1+5+3, 1+5+3+7] = [1, 6, 9, 16]

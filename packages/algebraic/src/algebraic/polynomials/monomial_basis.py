@@ -4,23 +4,23 @@
 from __future__ import annotations
 
 import dataclasses
-import operator
 import typing
 from collections.abc import Mapping
 
 import equinox as eqx
 import jax.numpy as jnp
-import quax
 from bitarray import frozenbitarray
 from jaxtyping import Array, ArrayLike, Scalar, Shaped
 
-import algebraic.array.core as alge
+import algebraic.numpy as alge
 import algebraic.polynomials.sparse as sparse_poly
-from algebraic.array.core import AlgebraicArray
+from algebraic.array import AlgebraicArray
 from algebraic.spec import BoundedDistributiveLattice as Lattice
 
+K = typing.TypeVar("K", bound=Lattice)
 
-class MonomialBasis[K: Lattice](eqx.Module):
+
+class MonomialBasis(eqx.Module, typing.Generic[K]):
     """Dense, monomial basis decomposition of a multilinear polynomial
 
     This class represents the coefficients of a multilinear polynomial as a tensor of
@@ -48,13 +48,13 @@ class MonomialBasis[K: Lattice](eqx.Module):
             raise TypeError("Multilinear polynomial representation is only supported over BoundedDistributiveLattice algebras")
 
     @staticmethod
-    def variable(index: int, num_vars: int, algebra: K) -> MonomialBasis:
-        idx = jnp.zeros(num_vars, dtype=jnp.int32).at[index].set(1)
+    def variable(index: int, num_vars: int, algebra: K) -> MonomialBasis[K]:
+        idx = tuple(1 if i == index else 0 for i in range(num_vars))
         coeffs = alge.zeros((2,) * num_vars, algebra).at[*idx].set(algebra.one)
         return MonomialBasis(coeffs)
 
     @staticmethod
-    def constant(value: Scalar, num_vars: int, algebra: K) -> MonomialBasis:
+    def constant(value: Scalar, num_vars: int, algebra: K) -> MonomialBasis[K]:
         idx = (0,) * num_vars
         coeffs = alge.zeros((2,) * num_vars, algebra).at[idx].set(value)
         return MonomialBasis(coeffs)
@@ -79,9 +79,9 @@ class MonomialBasis[K: Lattice](eqx.Module):
     def __add__(self, other: MonomialBasis[K] | Scalar) -> MonomialBasis[K]:
         """Add two polynomials by adding the monomial coefficients for identical terms."""
         if jnp.isscalar(other):
-            other = MonomialBasis(AlgebraicArray(other, self.algebra))  # type: ignore[arg-type, assignment]
+            other = MonomialBasis(AlgebraicArray(other, self.algebra))  # type: ignore[arg-type]
         assert isinstance(other, MonomialBasis)
-        coeffs = quax.quaxify(operator.add)(self.coeffs, other.coeffs)
+        coeffs = self.coeffs + other.coeffs
         return MonomialBasis[K](coeffs)
 
     def __mul__(self, other: MonomialBasis[K] | Scalar) -> MonomialBasis[K]:
@@ -91,7 +91,7 @@ class MonomialBasis[K: Lattice](eqx.Module):
 
         """
         if jnp.isscalar(other):
-            other = MonomialBasis(AlgebraicArray(other, self.algebra))  # type: ignore[arg-type, assignment]
+            other = MonomialBasis(AlgebraicArray(other, self.algebra))  # type: ignore[arg-type]
         assert isinstance(other, MonomialBasis)
         # Check if either is scalar: easy case
         if self.num_vars == 0 or other.num_vars == 0:
@@ -134,7 +134,7 @@ class MonomialBasis[K: Lattice](eqx.Module):
         #         result_with_new_coeffs = result_coeffs.at[result_bits].set(new_coeff.data)
         #         result_with_new_coeffs = set_at(result_coeffs, result_bits, new_coeff)
         #         # don't add new_coeff if it is bottom
-        #         result_coeffs = quax.quaxify(jnp.select)([is_bottom, ~is_bottom], [result_coeffs, result_with_new_coeffs])  # type: ignore[arg-type]
+        #         result_coeffs = alge.select([is_bottom, ~is_bottom], [result_coeffs, result_with_new_coeffs])
 
         # """
         # This implementation performs the OR-convolution dimension by dimension.
@@ -171,9 +171,8 @@ class MonomialBasis[K: Lattice](eqx.Module):
         # a_shape = result_shape + tuple([1] * n)
         # b_shape = tuple([1] * n) + result_shape
 
-        # jnp_reshape = quax.quaxify(jnp.reshape)
-        # a_expanded = jnp_reshape(self.coeffs, a_shape)  # type: ignore[invalid-argument-type]
-        # b_expanded = jnp_reshape(other.coeffs, b_shape)  # type: ignore[invalid-argument-type]
+        # a_expanded = alge.reshape(self.coeffs, a_shape)
+        # b_expanded = alge.reshape(other.coeffs, b_shape)
 
         # # Outer product: shape (2,2,...,2, 2,2,...,2) with 2n dimensions
         # outer = a_expanded * b_expanded
@@ -216,7 +215,7 @@ class MonomialBasis[K: Lattice](eqx.Module):
 
         #     assert isinstance(c0, AlgebraicArray)
         #     assert isinstance(c1, AlgebraicArray)
-        #     result_coeffs = quax.quaxify(jnp.stack)([c0, c1], axis=axis_idx)
+        #     result_coeffs = alge.stack([c0, c1], axis=axis_idx)
         #     assert isinstance(result_coeffs, AlgebraicArray)
 
         return MonomialBasis(result_coeffs)
@@ -239,8 +238,8 @@ class MonomialBasis[K: Lattice](eqx.Module):
     @eqx.filter_jit
     def compose(
         self,
-        replacements: Mapping[int, MonomialBasis | Scalar],
-    ) -> MonomialBasis:
+        replacements: Mapping[int, MonomialBasis[K] | Scalar],
+    ) -> MonomialBasis[K]:
         """Compose polynomial with multiple substitutions.
 
         Returns p(x_1 <- q_1, ..., x_n <- q_n) where only specified indices are replaced.
@@ -269,8 +268,8 @@ class MonomialBasis[K: Lattice](eqx.Module):
             coeffs = poly.coeffs
             var_idx = repl_keys[at]
             # Extract slices of shape: (2,) * (n-1)
-            p_xi_0 = quax.quaxify(jnp.take)(coeffs, 0, axis=var_idx)  # type: ignore[arg-type]
-            p_xi_1 = quax.quaxify(jnp.take)(coeffs, 1, axis=var_idx)  # type: ignore[arg-type]
+            p_xi_0 = alge.take(coeffs, 0, axis=var_idx)
+            p_xi_1 = alge.take(coeffs, 1, axis=var_idx)
             assert isinstance(p_xi_0, AlgebraicArray), f"{type(p_xi_0)=}"
             assert isinstance(p_xi_1, AlgebraicArray), f"{type(p_xi_1)=}"
 
@@ -304,35 +303,28 @@ class MonomialBasis[K: Lattice](eqx.Module):
 
     def _lift_tensor(self, tensor: AlgebraicArray[K], insert_axis: int) -> AlgebraicArray[K]:
         """Lift (n-1)-dim tensor to n-dim by inserting axis."""
-        jnp_expand_dims = quax.quaxify(jnp.expand_dims)
-        jnp_pad = quax.quaxify(jnp.pad)
         # Insert axis at position insert_axis
-        expanded = jnp_expand_dims(tensor, axis=insert_axis)  # type: ignore[arg-type]
+        expanded = alge.expand_dims(tensor, axis=insert_axis)
         # assert isinstance(expanded, AlgebraicArray)
 
         # Pad along new axis to get shape (2,) * target_ndim
         padding = [(0, 0)] * self.num_vars
         padding[insert_axis] = (0, 1)
 
-        return jnp_pad(expanded, padding, constant_values=self.algebra.zero)  # type: ignore[return-value]
+        return alge.pad(expanded, padding, constant_values=self.algebra.zero)
 
     def to_sparse(self) -> sparse_poly.SparsePolynomial[K]:
         from itertools import product
 
-        allclose = quax.quaxify(jnp.allclose)
-
-        result = {}
+        result: dict[frozenbitarray, Scalar] = dict()
         # Enumerate all 2^n possible indices
         for idx in product([0, 1], repeat=self.num_vars):
             coeff = self.coeffs[idx]
-            # Unwrap AlgebraicArray to get the raw JAX array
-            coeff_data = coeff.data
-            while isinstance(coeff_data, AlgebraicArray):
-                coeff_data = coeff_data.data
+            assert coeff.shape == ()
             # Only include non-zero coefficients
-            if not allclose(coeff_data, self.algebra.zero):
+            if not alge.allclose(coeff, self.algebra.zero, rtol=1e-5):
                 monomial = frozenbitarray(idx)
-                result[monomial] = coeff_data  # Store the raw JAX array
+                result[monomial] = coeff.data  # Store the raw JAX array
 
         return sparse_poly.SparsePolynomial(self.algebra, self.num_vars, result)
 
@@ -346,9 +338,9 @@ class MonomialBasis[K: Lattice](eqx.Module):
         return MonomialBasis(coeffs)
 
 
-def _multiply_recursive[K: Lattice](
-    lhs: Shaped[AlgebraicArray, "*2"], rhs: Shaped[AlgebraicArray, "*2"]
-) -> Shaped[AlgebraicArray, "*2"]:
+def _multiply_recursive(
+    lhs: Shaped[AlgebraicArray[K], "*2"], rhs: Shaped[AlgebraicArray[K], "*2"]
+) -> Shaped[AlgebraicArray[K], "*2"]:
     """A recursive function to compute the Horner's expansion multiplication."""
     assert lhs.shape == rhs.shape
     assert eqx.tree_equal(lhs.semiring, rhs.semiring)
@@ -356,7 +348,6 @@ def _multiply_recursive[K: Lattice](
     n = len(lhs.shape)
     return_shape = lhs.shape
 
-    stack = quax.quaxify(jnp.stack)
     expected_shape_post_idx = (2,) * (n - 1)
 
     # We want to split the lhs and rhs into the cofactors of the variable at the given level
@@ -380,6 +371,6 @@ def _multiply_recursive[K: Lattice](
         ret_1 = _multiply_recursive(lhs_0, rhs_1) + _multiply_recursive(lhs_1, rhs_0) + _multiply_recursive(lhs_1, rhs_1)
     assert ret_0.shape == ret_1.shape == expected_shape_post_idx
     # Put it back together
-    ret: AlgebraicArray[K] = stack([ret_0, ret_1], axis=0)  # type: ignore[arg-type]
+    ret: AlgebraicArray[K] = alge.stack([ret_0, ret_1], axis=0)
     assert ret.shape == return_shape
     return ret

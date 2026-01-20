@@ -1,4 +1,5 @@
 """Sparse polynomial representation using dictionary-based storage."""
+# mypy: disable-error-code="misc"
 
 from __future__ import annotations
 
@@ -17,9 +18,10 @@ from typing_extensions import override
 from algebraic.spec import BoundedDistributiveLattice as Lattice
 
 type S = Array | ScalarLike
+K = typing.TypeVar("K", bound=Lattice)
 
 
-class SparsePolynomial[K: Lattice](eqx.Module, Mapping[frozenbitarray, Array | Scalar]):
+class SparsePolynomial(eqx.Module, Mapping[frozenbitarray, Array | Scalar], typing.Generic[K]):
     """Sparse polynomial represented as monomial -> coefficient mapping."""
 
     algebra: K

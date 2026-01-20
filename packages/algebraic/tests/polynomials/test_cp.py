@@ -1,8 +1,10 @@
 """Tests for RankDecomposition polynomial implementation against SparsePolynomial baseline."""
 # ruff: noqa: ANN201, ANN001
+# mypy: disable-error-code="no-untyped-call,no-untyped-def,import-not-found"
 
 from __future__ import annotations
 
+import algebraic.numpy as alge
 import equinox as eqx
 import hypothesis
 import jax
@@ -17,8 +19,6 @@ from bitarray import frozenbitarray
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from jaxtyping import Array, Shaped
-
-allclose = quax.quaxify(jnp.allclose)
 
 
 class TestRankDecompositionConversion:
@@ -136,7 +136,7 @@ class TestRankDecompositionAddition:
 
         assert set(result_sparse.keys()) == set(sparse_repr.keys())
         for monom in result_sparse.keys():
-            if not allclose(result_sparse[monom], sparse_repr[monom]):
+            if not alge.allclose(result_sparse[monom], sparse_repr[monom]):
                 raise AssertionError(f"{result_sparse[monom]=} != {sparse_repr[monom]=} at {monom}")
 
 
@@ -278,7 +278,7 @@ class TestRankDecompositionMultiplication:
         rank_value = result_rank.factors[0, 0, 0]
         assert isinstance(rank_value, AlgebraicArray)
 
-        assert allclose(sparse_value, rank_value, rtol=1e-5)
+        assert alge.allclose(sparse_value, rank_value, rtol=1e-5)
 
 
 class TestRankDecompositionEvaluation:
@@ -456,7 +456,7 @@ class TestRankDecompositionJAXTransformations:
         # Create JIT-compiled evaluation function
         @jax.jit
         def eval_fn(point: Shaped[Array, "2"]) -> RankDecomposition[BooleanAlgebra]:
-            return rank_alg.evaluate(p, point)
+            return RankDecomposition.evaluate(p, point)
 
         result = eval_fn(jnp.array([2.0, 3.0]))
         # In max-min: mul is min, so min(2.0, 3.0) = 2.0
@@ -485,8 +485,8 @@ class TestRankDecompositionJAXTransformations:
         p = rank_alg.mul(x_0, x_1)  # In tropical max-plus: x_0 + x_1
 
         # Create JIT-compiled evaluation function
-        def fn(x: Shaped[Array, "2"]) -> RankDecomposition[BooleanAlgebra]:
-            return rank_alg.evaluate(p, x).factors[0, 0, 0].data
+        def fn(x: Shaped[Array, "2"]) -> Array:
+            return RankDecomposition.evaluate(p, x).factors[0, 0, 0].data
 
         # Compute gradient
         grad_fn = eqx.filter_grad(fn)

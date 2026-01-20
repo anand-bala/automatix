@@ -1,15 +1,16 @@
 """Tests for MonomialBasis representation against SparsePolynomial baseline."""
 
-# ruff: noqa: ANN201, ANN001
+# ruff: noqa: ANN001
 # mypy: disable-error-code="no-untyped-call,no-untyped-def,import-not-found"
 
 from __future__ import annotations
 
+import algebraic.numpy as alge
 import hypothesis
 import jax.numpy as jnp
 import pytest
 import quax
-from algebraic import AlgebraicArray
+from algebraic import AlgebraicArray, BooleanAlgebra, DeMorganAlgebra
 from algebraic.polynomials.monomial_basis import MonomialBasis
 from algebraic.polynomials.sparse import SparsePolynomial
 from bitarray import frozenbitarray
@@ -17,72 +18,64 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from jaxtyping import Array
 
-allclose = quax.quaxify(jnp.allclose)
-
 
 class TestMonomialBasisConversion:
     """Test conversion between sparse and monomial basis representations."""
 
-    def test_from_sparse_constant(self, sparse_helper, monomial_helper, bool_algebra):
+    def test_from_sparse_constant(self, bool_algebra: BooleanAlgebra) -> None:
         """Test converting constant from sparse to monomial basis."""
-        sparse_alg = sparse_helper(bool_algebra, 3)
-        monomial_alg = monomial_helper(bool_algebra, 3)
-
         # Create constant in sparse form
-        p_sparse = sparse_alg.constant(jnp.array(True))
+        p_sparse = SparsePolynomial.constant(jnp.array(True), 3, bool_algebra)
 
         # Convert to monomial basis
-        p_monomial = monomial_alg.from_sparse(p_sparse)
+        p_monomial = MonomialBasis.from_sparse(p_sparse)
 
         # Check shape
         assert p_monomial.shape == (2, 2, 2)
 
         # Check that constant term is correct (use quaxified array_equal)
-        array_equal = quax.quaxify(jnp.array_equal)
-        assert array_equal(p_monomial.coeffs[0, 0, 0].data, jnp.array(True))
+        assert alge.array_equal(p_monomial.coeffs[0, 0, 0].data, jnp.array(True))
 
-    def test_from_sparse_variable(self, sparse_helper, monomial_helper, bool_algebra):
+    def test_from_sparse_variable(self, bool_algebra: BooleanAlgebra) -> None:
         """Test converting variable from sparse to monomial basis."""
-        sparse_alg = sparse_helper(bool_algebra, 3)
-        monomial_alg = monomial_helper(bool_algebra, 3)
+        num_vars = 3
 
         # Create variable in sparse form
-        x_0 = sparse_alg.variable(0)
+        x_0 = SparsePolynomial.variable(0, num_vars, bool_algebra)
 
         # Convert to monomial basis
-        x_0_monomial = monomial_alg.from_sparse(x_0)
+        x_0_monomial = MonomialBasis.from_sparse(x_0)
 
         # Check that variable term is correct
-        array_equal = quax.quaxify(jnp.array_equal)
-        assert array_equal(x_0_monomial.coeffs[1, 0, 0], jnp.array(True))
+        assert alge.array_equal(x_0_monomial.coeffs[1, 0, 0], jnp.array(True))
 
-    def test_to_sparse_from_monomial(self, monomial_helper, bool_algebra):
+    def test_to_sparse_from_monomial(self, bool_algebra: BooleanAlgebra) -> None:
         """Test converting monomial basis back to sparse."""
-        monomial_alg = monomial_helper(bool_algebra, 2)
+        num_vars = 2
 
         # Create variable x_0
-        x_0 = monomial_alg.variable(0)
-
+        x_0 = MonomialBasis.variable(0, num_vars, bool_algebra)
         # Convert to sparse
-        x_0_sparse = monomial_alg.to_sparse(x_0)
+        x_0_sparse = MonomialBasis.to_sparse(x_0)
 
         # Check that we have the right monomial
         assert len(x_0_sparse) == 1
         assert frozenbitarray("10") in x_0_sparse
 
-    def test_round_trip_conversion(self, sparse_helper, monomial_helper, bool_algebra):
+    def test_round_trip_conversion(self, bool_algebra: BooleanAlgebra) -> None:
         """Test sparse -> monomial -> sparse preserves polynomial."""
-        sparse_alg = sparse_helper(bool_algebra, 2)
-        monomial_alg = monomial_helper(bool_algebra, 2)
+        num_vars = 2
+        # SparsePolynomial = sparse_helper(bool_algebra, 2)
+        # MonomialBasis = monomial_helper(bool_algebra, 2)
 
         # Create polynomial x_0 + x_1
-        x_0 = sparse_alg.variable(0)
-        x_1 = sparse_alg.variable(1)
-        p_sparse = sparse_alg.add(x_0, x_1)
+        x_0 = SparsePolynomial.variable(0, num_vars, bool_algebra)
+        x_1 = SparsePolynomial.variable(1, num_vars, bool_algebra)
+        p_sparse = x_0 + x_1
 
         # Convert to monomial and back
-        p_monomial = monomial_alg.from_sparse(p_sparse)
-        p_back = monomial_alg.to_sparse(p_monomial)
+        p_monomial = MonomialBasis.from_sparse(p_sparse)
+        p_back = MonomialBasis.to_sparse(p_monomial)
 
         # Check we have the same monomials
         assert p_sparse.keys() == p_back.keys()
@@ -93,53 +86,58 @@ class TestMonomialBasisConversion:
 class TestMonomialBasisAddition:
     """Test that addition matches sparse representation."""
 
-    def test_add_variables(self, sparse_helper, monomial_helper, maxmin_algebra):
+    def test_add_variables(self, maxmin_algebra: DeMorganAlgebra) -> None:
         """Test adding two variables."""
-        sparse_alg = sparse_helper(maxmin_algebra, 3)
-        monomial_alg = monomial_helper(maxmin_algebra, 3)
+        num_vars = 3
+        algebra = maxmin_algebra
+        # SparsePolynomial = sparse_helper(maxmin_algebra, 3)
+        # MonomialBasis = monomial_helper(maxmin_algebra, 3)
 
         # Create in both representations
-        x_0_sparse = sparse_alg.variable(0)
-        x_1_sparse = sparse_alg.variable(1)
-        x_0_monomial = monomial_alg.from_sparse(x_0_sparse)
-        x_1_monomial = monomial_alg.from_sparse(x_1_sparse)
+        x_0_sparse = SparsePolynomial.variable(0, num_vars, algebra)
+        x_1_sparse = SparsePolynomial.variable(1, num_vars, algebra)
+        x_0_monomial = MonomialBasis.from_sparse(x_0_sparse)
+        x_1_monomial = MonomialBasis.from_sparse(x_1_sparse)
 
         # Add in both
-        sum_sparse = sparse_alg.add(x_0_sparse, x_1_sparse)
-        sum_monomial = monomial_alg.add(x_0_monomial, x_1_monomial)
+        sum_sparse = x_0_sparse + x_1_sparse
+        sum_monomial = x_0_monomial + x_1_monomial
 
         # Convert monomial result back to sparse
-        sum_monomial_as_sparse = monomial_alg.to_sparse(sum_monomial)
+        sum_monomial_as_sparse = MonomialBasis.to_sparse(sum_monomial)
 
         # Compare
         assert sum_sparse.keys() == sum_monomial_as_sparse.keys()
         for key in sum_sparse.keys():
-            assert allclose(sum_sparse[key], sum_monomial_as_sparse[key])
+            assert alge.allclose(sum_sparse[key], sum_monomial_as_sparse[key])
 
     # @pytest.mark.skip(reason="Too slow - hypothesis test disabled temporarily")
     @given(degree=st.integers(2, 3))
     @settings(max_examples=2, deadline=None, suppress_health_check=[hypothesis.HealthCheck.function_scoped_fixture])
-    def test_add_with_hypothesis(self, degree, sparse_helper, monomial_helper, maxmin_algebra):
+    def test_add_with_hypothesis(self, degree, maxmin_algebra) -> None:
         """Test addition with random polynomials using hypothesis."""
 
-        module = maxmin_algebra
-        sparse_alg = sparse_helper(module, degree)
-        monomial_alg = monomial_helper(module, degree)
+        num_vars = degree
+        algebra = maxmin_algebra
+        # SparsePolynomial = sparse_helper(module, degree)
+        # MonomialBasis = monomial_helper(module, degree)
 
         # Create two random simple polynomials
-        x_0 = sparse_alg.variable(0)
-        x_1 = sparse_alg.variable(1) if degree > 1 else sparse_alg.variable(0)
+        x_0 = SparsePolynomial.variable(0, num_vars, algebra)
+        x_1 = (
+            SparsePolynomial.variable(1, num_vars, algebra) if degree > 1 else SparsePolynomial.variable(0, num_vars, algebra)
+        )
 
-        p1_sparse = sparse_alg.add(x_0, sparse_alg.constant(jnp.array(2.0)))
-        p2_sparse = sparse_alg.add(x_1, sparse_alg.constant(jnp.array(3.0)))
+        p1_sparse = x_0 + SparsePolynomial.constant(jnp.array(2.0), num_vars, algebra)
+        p2_sparse = x_1 + SparsePolynomial.constant(jnp.array(3.0), num_vars, algebra)
 
         # Convert to monomial
-        p1_monomial = monomial_alg.from_sparse(p1_sparse)
-        p2_monomial = monomial_alg.from_sparse(p2_sparse)
+        p1_monomial = MonomialBasis.from_sparse(p1_sparse)
+        p2_monomial = MonomialBasis.from_sparse(p2_sparse)
 
         # Add in both representations
-        sum_sparse = sparse_alg.add(p1_sparse, p2_sparse)
-        sum_monomial = monomial_alg.add(p1_monomial, p2_monomial)
+        sum_sparse = p1_sparse + p2_sparse
+        sum_monomial = p1_monomial + p2_monomial
 
         # Test by evaluation at a random point
         import jax.random as jrandom
@@ -149,41 +147,43 @@ class TestMonomialBasisAddition:
         point_dict = {i: point[i] for i in range(degree)}
 
         # Evaluate sparse
-        result_sparse = sparse_alg.evaluate(sum_sparse, point_dict)
+        result_sparse = sum_sparse.evaluate(point_dict)
         assert isinstance(result_sparse, SparsePolynomial)
 
         # Evaluate monomial
-        result_monomial = monomial_alg.evaluate(sum_monomial, point)
+        result_monomial = MonomialBasis.evaluate(sum_monomial, point)
         assert isinstance(result_monomial, MonomialBasis)
         # Convert to sparse repr and check equality
-        sparse_repr = monomial_alg.to_sparse(result_monomial)
+        sparse_repr = MonomialBasis.to_sparse(result_monomial)
 
         assert set(result_sparse.keys()) == set(sparse_repr.keys())
         for monom in result_sparse.keys():
-            if not allclose(result_sparse[monom], sparse_repr[monom]):
+            if not alge.allclose(result_sparse[monom], sparse_repr[monom]):
                 raise AssertionError(f"{result_sparse[monom]=} != {sparse_repr[monom]=} at {monom}")
 
 
 class TestMonomialBasisMultiplication:
     """Test that multiplication matches sparse representation."""
 
-    def test_multiply_variables(self, sparse_helper, monomial_helper, bool_algebra):
+    def test_multiply_variables(self, bool_algebra: BooleanAlgebra) -> None:
         """Test multiplying two variables."""
-        sparse_alg = sparse_helper(bool_algebra, 2)
-        monomial_alg = monomial_helper(bool_algebra, 2)
+        num_vars = 2
+        algebra = bool_algebra
+        # SparsePolynomial = sparse_helper(bool_algebra, 2)
+        # MonomialBasis = monomial_helper(bool_algebra, 2)
 
         # Create in both representations
-        x_0_sparse = sparse_alg.variable(0)
-        x_1_sparse = sparse_alg.variable(1)
-        x_0_monomial = monomial_alg.from_sparse(x_0_sparse)
-        x_1_monomial = monomial_alg.from_sparse(x_1_sparse)
+        x_0_sparse = SparsePolynomial.variable(0, num_vars, algebra)
+        x_1_sparse = SparsePolynomial.variable(1, num_vars, algebra)
+        x_0_monomial = MonomialBasis.from_sparse(x_0_sparse)
+        x_1_monomial = MonomialBasis.from_sparse(x_1_sparse)
 
         # Multiply in both
-        prod_sparse = sparse_alg.mul(x_0_sparse, x_1_sparse)
-        prod_monomial = monomial_alg.mul(x_0_monomial, x_1_monomial)
+        prod_sparse = x_0_sparse * x_1_sparse
+        prod_monomial = x_0_monomial * x_1_monomial
 
         # Convert monomial result back to sparse
-        prod_monomial_as_sparse = monomial_alg.to_sparse(prod_monomial)
+        prod_monomial_as_sparse = MonomialBasis.to_sparse(prod_monomial)
 
         # Compare
         array_equal = quax.quaxify(jnp.array_equal)
@@ -191,56 +191,61 @@ class TestMonomialBasisMultiplication:
         for key in prod_sparse.keys():
             assert array_equal(prod_sparse[key], prod_monomial_as_sparse[key])
 
-    def test_multiply_with_constant(self, sparse_helper, monomial_helper, maxmin_algebra):
+    def test_multiply_with_constant(self, maxmin_algebra: DeMorganAlgebra) -> None:
         """Test multiplication with constant."""
-        sparse_alg = sparse_helper(maxmin_algebra, 2)
-        monomial_alg = monomial_helper(maxmin_algebra, 2)
+        num_vars = 2
+        algebra = maxmin_algebra
+        # SparsePolynomial = sparse_helper(maxmin_algebra, 2)
+        # MonomialBasis = monomial_helper(maxmin_algebra, 2)
 
         # Create variable and constant
-        x_0_sparse = sparse_alg.variable(0)
-        c_sparse = sparse_alg.constant(jnp.array(5.0))
+        x_0_sparse = SparsePolynomial.variable(0, num_vars, algebra)
+        c_sparse = SparsePolynomial.constant(jnp.array(5.0), num_vars, algebra)
 
-        x_0_monomial = monomial_alg.from_sparse(x_0_sparse)
-        c_monomial = monomial_alg.from_sparse(c_sparse)
+        x_0_monomial = MonomialBasis.from_sparse(x_0_sparse)
+        c_monomial = MonomialBasis.from_sparse(c_sparse)
 
         # Multiply
-        prod_sparse = sparse_alg.mul(x_0_sparse, c_sparse)
-        prod_monomial = monomial_alg.mul(x_0_monomial, c_monomial)
+        prod_sparse = x_0_sparse * c_sparse
+        prod_monomial = x_0_monomial * c_monomial
 
         # Compare by evaluation
         test_point = {0: jnp.array(3.0), 1: jnp.array(2.0)}
 
-        result_sparse = list(sparse_alg.evaluate(prod_sparse, test_point).values())[0]
+        result_sparse, *_ = prod_sparse.evaluate(test_point).values()
         _result_monomial = prod_monomial.coeffs[tuple([0] * 2)]  # Constant term after evaluation
 
         # Evaluate monomial at the test point
         point_array = jnp.array([3.0, 2.0])
-        result_monomial_eval = monomial_alg.evaluate(prod_monomial, point_array)
+        result_monomial_eval = MonomialBasis.evaluate(prod_monomial, point_array)
         result_monomial_val = result_monomial_eval.coeffs[0, 0].data
 
-        assert allclose(result_sparse, result_monomial_val)
+        assert alge.allclose(result_sparse, result_monomial_val)
 
     # @pytest.mark.skip(reason="Too slow - hypothesis test disabled temporarily")
     @given(degree=st.integers(2, 3))
     @settings(max_examples=2, deadline=None, suppress_health_check=[hypothesis.HealthCheck.function_scoped_fixture])
-    def test_multiply_with_hypothesis(self, degree, sparse_helper, monomial_helper, maxmin_algebra):
+    def test_multiply_with_hypothesis(self, degree: int, maxmin_algebra: DeMorganAlgebra) -> None:
         """Test multiplication with random polynomials."""
 
+        num_vars = degree
         algebra = maxmin_algebra
-        sparse_alg = sparse_helper(algebra, degree)
-        monomial_alg = monomial_helper(algebra, degree)
+        # SparsePolynomial = sparse_helper(algebra, degree)
+        # MonomialBasis = monomial_helper(algebra, degree)
 
         # Create two simple polynomials
-        x_0 = sparse_alg.variable(0)
-        x_1 = sparse_alg.variable(1) if degree > 1 else sparse_alg.variable(0)
+        x_0 = SparsePolynomial.variable(0, num_vars, algebra)
+        x_1 = (
+            SparsePolynomial.variable(1, num_vars, algebra) if degree > 1 else SparsePolynomial.variable(0, num_vars, algebra)
+        )
 
         # Convert to monomial
-        x_0_monomial = monomial_alg.from_sparse(x_0)
-        x_1_monomial = monomial_alg.from_sparse(x_1)
+        x_0_monomial = MonomialBasis.from_sparse(x_0)
+        x_1_monomial = MonomialBasis.from_sparse(x_1)
 
         # Multiply
-        prod_sparse = sparse_alg.mul(x_0, x_1)
-        prod_monomial = monomial_alg.mul(x_0_monomial, x_1_monomial)
+        prod_sparse = x_0 * x_1
+        prod_monomial = x_0_monomial * x_1_monomial
 
         # Test by evaluation
         import jax.random as jrandom
@@ -249,88 +254,90 @@ class TestMonomialBasisMultiplication:
         point = jrandom.uniform(key, shape=(degree,), minval=-5.0, maxval=5.0)
         point_dict = {i: point[i] for i in range(degree)}
 
-        result_sparse = sparse_alg.evaluate(prod_sparse, point_dict)
+        result_sparse = SparsePolynomial.evaluate(prod_sparse, point_dict)
         assert isinstance(result_sparse, SparsePolynomial)
         assert len(result_sparse) == 1
         assert list(result_sparse.keys())[0] == frozenbitarray(degree)
         sparse_value: Array = result_sparse[frozenbitarray(degree)]
         assert isinstance(sparse_value, Array)
 
-        result_monomial = monomial_alg.evaluate(prod_monomial, point)
+        result_monomial = MonomialBasis.evaluate(prod_monomial, point)
         assert isinstance(result_monomial, MonomialBasis)
         monomial_value = result_monomial.coeffs[tuple([0] * degree)]
         assert isinstance(monomial_value, AlgebraicArray)
 
-        assert allclose(sparse_value, monomial_value, rtol=1e-5)
+        assert alge.allclose(sparse_value, monomial_value, rtol=1e-5)
 
 
 class TestMonomialBasisEvaluation:
     """Test that evaluation matches sparse representation."""
 
-    def test_evaluate_variable(self, sparse_helper, monomial_helper, maxmin_algebra):
+    def test_evaluate_variable(self, maxmin_algebra: DeMorganAlgebra) -> None:
         """Test evaluating a variable."""
-        sparse_alg = sparse_helper(maxmin_algebra, 3)
-        monomial_alg = monomial_helper(maxmin_algebra, 3)
+        num_vars = 3
+        algebra = maxmin_algebra
+        # SparsePolynomial = sparse_helper(maxmin_algebra, 3)
+        # MonomialBasis = monomial_helper(maxmin_algebra, 3)
 
         # Create variable
-        x_0_sparse = sparse_alg.variable(0)
-        x_0_monomial = monomial_alg.from_sparse(x_0_sparse)
+        x_0_sparse = SparsePolynomial.variable(0, num_vars, algebra)
+        x_0_monomial = MonomialBasis.from_sparse(x_0_sparse)
 
         # Evaluate at a point
         point_dict = {0: jnp.array(2.0), 1: jnp.array(3.0), 2: jnp.array(4.0)}
         point_array = jnp.array([2.0, 3.0, 4.0])
 
-        result_sparse = list(sparse_alg.evaluate(x_0_sparse, point_dict).values())[0]
-        result_monomial = monomial_alg.evaluate(x_0_monomial, point_array)
+        result_sparse = list(SparsePolynomial.evaluate(x_0_sparse, point_dict).values())[0]
+        result_monomial = MonomialBasis.evaluate(x_0_monomial, point_array)
 
         # After evaluating all variables, we should have a constant
         monomial_value = result_monomial.coeffs[0, 0, 0].data
 
-        assert allclose(result_sparse, monomial_value)
+        assert alge.allclose(result_sparse, monomial_value)
 
-    def test_evaluate_product(self, sparse_helper, monomial_helper, maxmin_algebra):
+    def test_evaluate_product(self, maxmin_algebra: DeMorganAlgebra) -> None:
         """Test evaluating a product."""
-        sparse_alg = sparse_helper(maxmin_algebra, 2)
-        monomial_alg = monomial_helper(maxmin_algebra, 2)
+        num_vars = 2
+        algebra = maxmin_algebra
 
         # Create x_0 * x_1
-        x_0 = sparse_alg.variable(0)
-        x_1 = sparse_alg.variable(1)
-        p_sparse = sparse_alg.mul(x_0, x_1)
-        p_monomial = monomial_alg.from_sparse(p_sparse)
+        x_0 = SparsePolynomial.variable(0, num_vars, algebra)
+        x_1 = SparsePolynomial.variable(1, num_vars, algebra)
+        p_sparse = x_0 * x_1
+        p_monomial = MonomialBasis.from_sparse(p_sparse)
 
         # Evaluate
         point_dict = {0: jnp.array(2.0), 1: jnp.array(3.0)}
         point_array = jnp.array([2.0, 3.0])
 
-        result_sparse = list(sparse_alg.evaluate(p_sparse, point_dict).values())[0]
-        result_monomial = monomial_alg.evaluate(p_monomial, point_array)
+        result_sparse = list(SparsePolynomial.evaluate(p_sparse, point_dict).values())[0]
+        result_monomial = MonomialBasis.evaluate(p_monomial, point_array)
         monomial_value = result_monomial.coeffs[0, 0].data
 
-        assert allclose(result_sparse, monomial_value)
+        assert alge.allclose(result_sparse, monomial_value)
 
 
 class TestMonomialBasisCompose:
     """Test that composition matches sparse representation."""
 
-    def test_compose_simple(self, sparse_helper, monomial_helper, bool_algebra):
+    def test_compose_simple(self, bool_algebra: BooleanAlgebra) -> None:
         """Test simple composition."""
-        sparse_alg = sparse_helper(bool_algebra, 2)
-        monomial_alg = monomial_helper(bool_algebra, 2)
+        num_vars = 2
+        algebra = bool_algebra
 
         # Create x_0 and x_1
-        x_0_sparse = sparse_alg.variable(0)
-        x_1_sparse = sparse_alg.variable(1)
+        x_0_sparse = SparsePolynomial.variable(0, num_vars, algebra)
+        x_1_sparse = SparsePolynomial.variable(1, num_vars, algebra)
 
-        x_0_monomial = monomial_alg.from_sparse(x_0_sparse)
-        x_1_monomial = monomial_alg.from_sparse(x_1_sparse)
+        x_0_monomial = MonomialBasis.from_sparse(x_0_sparse)
+        x_1_monomial = MonomialBasis.from_sparse(x_1_sparse)
 
         # Compose x_0 with x_1 (replace x_0 with x_1)
-        result_sparse = sparse_alg.compose(x_0_sparse, {0: x_1_sparse})
-        result_monomial = monomial_alg.compose(x_0_monomial, {0: x_1_monomial})
+        result_sparse = SparsePolynomial.compose(x_0_sparse, {0: x_1_sparse})
+        result_monomial = MonomialBasis.compose(x_0_monomial, {0: x_1_monomial})
 
         # Convert monomial result to sparse
-        result_monomial_as_sparse = monomial_alg.to_sparse(result_monomial)
+        result_monomial_as_sparse = MonomialBasis.to_sparse(result_monomial)
 
         # Compare - filter out zero coefficients for comparison
         # (sparse representation may include explicit zeros)
@@ -348,24 +355,27 @@ class TestMonomialBasisCompose:
 class TestMonomialBasisEdgeCases:
     """Test edge cases for monomial basis."""
 
-    def test_zero_polynomial(self, monomial_helper, maxmin_algebra):
+    def test_zero_polynomial(self, maxmin_algebra: DeMorganAlgebra) -> None:
         """Test zero polynomial."""
-        monomial_alg = monomial_helper(maxmin_algebra, 2)
+        algebra = maxmin_algebra
+        num_vars = 2
 
-        zero = monomial_alg.constant(maxmin_algebra.zero)
+        zero = MonomialBasis.zero(num_vars, algebra)
 
         # In tropical max-plus, zero = -inf
         expected = jnp.full((2, 2), maxmin_algebra.zero)
-        assert allclose(zero.coeffs, expected)
+        assert alge.allclose(zero.coeffs, expected)
 
-    def test_large_degree(self, sparse_helper, monomial_helper, bool_algebra):
+    def test_large_degree(self, bool_algebra: BooleanAlgebra) -> None:
         """Test with larger degree (but still manageable)."""
+        num_vars = 6
+        algebra = bool_algebra
         # 2^6 = 64 entries, should be fine
-        sparse_alg = sparse_helper(bool_algebra, 6)
-        monomial_alg = monomial_helper(bool_algebra, 6)
+        # SparsePolynomial = sparse_helper(bool_algebra, 6)
+        # MonomialBasis = monomial_helper(bool_algebra, 6)
 
-        x_0 = sparse_alg.variable(0)
-        x_0_monomial = monomial_alg.from_sparse(x_0)
+        x_0 = SparsePolynomial.variable(0, num_vars, algebra)
+        x_0_monomial = MonomialBasis.from_sparse(x_0)
 
         assert x_0_monomial.shape == (2,) * 6
 

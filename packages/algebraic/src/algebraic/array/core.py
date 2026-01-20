@@ -1,4 +1,4 @@
-# mypy: disable-error-code="no-any-return,no-untyped-call"
+# mypy: disable-error-code="no-any-return,no-untyped-call,type-arg"
 from __future__ import annotations
 
 import dataclasses
@@ -14,23 +14,26 @@ import jax.extend.core
 import jax.lax as lax
 import jax.numpy as jnp
 import quax
-from jaxtyping import Array, ArrayLike, DTypeLike, Scalar, Shaped
-from typing_extensions import final, overload, override
+from jaxtyping import Array, ArrayLike, DTypeLike, Shaped
+from typing_extensions import final, override
 
-from algebraic.spec import MatmulFn, Semiring, Shape, VdotFn, has_complement, is_ring
+import algebraic.numpy as alge
+from algebraic.spec import MatmulFn, Semiring, VdotFn, has_complement, is_ring
 
 if TYPE_CHECKING:
     from ._index_update import _IndexUpdateHelper
 
+K = typing.TypeVar("K", bound=Semiring)
 
-def _as_array(data: Shaped[ArrayLike | AlgebraicArray, "*shape"]) -> Shaped[Array, "*shape"]:
+
+def _as_array(data: Shaped[ArrayLike | AlgebraicArray[K], "*shape"]) -> Shaped[Array, "*shape"]:
     if isinstance(data, AlgebraicArray):
         data = data.data
     return jnp.asarray(data)
 
 
 @final
-class AlgebraicArray[K: Semiring](quax.ArrayValue):
+class AlgebraicArray(quax.ArrayValue, typing.Generic[K]):
     """A multidimensional array with elements from a semiring.
 
 
@@ -81,7 +84,7 @@ class AlgebraicArray[K: Semiring](quax.ArrayValue):
         special semiring handling (like reshaping, indexing, broadcasting, etc.).
         """
         # Extract data from AlgebraicArray arguments
-        unwrapped_args: list[ArrayLike | AlgebraicArray] = []
+        unwrapped_args: list[ArrayLike | AlgebraicArray[K]] = []
         semiring: K | None = None
         for arg in values:
             if eqx.is_array_like(arg):
@@ -106,7 +109,7 @@ class AlgebraicArray[K: Semiring](quax.ArrayValue):
             if primitive.multiple_results:
                 # Primitive returns multiple values - wrap each array result
                 # TODO: verify if this is correct.
-                return [AlgebraicArray(r, semiring) if eqx.is_array_like(r) else r for r in result]
+                return [AlgebraicArray(r, semiring) if eqx.is_array(r) else r for r in result]
             elif eqx.is_array(result):
                 # Single result - wrap it
                 return AlgebraicArray(result, semiring)
@@ -114,22 +117,22 @@ class AlgebraicArray[K: Semiring](quax.ArrayValue):
         return result
 
     def __add__(self, other: AlgebraicArray[K]) -> AlgebraicArray[K]:
-        ret = quax.quaxify(jnp.add)(self, other)  # type: ignore[arg-type]
+        ret = alge.add(self, other)
         assert isinstance(ret, AlgebraicArray)
         return ret
 
     def sum(self, **kwargs: Any) -> AlgebraicArray[K]:  # noqa: ANN401
-        ret = quax.quaxify(jnp.sum)(self, **kwargs)  # type: ignore[arg-type]
+        ret = alge.sum(self, **kwargs)
         assert isinstance(ret, AlgebraicArray)
         return ret
 
     def __mul__(self, other: AlgebraicArray[K]) -> AlgebraicArray[K]:
-        ret = quax.quaxify(jnp.multiply)(self, other)  # type: ignore[arg-type]
+        ret = alge.multiply(self, other)
         assert isinstance(ret, AlgebraicArray)
         return ret
 
     def prod(self, **kwargs: Any) -> AlgebraicArray[K]:  # noqa: ANN401
-        ret = quax.quaxify(jnp.prod)(self, **kwargs)  # type: ignore[arg-type]
+        ret = alge.prod(self, **kwargs)
         assert isinstance(ret, AlgebraicArray)
         return ret
 
@@ -144,33 +147,7 @@ class AlgebraicArray[K: Semiring](quax.ArrayValue):
         return _IndexUpdateHelper(self)
 
     def __matmul__(self, other: AlgebraicArray[K]) -> AlgebraicArray[K]:
-        return quax.quaxify(jnp.matmul)(self, other)  # type: ignore[arg-type,return-value]
-
-    def item(self) -> Scalar:
-        """Return the scalar value in the array if and only if there is only 1 value"""
-        return self.data.item()
-
-
-@overload
-def zeros[K: Semiring](shape: int, dtype: K) -> Shaped[AlgebraicArray[K], " {shape}"]: ...
-@overload
-def zeros[K: Semiring](shape: tuple[int, ...], dtype: K) -> Shaped[AlgebraicArray[K], " {*shape}"]: ...
-
-
-def zeros[K: Semiring](shape: Shape, dtype: K) -> Shaped[AlgebraicArray[K], "*shape"]:
-    """Return an array of given shape filled with the additive identity (zero)"""
-    return AlgebraicArray(jnp.full(shape, dtype.zero), dtype)
-
-
-@overload
-def ones[K: Semiring](shape: int, dtype: K) -> Shaped[AlgebraicArray[K], " {shape}"]: ...
-@overload
-def ones[K: Semiring](shape: tuple[int, ...], dtype: K) -> Shaped[AlgebraicArray[K], " {*shape}"]: ...
-
-
-def ones[K: Semiring](shape: Shape, dtype: K) -> Shaped[AlgebraicArray[K], "*shape"]:
-    """Return an array of given shape filled with the additive identity (one)"""
-    return AlgebraicArray(jnp.full(shape, dtype.one), dtype)
+        return alge.matmul(self, other)
 
 
 @quax.register(lax.add_p)
@@ -205,15 +182,16 @@ def _(lhs: AlgebraicArray, rhs: AlgebraicArray) -> AlgebraicArray:
             f"lhs semiring: {lhs.semiring}, rhs semiring: {rhs.semiring}"
         )
 
+    semiring = lhs.semiring
     # Check if semiring has additive inverse (is a Ring)
-    if not is_ring(lhs.semiring):
+    if not is_ring(semiring):
         raise TypeError(
             f"Subtraction requires a Ring with additive_inverse. "
             f"Semiring {type(lhs.semiring).__name__} does not support subtraction."
         )
 
     # Compute: lhs + (-rhs)
-    neg_rhs = lhs.semiring.additive_inverse(rhs.data)
+    neg_rhs = semiring.additive_inverse(rhs.data)
     result_data = lhs.semiring.add(lhs.data, neg_rhs)
     return dataclasses.replace(lhs, data=result_data)
 

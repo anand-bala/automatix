@@ -1,5 +1,7 @@
 from algebraic import array as array
 from algebraic import semirings as semirings
+from algebraic._jax_wrappers import jit as jit
+from algebraic._jax_wrappers import vmap as vmap
 from algebraic.array import AlgebraicArray as AlgebraicArray
 from algebraic.spec import AlgebraicStructure as AlgebraicStructure
 from algebraic.spec import BooleanAlgebra as BooleanAlgebra
@@ -18,6 +20,8 @@ from algebraic.spec import is_stone_algebra as is_stone_algebra
 __all__ = [
     "array",
     "semirings",
+    "jit",
+    "vmap",
     "AlgebraicArray",
     "AlgebraicStructure",
     "BooleanAlgebra",

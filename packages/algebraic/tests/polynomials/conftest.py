@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import jax.numpy as jnp
 import pytest
 import quax
+from algebraic import BoundedDistributiveLattice
 from hypothesis import strategies as st
 from hypothesis.extra.numpy import arrays
 
@@ -349,9 +350,9 @@ def simple_sparse_polynomials_float(draw: st.DrawFn, degree: int, min_value: flo
 
 
 # Utility functions
-def polynomials_equal_by_evaluation(
-    poly1: SparsePolynomial,
-    poly2: SparsePolynomial,
+def polynomials_equal_by_evaluation[K: BoundedDistributiveLattice](
+    poly1: SparsePolynomial[K],
+    poly2: SparsePolynomial[K],
     test_points: list[Array | Mapping[int, Array]],
     rtol: float = 1e-5,
     atol: float = 1e-8,

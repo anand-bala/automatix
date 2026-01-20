@@ -1,4 +1,5 @@
 """Tests for AlgebraicArray index update functionality (at[] API)."""
+# mypy: disable-error-code="type-arg"
 
 import equinox as eqx
 import jax.numpy as jnp

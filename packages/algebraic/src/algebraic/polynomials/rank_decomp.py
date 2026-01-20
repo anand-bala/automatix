@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import dataclasses
+import typing
 from collections.abc import Mapping
 
 import equinox as eqx
@@ -10,13 +11,15 @@ import quax
 from bitarray import frozenbitarray
 from jaxtyping import Array, ArrayLike, Scalar, Shaped
 
-import algebraic.array.core as alge
-from algebraic.array.core import AlgebraicArray
+import algebraic.numpy as alge
+from algebraic import AlgebraicArray
+from algebraic import BoundedDistributiveLattice as Lattice
 from algebraic.polynomials.sparse import SparsePolynomial
-from algebraic.spec import BoundedDistributiveLattice as Lattice
+
+K = typing.TypeVar("K", bound=Lattice)
 
 
-class RankDecomposition[K: Lattice](eqx.Module):
+class RankDecomposition(eqx.Module, typing.Generic[K]):
     """CP (CANDECOMP/PARAFAC) decomposition of multilinear polynomial.
 
     Represents polynomial as sum of rank-1 components:
@@ -27,7 +30,7 @@ class RankDecomposition[K: Lattice](eqx.Module):
         - i (i>0) represents variable x_{i-1}
     """
 
-    factors: Shaped[AlgebraicArray, "rank degree num_vars_p_1"]
+    factors: Shaped[AlgebraicArray[K], "rank degree num_vars_p_1"]
     algebra: K = eqx.field(static=True)
     max_rank: int = eqx.field(static=True)
     """Maximum rank for CP decomposition (controls memory usage)"""
@@ -38,7 +41,7 @@ class RankDecomposition[K: Lattice](eqx.Module):
 
     def __init__(
         self,
-        factors: Shaped[AlgebraicArray | ArrayLike, "rank degree num_vars_p_1"],
+        factors: Shaped[AlgebraicArray[K] | ArrayLike, "rank degree num_vars_p_1"],
         max_rank: int | None = None,
         max_degree: int | None = None,
         max_replacement_degree: int | None = None,
@@ -63,8 +66,14 @@ class RankDecomposition[K: Lattice](eqx.Module):
         self.max_degree = max_degree if max_degree is not None else num_vars
         self.max_replacement_degree = max_replacement_degree if max_replacement_degree is not None else self.max_degree
 
-    def _replace_factors(self, factors: Shaped[AlgebraicArray, "rank degree num_vars_p_1"]) -> RankDecomposition[K]:
-        return dataclasses.replace(self, factors=factors)
+    def _replace_factors(self, factors: Shaped[AlgebraicArray[K], "rank degree num_vars_p_1"]) -> RankDecomposition[K]:
+        return RankDecomposition(
+            factors,
+            algebra=self.algebra,
+            max_rank=self.max_rank,
+            max_degree=self.max_degree,
+            max_replacement_degree=self.max_replacement_degree,
+        )
 
     @property
     def rank(self) -> int:
@@ -163,7 +172,7 @@ class RankDecomposition[K: Lattice](eqx.Module):
         padding = alge.zeros((rank, extra_dims, n_plus_1), self.algebra)
         padding = padding.at[:, :, 0].set(self.algebra.one)  # constant term = 1
 
-        new_factors = quax.quaxify(jnp.concatenate)([self.factors, padding], axis=1)
+        new_factors = alge.concatenate([self.factors, padding], axis=1)
         return self._replace_factors(new_factors)
 
     def __add__(self, other: RankDecomposition[K] | Scalar) -> RankDecomposition[K]:
@@ -185,14 +194,13 @@ class RankDecomposition[K: Lattice](eqx.Module):
         b_padded = other._pad_degree(d)
 
         # Concatenate along rank dimension
-        new_factors = quax.quaxify(jnp.concatenate)([a_padded.factors, b_padded.factors], axis=0)
+        new_factors = alge.concatenate([a_padded.factors, b_padded.factors], axis=0)
         result: RankDecomposition[K] = self._replace_factors(new_factors)
         result = result._compress_rank()
 
         return result
 
     @eqx.filter_jit
-    @quax.quaxify
     def _multiply_arrays(self, p_arr: AlgebraicArray[K], q_arr: AlgebraicArray[K]) -> AlgebraicArray[K]:
         """Core multiplication logic on raw arrays (no simplification/compression).
 
@@ -214,21 +222,21 @@ class RankDecomposition[K: Lattice](eqx.Module):
         rank_q, degree_q, _ = q_arr.shape
 
         # Broadcast to [R_p, R_q, d_p, n+1] and [R_p, R_q, d_q, n+1]
-        p_expanded = jnp.broadcast_to(
+        p_expanded = alge.broadcast_to(
             p_arr[:, None, :, :],  # [R_p, 1, d_p, n+1]
             (rank_p, rank_q, degree_p, n_plus_1),
         )
-        q_expanded = jnp.broadcast_to(
+        q_expanded = alge.broadcast_to(
             q_arr[None, :, :, :],  # [1, R_q, d_q, n+1]
             (rank_p, rank_q, degree_q, n_plus_1),
         )
 
         # Concatenate along degree dimension
-        result = jnp.concatenate([p_expanded, q_expanded], axis=2)
+        result = alge.concatenate([p_expanded, q_expanded], axis=2)
         # Shape: [R_p, R_q, d_p + d_q, n+1]
 
         # Reshape to [R_p * R_q, d_p + d_q, n+1]
-        result = result.reshape(rank_p * rank_q, degree_p + degree_q, n_plus_1)
+        result = alge.reshape(result, (rank_p * rank_q, degree_p + degree_q, n_plus_1))
 
         return result
 
@@ -240,7 +248,7 @@ class RankDecomposition[K: Lattice](eqx.Module):
         """
         # Core multiplication (Khatri-Rao product)
         new_factors = self._multiply_arrays(self.factors, other.factors)
-        result = dataclasses.replace(self, factors=new_factors)
+        result = self._replace_factors(new_factors)
 
         # Filter out zero components (rank-1 components with any all-zero factor)
         result = result._remove_zero_components()
@@ -443,8 +451,8 @@ class RankDecomposition[K: Lattice](eqx.Module):
         # (partial evaluation is equivalent to composition with constants)
         if isinstance(points, Mapping):
             # Partial evaluation: only substitute specified variables
-            replacements = {i: self._make_const(v) for i, v in points.items()}
-            return self.compose(replacements)
+            replacements = {i: self._make_const(v) for i, v in points.items()}  # ty:ignore[invalid-argument-type]
+            return self.compose(replacements)  # ty:ignore[invalid-argument-type]
 
         # Full evaluation: substitute all variables
         rank, d, _ = self.factors.shape
@@ -453,7 +461,7 @@ class RankDecomposition[K: Lattice](eqx.Module):
         # Use algebra.one (multiplicative identity) for constant selection
         one_array = alge.ones((1,), self.algebra)
         points_array = AlgebraicArray(points, self.algebra)
-        selector = quax.quaxify(jnp.concatenate)([one_array, points_array])  # Shape: (n+1,)
+        selector = alge.concatenate([one_array, points_array])  # Shape: (n+1,)
 
         # For each rank-1 component
         result = alge.zeros((), self.algebra)
@@ -509,11 +517,11 @@ class RankDecomposition[K: Lattice](eqx.Module):
             padded_list.append(padded)
 
         # Stack into contiguous array for fast indexing
-        q_array = quax.quaxify(jnp.stack)(padded_list, axis=0)
+        q_array = alge.stack(padded_list, axis=0)
 
         return q_array  # Shape: [n+1, R_max, max_replacement_degree, m+1]
 
-    def compose(self, replacements: dict[int, RankDecomposition]) -> RankDecomposition[K]:
+    def compose(self, replacements: dict[int, RankDecomposition[K]]) -> RankDecomposition[K]:
         """Compose p with replacement polynomials.
 
         Performance notes (CRITICAL for AFA hot path):
@@ -580,25 +588,25 @@ class RankDecomposition[K: Lattice](eqx.Module):
             composed_list.append(result)
 
         # Stack all composed components
-        composed = quax.quaxify(jnp.stack)(composed_list, axis=0)
+        composed = alge.stack(composed_list, axis=0)
         assert isinstance(composed, AlgebraicArray)
         # Shape: [R_p, R_result, d_result, m+1]
 
         # Step 3: Flatten rank dimensions
         rank_p, rank_result, d_result, m_plus_1 = composed.shape
-        result_factors = quax.quaxify(jnp.reshape)(composed, (rank_p * rank_result, d_result, m_plus_1))
+        result_factors = alge.reshape(composed, (rank_p * rank_result, d_result, m_plus_1))
         assert isinstance(result_factors, AlgebraicArray)
 
-        result = self._replace_factors(result_factors)
+        result_poly = self._replace_factors(result_factors)
 
         # Step 4: Simplify and compress
         # Remove zero components first (components with any all-zero factor)
-        result = result._remove_zero_components()
+        result_poly = result_poly._remove_zero_components()
         # Use fast heuristic first (especially important for AFA hot path)
         # Falls back to exact simplification if needed
-        result = result._simplify_multilinear_fast()
-        result = result._compress_rank()
-        return result
+        result_poly = result_poly._simplify_multilinear_fast()
+        result_poly = result_poly._compress_rank()
+        return result_poly
 
     def _index_to_bits(self, index: int) -> tuple[int, ...]:
         """Convert flat index to n-bit tuple."""
@@ -606,13 +614,14 @@ class RankDecomposition[K: Lattice](eqx.Module):
 
         return tuple(int2ba(index, length=self.num_vars))
 
-    def to_sparse(self) -> SparsePolynomial:
+    def to_sparse(self) -> SparsePolynomial[K]:
         """Convert CP to sparse by enumerating all monomial evaluations.
 
         WARNING: This is expensive O((n+1)^d) where d is degree.
         """
         from itertools import product
 
+        factor_data: Array
         result: dict[frozenbitarray, Scalar] = {}
 
         # Enumerate all possible assignments (expensive: (n+1)^d possibilities)
@@ -645,7 +654,7 @@ class RankDecomposition[K: Lattice](eqx.Module):
 
     @staticmethod
     def from_sparse(
-        sparse: SparsePolynomial,
+        sparse: SparsePolynomial[K],
         max_rank: int | None = None,
         max_degree: int | None = None,
         max_replacement_degree: int | None = None,
