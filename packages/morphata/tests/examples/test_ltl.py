@@ -4,7 +4,10 @@ These tests verify the ltl_to_automaton function with various LTL formulas
 including basic propositional logic, temporal operators, and bounded intervals.
 """
 
+from collections.abc import Set as AbstractSet
+
 import logic_asts
+from morphata import AlternatingTransitions
 from morphata.acceptance import Buchi, Finite
 from morphata.examples.ltl import ltl_to_automaton
 
@@ -274,15 +277,22 @@ def test_step_run_evaluation() -> None:
     expr = logic_asts.parse_expr("F p", syntax="ltl")
     aut = ltl_to_automaton(expr, finite=True)
 
-    # Get initial symbolic state
+    delta = aut.delta
+    assert isinstance(aut.initial, int)
+    assert aut.initial == 0
     initial_state = logic_asts.Variable(aut.initial)
 
+    assert isinstance(delta, AlternatingTransitions)
+    assert logic_asts.is_propositional_logic(initial_state, var_type=int)
+
     # Get a valid symbol
-    symbols = list(aut.domain.symbols) if aut.domain.symbols is not None else []
+    symbols: list[AbstractSet[str]] = []
+    if aut.domain.symbols is not None:
+        symbols = [sym for sym in aut.domain.symbols]
     assert len(symbols) > 0
 
     # Test step_run
-    next_state = aut.delta.step_run(initial_state, symbols[0])
+    next_state = delta.step_run(initial_state, symbols[0])  # ty:ignore[invalid-argument-type]
     assert next_state is not None
 
 

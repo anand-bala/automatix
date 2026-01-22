@@ -7,24 +7,26 @@ This package provides:
 - Example implementations (morphata.examples)
 """
 
+from __future__ import annotations
+
 from collections.abc import Hashable, Mapping
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 
 from typing_extensions import override
 
+from morphata.spec import AcceptanceCondition as AcceptanceCondition
 from morphata.spec import (
-    AcceptanceCondition,
     AlternatingTransitions,
-    Automaton,
     BoolExpr,
     DeterministicTransitions,
-    Domain,
-    InitialState,
     NonDeterministicTransitions,
-    TransitionRelation,
     UniversalTransitions,
 )
+from morphata.spec import Automaton as Automaton
+from morphata.spec import Domain as Domain
+from morphata.spec import InitialState as InitialState
+from morphata.spec import TransitionRelation as TransitionRelation
 
 
 @dataclass

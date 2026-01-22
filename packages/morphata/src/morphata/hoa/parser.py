@@ -282,6 +282,8 @@ class _AstTransformer(Transformer[Token, ParsedAutomaton]):
                 if alias not in self._aliases:
                     raise UndefinedAliasError(alias)
                 return self._aliases[alias]
+            case _:
+                raise HoaSyntaxError(f"Unexpected label_atom type: {type(val).__name__}")
 
     @v_args(inline=True)
     def label_not(self, arg: LabelExpr) -> LabelExpr:

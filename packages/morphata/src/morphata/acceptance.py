@@ -47,7 +47,7 @@ def acc_from_name(name: ty.Literal["Streett"], /, *args: AccPair[State]) -> Stre
 def acc_from_name(name: ty.Literal["Rabin"], /, *args: AccPair[State]) -> Rabin[State]: ...
 
 
-def acc_from_name(name: str, /, *args) -> AcceptanceCondition[State]:  # type: ignore[no-untyped-def]
+def acc_from_name(name: str, /, *args) -> AcceptanceCondition[State]:
     match name:
         case "Finite":
             assert len(args) == 1, "Finite acceptance condition requires 1 accepting set"

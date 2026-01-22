@@ -4,6 +4,8 @@ These tests verify basic properties of the strel_to_automata function
 with a focus on reach and escape operators using real-world specifications.
 """
 
+from __future__ import annotations
+
 import typing
 
 import logic_asts
@@ -117,23 +119,24 @@ def test_reach_delta_evaluation() -> None:
     spec = r"somewhere[0,2] goal"
     expr = logic_asts.parse_expr(spec, syntax="strel")
 
-    aut = strel_to_automata(
+    aut: morphata.Automaton[tuple[int, int], Input] = strel_to_automata(
         expr,
         dist_attr="hop",
         label_fn=label_fn,
         num_locations=5,
         ego_location=0,
     )
-    assert isinstance(aut.delta, morphata.AlternatingTransitions)
-    assert logic_asts.is_propositional_logic(aut.initial, tuple[int, int])
+    delta = aut.delta
+    initial_state = aut.initial
+    assert isinstance(delta, morphata.AlternatingTransitions)
+    assert logic_asts.is_propositional_logic(initial_state, tuple[int, int])
 
     # Create a graph with goal at node 2
     graph = create_simple_graph()
     graph.nodes[2]["goal"] = True
 
     # Test that we can call delta
-    initial_state = aut.initial
-    next_state = aut.delta.step_run(initial_state, graph)
+    next_state = delta.step_run(initial_state, graph)  # ty:ignore[invalid-argument-type]
 
     assert next_state is not None
 
@@ -186,16 +189,16 @@ def test_reach_avoid_full_evaluation() -> None:
         num_locations=5,
         ego_location=0,
     )
-    assert isinstance(aut.delta, morphata.AlternatingTransitions)
-    assert logic_asts.is_propositional_logic(aut.initial, tuple[int, int])
-
     # Create graph with groundstation at node 1 and goal at node 4
     graph = create_simple_graph()
     graph.nodes[1]["groundstation"] = True
     graph.nodes[4]["goal"] = True
 
     # Evaluate initial state
+    delta = aut.delta
     initial_state = aut.initial
-    next_state = aut.delta.step_run(initial_state, graph)
+    assert isinstance(delta, morphata.AlternatingTransitions)
+    assert logic_asts.is_propositional_logic(initial_state, tuple[int, int])
+    next_state = delta.step_run(initial_state, graph)  # ty:ignore[invalid-argument-type]
 
     assert next_state is not None

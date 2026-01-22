@@ -11,9 +11,9 @@ import functools
 import typing as ty
 from abc import ABC, abstractmethod
 from collections.abc import Hashable, Iterable
+from collections.abc import Set as AbstractSet
 
 import logic_asts.base as logic
-from attrs import frozen
 
 type BoolExpr[Var] = logic.BaseExpr[Var]
 
@@ -48,31 +48,23 @@ class Domain(ABC, ty.Generic[State, Symbol]):
         return None
 
 
-type InitialState[State] = State | Iterable[State] | BoolExpr[State]
-
-
-@ty.runtime_checkable
-class TransitionRelation(ty.Protocol[State, Symbol]):
-    def __call__(self, state: State, symbol: Symbol) -> State | Iterable[State] | BoolExpr[State]: ...
-
-
-@ty.runtime_checkable
-class DeterministicTransitions(TransitionRelation[State, Symbol], ty.Protocol):
+class DeterministicTransitions(ABC, ty.Generic[State, Symbol]):
+    @abstractmethod
     def __call__(self, state: State, symbol: Symbol) -> State: ...
 
 
-@ty.runtime_checkable
-class NonDeterministicTransitions(TransitionRelation[State, Symbol], ty.Protocol):
+class NonDeterministicTransitions(ABC, ty.Generic[State, Symbol]):
+    @abstractmethod
     def __call__(self, state: State, symbol: Symbol) -> Iterable[State]: ...
 
 
-@ty.runtime_checkable
-class UniversalTransitions(TransitionRelation[State, Symbol], ty.Protocol):
+class UniversalTransitions(ABC, ty.Generic[State, Symbol]):
+    @abstractmethod
     def __call__(self, state: State, symbol: Symbol) -> Iterable[State]: ...
 
 
-@ty.runtime_checkable
-class AlternatingTransitions(TransitionRelation[State, Symbol], ty.Protocol):
+class AlternatingTransitions(ABC, ty.Generic[State, Symbol]):
+    @abstractmethod
     def __call__(self, state: State, symbol: Symbol) -> BoolExpr[State]: ...
 
     def step_run(self, run_state: BoolExpr[State], symbol: Symbol) -> BoolExpr[State]:
@@ -94,9 +86,36 @@ class AlternatingTransitions(TransitionRelation[State, Symbol], ty.Protocol):
         return cache[run_state]
 
 
-@frozen
+type InitialState[State] = State | AbstractSet[State] | BoolExpr[State]
+type TransitionRelation[State, Symbol] = (
+    DeterministicTransitions[State, Symbol]
+    | NonDeterministicTransitions[State, Symbol]
+    # | UniversalTransitions[State, Symbol]
+    | AlternatingTransitions[State, Symbol]
+)
+
+
 class Automaton(ty.Generic[State, Symbol]):
     domain: Domain[State, Symbol]
     initial: InitialState[State]
     delta: TransitionRelation[State, Symbol]
     acceptance: AcceptanceCondition[State]
+
+    def __init__(
+        self,
+        domain: Domain[State, Symbol],
+        initial: State | Iterable[State] | BoolExpr[State],
+        delta: TransitionRelation[State, Symbol],
+        acceptance: AcceptanceCondition[State],
+    ) -> None:
+        self.domain = domain
+        self.acceptance = acceptance
+        if isinstance(initial, Iterable):
+            initial = frozenset(initial)
+        elif logic.is_bool_expr(initial) and not isinstance(delta, AlternatingTransitions):
+            raise TypeError(
+                "Cannot instantiate 'Automaton' with Boolean expression initial configuration and {type(delta).__name__} transitions"
+            )
+
+        self.initial = initial
+        self.delta = delta

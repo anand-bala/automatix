@@ -7,6 +7,7 @@ The translation supports
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import typing as ty
 from collections import deque
@@ -45,6 +46,28 @@ def ltl_to_automaton(formula: LTLExpr[AP], *, finite: bool = False) -> morphata.
     # 3. Unreachable nodes not there
     mappings: dict[logic.Variable[LTLExpr[AP]] | logic.Not, int] = dict()
 
+    expr_remap_cache: dict[BoolExpr[LTLExpr[AP]], BoolExpr[int]] = dict()
+
+    def _remap_bool_expr(node: BoolExpr[LTLExpr[AP]]) -> BoolExpr[int]:
+        if node in expr_remap_cache:
+            return expr_remap_cache[node]
+        match node:
+            case logic.Literal():
+                return node
+            case logic.Variable():
+                return logic.Variable(mappings.setdefault(node, len(mappings)))
+            case logic.Not(arg):
+                # Assumes that the input node was coverted to NNF
+                assert isinstance(arg, logic.Variable)
+                # Make a new variable for Not(var)
+                return logic.Variable(mappings.setdefault(node, len(mappings)))
+            case logic.And(args) | logic.Or(args) as nary_node:
+                return dataclasses.replace(
+                    nary_node, args=tuple(_remap_bool_expr(ty.cast(BoolExpr[LTLExpr[AP]], arg)) for arg in args)
+                )
+            case _:
+                raise RuntimeError("unreachable")
+
     # Queue containing list of reachable nodes that need to be remapped.
     # The order of insertion in the queue is the reachability order
     queue: deque[logic.Variable[LTLExpr[AP]] | logic.Not] = deque()
@@ -67,30 +90,14 @@ def ltl_to_automaton(formula: LTLExpr[AP], *, finite: bool = False) -> morphata.
             final_states.add(node_id)
         # Add the reachable nodes in the next step (Variables/Not(Variable)) if they are not already mapped
         reachable: dict[Input[AP], BoolExpr[int]] = dict()
+        sym: Input[AP]
         for sym in _powerset(atomic_predicates):
             # Compute the possible successor polynomial
-            successor = _aut_expansion_rule(node, sym)
+            successor = _aut_expansion_rule(node, sym)  # pyrefly: ignore[bad-argument-type]
             # We want to add the NNF leaf nodes to the queue, i.e., Not(var) is a leaf node, iff they are not already visited
-            # Moreover, we want to convert BoolExpr[LTLExpr[AP]] to BoolExpr[int]
-            _expr_morph_cache: dict[BoolExpr[LTLExpr[AP]], BoolExpr[int]] = dict()
-            for e in _iter_expr_nnf(successor):
-                match e:
-                    case logic.Literal():
-                        _expr_morph_cache[e] = e
-                    case logic.Variable():
-                        _expr_morph_cache[e] = logic.Variable(mappings.setdefault(e, len(mappings)))
-                        queue.append(e)
-                    case logic.Not(arg):
-                        assert isinstance(arg, logic.Variable)
-                        # Make a new variable for Not(var)
-                        _expr_morph_cache[e] = logic.Variable(mappings.setdefault(e, len(mappings)))
-                    case logic.And(args):
-                        _expr_morph_cache[e] = logic.And(tuple(_expr_morph_cache[a] for a in args))
-                    case logic.Or(args):
-                        _expr_morph_cache[e] = logic.Or(tuple(_expr_morph_cache[a] for a in args))
-                    case _:
-                        raise RuntimeError("unreachable")
-            reachable[sym] = _expr_morph_cache[successor]
+            queue.extend((e for e in successor.atomic_predicates(assume_nnf=True) if e not in mappings))
+            # pyrefly: ignore[bad-argument-type]
+            reachable[sym] = _remap_bool_expr(successor)
         transitions[node_id] = reachable
 
     assert mappings[logic.Variable(initial_node)] == 0
@@ -230,7 +237,7 @@ def _iter_expr_nnf[Var: Hashable](expr: BoolExpr[Var]) -> Iterator[BoolExpr[Var]
         if visited.issuperset(need_to_visit_children):
             # subexpr is a leaf (the set is empty) or it's children have been
             # yielded get rid of it from the stack
-            _ = stack.pop()
+            stack.pop()
             # Add subexpr to visited
             visited.add(subexpr)
             # post-order return it

@@ -278,14 +278,14 @@ class STRELAutomaton[AP: Hashable](morphata.AlternatingTransitions[Q, Input]):
         # Then, make the symbolic expressions for each path, with the terminal one being for the rhs
         lhs = typing.cast(STRELExpr[AP], phi.lhs)
         rhs = typing.cast(STRELExpr[AP], phi.rhs)
-        expr = logic.Literal(False)
+        expr: State = logic.Literal(False)
         for edge_path in _all_bounded_simple_paths(input, loc, d1, d2, self.dist_attr):
             path = [loc] + [e[1] for e in edge_path]
             # print(f"{path=}")
             # Path expr checks if last node satisfies rhs and all others satisfy lhs
             path_expr = self.delta(input, rhs, path[-1])
-            for l_p in reversed(path[:-1]):
-                path_expr &= self.delta(input, lhs, l_p)  # type: ignore[assignment]
+            for l_p in reversed(path[:-1]):  # pyrefly: ignore
+                path_expr &= self.delta(input, lhs, l_p)  # pyrefly: ignore
             expr |= path_expr  # type: ignore[assignment]
             # Break early if TOP/True
             if expr == logic.Literal(True):
@@ -303,7 +303,11 @@ class STRELAutomaton[AP: Hashable](morphata.AlternatingTransitions[Q, Input]):
         # Make the symbolic expressions for each path, with the terminal one being for the rhs
         arg = typing.cast(STRELExpr[AP], phi.arg)
         expr: State
-        for path in nx.all_simple_paths(input, source=loc, target=targets):  # type: ignore[call-overload,var-annotated]
+        for path in nx.all_simple_paths(
+            input,  # ty:ignore[invalid-argument-type]
+            source=loc,  # ty:ignore[invalid-argument-type]
+            target=targets,  # ty:ignore[invalid-argument-type]
+        ):  # pyrefly: ignore
             # print(f"{path=}")
             # Path expr checks if all locations satisfy arg
             expr = logic.Literal(False)
@@ -393,7 +397,7 @@ class _SpLTLRewrite[AP: Hashable]:
             case (int(t1), None):
                 # phi = lhs U[t1,] rhs = G[0,t1] (lhs U rhs)
                 return self._expand_always(unbounded_unt, interval)
-            case (int(t1), int(_t2)):
+            case (int(t1), int()):
                 # phi = lhs U[t1,t2] rhs = (F[t1,t2] rhs) & (lhs U[t1,] rhs) = (F[t1,t2] rhs) & (G[0,t1] (lhs U rhs))
                 # phi1 = F[t1,t2] rhs
                 # phi2 = G[0,t1] (lhs U rhs)
@@ -526,7 +530,7 @@ def _all_bounded_simple_paths(
         # 2. Check if we've reached a target (if adding the next_edge puts us in the distance range).
         if d1 <= new_path_len <= d2:
             # Yield the current path, removing the initial dummy edges [None, (None, source)]
-            ret: list[tuple[Location, Location, float]] = (list(current_path.values()) + [next_edge])[2:]  # type: ignore
+            ret: list[tuple[Location, Location, float]] = (list(current_path.values()) + [next_edge])[2:]  # type: ignore  # ty:ignore[unused-ignore-comment]
             yield ret
 
         # 3. Only expand the search through the next node if it makes sense.
@@ -536,6 +540,6 @@ def _all_bounded_simple_paths(
         if new_path_len <= d2 and (targets - current_path.keys() - {next_node}):
             # Change next_edge to contain the cumulative distance
             update_edge = next_edge[:-1] + (new_path_len,)
-            current_path[next_node] = update_edge
+            current_path[next_node] = update_edge  # pyrefly: ignore
             stack.append(iter(get_edges(next_node)))
             pass

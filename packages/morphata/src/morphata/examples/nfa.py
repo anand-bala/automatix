@@ -8,14 +8,16 @@ structural Automaton representation.
 from __future__ import annotations
 
 import typing
-from collections.abc import Iterable, Iterator
+from collections.abc import Hashable, Iterable, Iterator
 from collections.abc import Set as AbstractSet
+from dataclasses import dataclass
 
 import networkx as nx
 from logic_asts.base import BaseExpr as BoolExpr
 from logic_asts.base import simple_eval
 from typing_extensions import overload, override
 
+from morphata import AcceptanceCondition
 from morphata.acceptance import Finite
 from morphata.spec import Automaton, Domain, NonDeterministicTransitions
 
@@ -24,44 +26,46 @@ type Guard[AtomicPredicate] = BoolExpr[AtomicPredicate]
 
 type NFAState = frozenset[int]
 
+AP = typing.TypeVar("AP", bound=Hashable)
 
-class NFADomain[In](Domain[int, AbstractSet[In]]):
+
+@dataclass
+class NFADomain(Domain[int, AbstractSet[AP]]):
     """Domain for NFA with integer states and set-based symbols."""
 
-    def __init__(self, graph: nx.DiGraph[int]) -> None:
-        self._graph = graph
+    _graph: nx.DiGraph[int]
 
     @property
     @override
     def states(self) -> Iterable[int] | None:
-        return self._graph.nodes
+        yield from self._graph.nodes
 
     @property
     @override
-    def symbols(self) -> Iterable[AbstractSet[In]] | None:
+    def symbols(self) -> Iterable[AbstractSet[AP]] | None:
         # Symbolic - cannot enumerate all possible input sets
         return None
 
 
-class NFATransition[In](NonDeterministicTransitions[int, AbstractSet[In]]):
+class NFATransition[AP](NonDeterministicTransitions[int, AbstractSet[AP]]):
     """Transition relation for NFA that evaluates guards."""
 
     def __init__(self, graph: nx.DiGraph[int]) -> None:
         self._graph = graph
 
     @override
-    def __call__(self, state: int, symbol: AbstractSet[In]) -> Iterable[int]:
+    def __call__(self, state: int, symbol: AbstractSet[AP]) -> Iterable[int]:
         """Evaluate guards and return successor states."""
         symbol_set = set(symbol)
         successors: list[int] = []
-        for _, succ, guard_data in self._graph.edges(state, data="guard"):  # type: ignore[var-annotated]
-            guard: Guard[In] = typing.cast(Guard[In], guard_data)
+        for _, succ, guard_data in self._graph.edges(state, data="guard"):
+            guard: Guard[AP] = typing.cast(Guard[AP], guard_data)
             if simple_eval(guard, symbol_set):
                 successors.append(succ)
         return successors
 
 
-class NFA[In]:
+class NFA(typing.Generic[AP]):
     """Nondeterministic Finite Automaton for finite-word recognition.
 
     An NFA is defined by a set of locations, transitions labeled with guards,
@@ -82,12 +86,12 @@ class NFA[In]:
     def __iter__(self) -> Iterator[int]:
         return iter(self._graph.nodes)
 
-    def __call__(self, input_symbol: AbstractSet[In], state: NFAState) -> tuple[bool, NFAState]:
+    def __call__(self, input_symbol: AbstractSet[AP], state: NFAState) -> tuple[bool, NFAState]:
         """Transition function for runtime stepping.
 
         Parameters
         ----------
-        input_symbol : AbstractSet[In]
+        input_symbol : AbstractSet[AP]
             Input symbol (set of atomic predicates)
         state : NFAState
             Current state (set of locations)
@@ -140,7 +144,7 @@ class NFA[In]:
             self._final_locations.add(location)
         self._graph.add_node(location, initial=initial, final=final)
 
-    def add_transition(self, src: int, dst: int, guard: Guard[In]) -> None:
+    def add_transition(self, src: int, dst: int, guard: Guard[AP]) -> None:
         """Add a transition between two locations.
 
         Parameters
@@ -149,7 +153,7 @@ class NFA[In]:
             Source location
         dst : int
             Destination location
-        guard : Guard[In]
+        guard : Guard[AP]
             Guard expression
         """
         if (src, dst) in self._graph.edges:
@@ -164,12 +168,12 @@ class NFA[In]:
         return len(self._graph)
 
     @overload
-    def guards(self, src: int, dst: int) -> Guard[In]: ...
+    def guards(self, src: int, dst: int) -> Guard[AP]: ...
 
     @overload
-    def guards(self, src: int, dst: None = None) -> dict[int, Guard[In]]: ...
+    def guards(self, src: int, dst: None = None) -> dict[int, Guard[AP]]: ...
 
-    def guards(self, src: int, dst: int | None = None) -> Guard[In] | dict[int, Guard[In]]:
+    def guards(self, src: int, dst: int | None = None) -> Guard[AP] | dict[int, Guard[AP]]:
         """Get a transition guard or the set of transition guards for each successor state.
 
         Parameters
@@ -181,34 +185,34 @@ class NFA[In]:
 
         Returns
         -------
-        Guard[In] or dict[int, Guard[In]]
+        Guard[AP] or dict[int, Guard[AP]]
             Single guard if dst is specified, else dict of {destination: guard}
         """
         if dst is None:
-            return {succ: guard for _, succ, guard in self._graph.edges(src, "guard")}  # type: ignore[var-annotated]
-        return typing.cast(Guard[In], self._graph.edges[src, dst]["guard"])
+            return {succ: guard for _, succ, guard in self._graph.edges(src, "guard")}
+        return typing.cast(Guard[AP], self._graph.edges[src, dst]["guard"])
 
     @property
-    def transitions(self) -> Iterable[tuple[int, int, Guard[In]]]:
+    def transitions(self) -> Iterable[tuple[int, int, Guard[AP]]]:
         """Get an iterable of (src, dst, guard) tuples for all transitions."""
         return self._graph.edges.data("guard")
 
-    def to_automaton(self) -> Automaton[int, AbstractSet[In]]:
+    def to_automaton(self) -> Automaton[int, AbstractSet[AP]]:
         """Convert to structural Automaton representation.
 
         Returns
         -------
-        Automaton[int, AbstractSet[In]]
+        Automaton[int, AbstractSet[AP]]
             Structural automaton with integer states and set-based symbols
         """
-        domain = NFADomain[In](self._graph)
-        delta = NFATransition[In](self._graph)
-        initial = self.initial_state
-        acceptance = self.acceptance_condition
+        domain: Domain[int, AbstractSet[AP]] = NFADomain[AP](self._graph)
+        delta: NonDeterministicTransitions[int, AbstractSet[AP]] = NFATransition[AP](self._graph)
+        initial: AbstractSet[int] = self.initial_state
+        acceptance: AcceptanceCondition[int] = self.acceptance_condition
 
         return Automaton(
-            domain=domain,
+            domain=domain,  # ty:ignore[invalid-argument-type]
             initial=initial,
-            delta=delta,
-            acceptance=acceptance,
+            delta=delta,  # ty:ignore[invalid-argument-type]
+            acceptance=acceptance,  # ty:ignore[invalid-argument-type]
         )
