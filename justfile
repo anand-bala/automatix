@@ -1,9 +1,11 @@
 # Set shell options for safety
+
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
 # If we want to use CUDA, the CUDA_VERSION variable should not be empty and contain the
 # version number (either 12 or 13)
-CUDA_VERSION := env_var_or_default("CUDA_VERSION", "")
+
+CUDA_VERSION := env("CUDA_VERSION", "")
 
 # Default: create the dev environment
 default: dev
@@ -15,13 +17,25 @@ dev: sync-venv cuda-packages-if-needed
 [no-cd]
 fmt:
     uv run --frozen ruff format
-    uv run --frozen ruff check --output-format concise --fix --exit-non-zero-on-fix .
+    uv run --frozen ruff check --output-format concise --fix --exit-non-zero-on-fix 
 
 # Run type checkers
 [no-cd]
-type-check:
+[private]
+ty-check:
     uv run --frozen ty check --output-format concise
-    uv run --frozen mypy --strict .
+
+[no-cd]
+[private]
+pyrefly-check:
+    uv run --frozen pyrefly check --output-format min-text
+
+[no-cd]
+mypy-check:
+    uv run --frozen mypy --strict
+
+[parallel]
+type-check: ty-check pyrefly-check
 
 # Run both formatting and type checking
 [no-cd]
@@ -58,5 +72,20 @@ lock-script script:
     uv lock --script {{ script }}
 
 # Release workflow
-tag-package package:
-    echo git tag $(printf "{{ package }}-v%s" $(uv version --directory packages/{{ package }} --short))
+
+@bump-version package *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    read -p "Are you sure? [y/n] " -n 1 -r
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      uv version --directory packages/{{ package }} --bump {{ args }}
+    fi
+
+@tag-package package:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Will run: git tag $(printf "{{ package }}-v%s" $(uv version --short))"
+    read -p "Are you sure? [y/n] " -n 1 -r
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      git tag $(printf "{{ package }}-v%s" $(uv version --short))
+    fi
