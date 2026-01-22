@@ -24,17 +24,14 @@ dependencies = [
 [dependency-groups]
 dev = [
   "beartype>=0.22.5",
-  "black",
-  "graphviz",
   "hypothesis>=6.0.0",
   "ipython",
-  "isort",
   "mypy",
+  "pyrefly>=0.49.0",
   "pytest>=9.0.0",
   "pytest-mypy>=1.0.1",
   "ruff",
   "rust-just>=1.46.0",
-  "sympy>=1.14.0",
   "ty",
   "zuban",
 ]
@@ -60,6 +57,10 @@ warn_unreachable = true
 # files = ["tests/", "src/", "packages/"]
 packages = ["automatix", "algebraic", "morphata"]
 
+exclude = '''(?x)(
+    ^examples/    # files in examples/
+)'''  # TOML's single-quoted strings do not require escaping backslashes
+
 [[tool.mypy.overrides]]
 module = ["dd", "dd.*"]
 ignore_missing_imports = true
@@ -69,6 +70,7 @@ strict = true
 
 [tool.ruff]
 line-length = 127
+extend-exclude = ["examples/**/*.py"]
 
 [tool.ruff.lint]
 extend-select = ["E", "F", "W", "N", "B", "ANN", "PYI", "I"]
@@ -81,7 +83,7 @@ extend-ignore = ["F722"]
 "test_*.py" = ["ANN", "N806"]
 
 [tool.pyright]
-include = ["src", "examples", "tests", "packages"]
+include = ["src", "tests", "packages"]
 pythonVersion = "3.12"
 pythonPlatform = "All"
 reportUnknownMemberType = false
@@ -89,3 +91,14 @@ reportUnknownParameterType = false
 reportUnknownVariableType = false
 reportUnknownArgumentType = false
 reportAny = false
+
+[tool.pyrefly]
+project-excludes = ["./examples/**"]
+
+[tool.ty.environment]
+# Multiple directories (priority order)
+root = ["./src", "./packages"]
+
+[tool.ty.src]
+exclude = ["./examples"]
+
