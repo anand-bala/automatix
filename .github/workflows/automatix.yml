@@ -43,7 +43,9 @@ jobs:
       - name: Test with Python ${{ matrix.python-version }}
         run: uv run --frozen pytest tests -v
       - name: Type check
-        run: uv run --frozen mypy src/automatix
+        run: |
+          uv run --frozen ty check --output-format concise src/ tests/
+          uv run --frozen pyrefly check --output-format min-text src/ tests/
 
   release:
     name: Build and release automatix
