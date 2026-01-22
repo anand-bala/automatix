@@ -7,12 +7,10 @@ This module provides operators for weighted automata:
 - from_ltl: Convenience method to create PolynomialOperator from LTL formula
 """
 
-from automatix.operators.matrix import MatrixOperator
-from automatix.operators.polynomial import PolynomialOperator, from_afa, from_ltl
+from automatix.operators.matrix import MatrixOperator as MatrixOperator
+from automatix.operators.polynomial import PolynomialOperator as PolynomialOperator
 
 __all__ = [
     "MatrixOperator",
     "PolynomialOperator",
-    "from_afa",
-    "from_ltl",
 ]

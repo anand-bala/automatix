@@ -7,20 +7,24 @@ from NFA and weight functions.
 from __future__ import annotations
 
 import functools
+import typing
 from collections.abc import Callable
+from typing import TypeVar
 
+import algebraic.numpy as alge
 import equinox as eqx
 import jax.numpy as jnp
-from algebraic import Semiring
-from algebraic.array import AlgebraicArray
-from algebraic.array.core import ones, zeros
+from algebraic import AlgebraicArray, Semiring
 from jaxtyping import Array, Num, Shaped
 from morphata.examples.nfa import NFA
 
 from automatix.spec import WeightFunction
 
+S = TypeVar("S", bound=Semiring)
+In = TypeVar("In")
 
-class MatrixOperator[S: Semiring, In](eqx.Module):
+
+class MatrixOperator(eqx.Module, typing.Generic[S, In]):
     """JAX module representing a weighted finite-word automaton operator.
 
     This operator computes weighted transitions based on input symbols and guard
@@ -30,9 +34,9 @@ class MatrixOperator[S: Semiring, In](eqx.Module):
     - A function computing transition matrices for each input
     """
 
-    initial_weights: Shaped[AlgebraicArray, " q"]
-    final_weights: Shaped[AlgebraicArray, " q"]
-    cost_transitions: Callable[[Num[Array, "..."]], Shaped[AlgebraicArray, "q q"]]
+    initial_weights: Shaped[AlgebraicArray[S], " q"]
+    final_weights: Shaped[AlgebraicArray[S], " q"]
+    cost_transitions: Callable[[Num[Array, "..."]], Shaped[AlgebraicArray[S], "q q"]]
 
     @classmethod
     def make(
@@ -41,9 +45,9 @@ class MatrixOperator[S: Semiring, In](eqx.Module):
         semiring: S,
         *,
         weight_function: WeightFunction[Num[Array, "..."], In],
-        initial_weights: None | Shaped[AlgebraicArray, " q"] = None,
-        final_weights: None | Shaped[AlgebraicArray, " q"] = None,
-    ) -> MatrixOperator:
+        initial_weights: None | Shaped[AlgebraicArray[S], " q"] = None,
+        final_weights: None | Shaped[AlgebraicArray[S], " q"] = None,
+    ) -> MatrixOperator[S, In]:
         """Create an automaton operator from an NFA and weight function.
 
         The operator computes weighted paths through the automaton by:
@@ -81,11 +85,15 @@ class MatrixOperator[S: Semiring, In](eqx.Module):
 
         if initial_weights is None:
             initial_weights = (
-                zeros(aut.num_locations, semiring).at[jnp.array(list(aut.initial_state))].set(ones(1, semiring).data.item())
+                alge.zeros(aut.num_locations, semiring)
+                .at[jnp.array(list(aut.initial_state))]
+                .set(alge.ones(1, semiring).data.item())
             )
         if final_weights is None:
             final_weights = (
-                zeros(aut.num_locations, semiring).at[jnp.array(list(aut.final_locations))].set(ones(1, semiring).data.item())
+                alge.zeros(aut.num_locations, semiring)
+                .at[jnp.array(list(aut.final_locations))]
+                .set(alge.ones(1, semiring).data.item())
             )
 
         assert initial_weights.shape == (n_q,)
@@ -93,7 +101,7 @@ class MatrixOperator[S: Semiring, In](eqx.Module):
 
         transitions = {(src, dst): functools.partial(weight_function, guard=guard) for src, dst, guard in aut.transitions}
 
-        def cost_transitions(x: Num[Array, "..."]) -> Shaped[AlgebraicArray, "q q"]:
+        def cost_transitions(x: Num[Array, "..."]) -> Shaped[AlgebraicArray[S], "q q"]:
             """Compute transition matrix for input x using weight_function.
 
             Parameters
@@ -103,15 +111,15 @@ class MatrixOperator[S: Semiring, In](eqx.Module):
 
             Returns
             -------
-            AlgebraicArray
+            AlgebraicArray[S]
                 q x q weighted transition matrix where element [i,j] is
                 weight_function(x, guard_{i,j}).
             """
 
-            matrix = zeros((n_q, n_q), semiring)
+            matrix = alge.zeros((n_q, n_q), semiring)
             for (src, dst), guard in transitions.items():
                 # Apply weight function: lambda(x, guard)
-                weight = guard(x)  # type: ignore[no-untyped-call]
+                weight = guard(x)
                 matrix = matrix.at[src, dst].set(weight)
 
             return matrix

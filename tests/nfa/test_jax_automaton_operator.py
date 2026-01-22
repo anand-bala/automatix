@@ -104,7 +104,7 @@ def make_circle_predicate[S: Semiring](algebra: S, circle: Circle) -> tuple[Pred
 
 
 def parse_guard(expr: str) -> Guard[str]:
-    return logic.parse_expr(expr)  # type: ignore[call-overload]
+    return logic.parse_expr(expr)
 
 
 @pytest.fixture(

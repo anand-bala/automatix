@@ -16,7 +16,7 @@ dependencies = [
   "numpy",
   "typing-extensions",
   "types-networkx",
-  "logic-asts>=1.2.0",
+  "logic-asts>=1.4.1",
   "algebraic-jax>=1.0.0",
   "morphata>=1.0.0",
 ]

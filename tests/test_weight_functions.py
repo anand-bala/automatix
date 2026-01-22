@@ -23,7 +23,7 @@ maxplus = tropical_semiring(minplus=False)
 
 
 def parse_guard(expr: str) -> Guard[str]:
-    return logic.parse_expr(expr)  # type: ignore[call-overload]
+    return logic.parse_expr(expr)
 
 
 class TestWeightFunctionBasics:
@@ -81,7 +81,7 @@ class TestAutomatonOperatorIntegration:
     def test_simple_automaton_with_weight_function(self) -> None:
         """Create a simple automaton and compute transitions with weight function."""
         # Create a 2-state automaton
-        aut: NFA[str] = NFA()
+        aut = NFA[str]()
         aut.add_location(0, initial=True)
         aut.add_location(1, final=True)
         aut.add_transition(0, 1, guard=logic.Variable("a"))
