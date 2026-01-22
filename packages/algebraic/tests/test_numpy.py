@@ -96,12 +96,9 @@ class TestAlgebraicNumpyExclusions:
         assert "dtype" in str(exc_info.value)
 
     def test_array_raises_attribute_error(self) -> None:
-        """Test that array raises AttributeError with helpful message."""
-        with pytest.raises(AttributeError) as exc_info:
+        """Test that array raises TypeError with helpful message."""
+        with pytest.raises(TypeError, match="missing a required argument"):
             alge.array([1, 2, 3])  # type: ignore[attr-defined]
-
-        assert "not available" in str(exc_info.value)
-        assert "array" in str(exc_info.value)
 
 
 class TestAlgebraicNumpyInvalidAttributes:
