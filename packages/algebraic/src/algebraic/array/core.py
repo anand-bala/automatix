@@ -69,9 +69,7 @@ class AlgebraicArray(quax.ArrayValue, typing.Generic[K]):
 
     @override
     def materialise(self) -> Shaped[Array, "..."]:
-        # TODO: should this be a RuntimeError or not?
-        # return self.data
-        raise RuntimeError("Refusing to materialise AlgebraicArray.")
+        return self.data
 
     @override
     @staticmethod
