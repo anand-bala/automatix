@@ -26,10 +26,6 @@ jobs:
       matrix:
         python-version: ["3.12", "3.13", "3.14"]
 
-    defaults:
-      run:
-        working-directory: packages/morphata
-
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v7
@@ -39,11 +35,24 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --dev
       - name: Format check
-        run: uv run --frozen just fmt
+        working-directory: packages/morphata
+        run: uv run --frozen ruff format --check src/ tests/
+      - name: Lint
+        working-directory: packages/morphata
+        run: uv run --frozen ruff check src/ tests/
       - name: Test with Python ${{ matrix.python-version }}
-        run: uv run --frozen pytest -v
+        working-directory: packages/morphata
+        run: |
+          if [[ "${{ matrix.python-version }}" == "3.14" ]]; then
+            uv run --frozen pytest tests/ -v -o addopts=""
+          else
+            uv run --frozen pytest tests/ -v
+          fi
       - name: Type check
-        run: uv run --frozen just type-check
+        working-directory: packages/morphata
+        run: |
+          uv run --frozen ty check --output-format concise src/ tests/
+          uv run --frozen pyrefly check --output-format min-text src/ tests/
 
   release:
     name: Build and release morphata

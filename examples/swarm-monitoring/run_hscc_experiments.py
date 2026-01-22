@@ -1,5 +1,7 @@
 """Run all experiments for HSCC 2025."""
 
+from __future__ import annotations
+
 import argparse
 import itertools
 import subprocess
@@ -7,9 +9,10 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
-from typing import Mapping, Sequence, TypeAlias
+from typing import TypeAlias
 
 import networkx as nx
+from logic_asts import STRELExpr
 
 N_TRIALS = 7
 N_REPEATS = 10
@@ -18,6 +21,7 @@ N_REPEATS = 10
 CURRENT_DIR = Path(__file__).parent
 
 Location: TypeAlias = int
+Q: TypeAlias = tuple[STRELExpr[str], int]
 Alph: TypeAlias = "nx.Graph[Location]"
 
 
@@ -67,17 +71,6 @@ SPECS = [
 ]
 
 
-def forward_run(
-    monitor: StrelAutomaton,
-    trace: Sequence["nx.Graph[Location]"],
-    ego_locs: Mapping[str, int],
-) -> dict[str, bool]:
-    states = {name: monitor.initial_at(loc) for name, loc in ego_locs.items()}
-    for input in trace:
-        states = {name: monitor.next(input, state) for name, state in states.items()}
-    return {name: monitor.final_weight(state) for name, state in states.items()}
-
-
 @dataclass
 class Args:
     @classmethod
@@ -88,7 +81,7 @@ class Args:
         return Args(**vars(args))
 
 
-def main(args: Args) -> None:
+def main(_args: Args) -> None:
     for spec, (map_file, trace_file), online in itertools.product(
         map(lambda p: Path(CURRENT_DIR, p), SPECS),
         map(lambda p: (Path(CURRENT_DIR, p[0]), Path(CURRENT_DIR, p[1])), EXPERIMENTS),

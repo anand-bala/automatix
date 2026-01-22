@@ -35,13 +35,18 @@ jobs:
           version: "latest"
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --dev
       - name: Format check
-        run: uv run --frozen ruff format --check src/automatix tests
+        run: uv run --frozen ruff format --check src/ tests/
       - name: Lint
-        run: uv run --frozen ruff check src/automatix tests
+        run: uv run --frozen ruff check src/ tests/
       - name: Test with Python ${{ matrix.python-version }}
-        run: uv run --frozen pytest tests -v
+        run: |
+          if [[ "${{ matrix.python-version }}" == "3.14" ]]; then
+            uv run --frozen pytest tests/ -v -o addopts=""
+          else
+            uv run --frozen pytest tests/ -v
+          fi
       - name: Type check
         run: |
           uv run --frozen ty check --output-format concise src/ tests/
