@@ -75,4 +75,4 @@ jobs:
       - name: Build wheels and sdist
         run: uv build --package morphata
       - name: Publish to PyPI
-        run: uv publish --package morphata
+        run: uv publish

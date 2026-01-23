@@ -74,4 +74,4 @@ jobs:
       - name: Build wheels and sdist
         run: uv build --package algebraic
       - name: Publish to PyPI
-        run: uv publish --package algebraic
+        run: uv publish
