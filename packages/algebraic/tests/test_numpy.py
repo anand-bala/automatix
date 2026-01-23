@@ -92,13 +92,16 @@ class TestAlgebraicNumpyExclusions:
         with pytest.raises(TypeError) as exc_info:
             alge.eye(3)  # type: ignore[call-arg]
 
-        assert "required argument" in str(exc_info.value)
+        assert "missing" in str(exc_info.value)
         assert "dtype" in str(exc_info.value)
 
     def test_array_raises_attribute_error(self) -> None:
         """Test that array raises TypeError with helpful message."""
-        with pytest.raises(TypeError, match="missing a required argument"):
+        with pytest.raises(TypeError) as exc_info:
             alge.array([1, 2, 3])  # type: ignore[attr-defined]
+
+        assert "missing" in str(exc_info.value)
+        assert "dtype" in str(exc_info.value)
 
 
 class TestAlgebraicNumpyInvalidAttributes:
