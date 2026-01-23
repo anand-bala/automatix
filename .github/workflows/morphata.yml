@@ -52,7 +52,6 @@ jobs:
         working-directory: packages/morphata
         run: |
           uv run --frozen ty check --output-format concise src/ tests/
-          uv run --frozen pyrefly check --output-format min-text src/ tests/
 
   release:
     name: Build and release morphata
