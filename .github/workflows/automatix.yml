@@ -35,7 +35,7 @@ jobs:
           version: "latest"
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
-        run: uv sync --frozen --dev
+        run: uv sync --frozen --dev --all-packages
       - name: Format check
         run: uv run --frozen ruff format --check src/ tests/
       - name: Lint
