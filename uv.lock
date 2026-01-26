@@ -42,7 +42,7 @@ requires-dist = [
 
 [[package]]
 name = "argus-automatix"
-version = "0.5.0"
+version = "0.5.1"
 source = { editable = "." }
 dependencies = [
     { name = "algebraic-jax" },
