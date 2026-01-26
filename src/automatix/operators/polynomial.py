@@ -106,7 +106,7 @@ class PolynomialOperator(eqx.Module, Generic[Symbol, K]):
     accepting_states: frozenset[int]
     num_states: int = eqx.field(static=True)
     algebra: K = eqx.field(default_factory=lambda: algebraic.semirings.boolean_algebra(), kw_only=True)
-    _transition_cache: Mapping[tuple[int, Symbol], RankDecomposition[K]] = eqx.field(static=True, kw_only=True)
+    _transition_cache: Mapping[tuple[int, Symbol], RankDecomposition[K]] = eqx.field(kw_only=True)
 
     def accepts(self, word: Sequence[Symbol]) -> Array:
         """Check if the automaton accepts the given word.
