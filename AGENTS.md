@@ -1,10 +1,7 @@
 # Automatix: Agent Context
 
-**Version**:
-v0.5.0 **Last Updated**:
-2026-01-11 **Status**:
-Active development - NFA operators with guard-based weight functions, polynomial
-representations, LTL/LTLf to AFA conversion
+**Version**: v0.5.0  
+**Last Updated**: 2026-01-25
 
 ## Quick Start for Agents
 
@@ -16,27 +13,127 @@ Automatix is a library for **weighted automata over semirings** with a focus on:
 - LTL/LTLf temporal logic specifications
 - Quantitative monitoring and synthesis
 
-### Essential Commands
+### Build, Lint, and Test Commands
+
+**Testing**:
 ```bash
-# Run all tests
-python -m pytest tests/ -v
+# Run all tests (uses --lf for last-failed)
+just test
+# OR
+uv run --dev --frozen pytest --lf
 
-# Run tests for specific packages
-python -m pytest packages/morphata/tests/ -v
-python -m pytest packages/algebraic/tests/ -v
+# Run all tests verbosely without --lf
+uv run --dev --frozen pytest -v
 
-# Type check (strict mode)
-python -m mypy src/automatix/ --strict
+# Run a single test file
+uv run --dev --frozen pytest tests/test_weight_functions.py -v
 
-# Check workspace status
-jj status
+# Run a single test function
+uv run --dev --frozen pytest tests/test_weight_functions.py::TestWeightFunctionBasics::test_constant_weight_function -v
 
-# Commit changes (use jj, not git)
-jj commit -m "your message"
+# Run tests for specific package
+uv run --dev --frozen pytest packages/morphata/tests/ -v
+uv run --dev --frozen pytest packages/algebraic/tests/ -v
+
+# Run with coverage
+uv run --dev --frozen pytest --cov=automatix --cov-report=term
 ```
 
+**Linting and Formatting**:
+```bash
+# Format and lint (fixes issues automatically)
+just fmt
+# OR
+uv run --frozen ruff format
+uv run --frozen ruff check --output-format concise --fix --exit-non-zero-on-fix
+
+# Format + type check
+just lint
+```
+
+**Type Checking**:
+```bash
+# Run all type checkers
+just type-check
+
+# Run specific type checkers
+uv run --frozen mypy --strict
+uv run --frozen ty check --output-format concise
+uv run --frozen pyrefly check --output-format min-text
+```
+
+**Development Setup**:
+```bash
+# Set up dev environment (sync dependencies)
+just dev
+# OR
+uv sync --all-packages --frozen --inexact --dev
+
+# For CUDA support (set CUDA_VERSION=12 or 13)
+CUDA_VERSION=12 just dev
+```
+
+## Code Style Guidelines
+
+### General Principles
+- **Type Safety**: All code must pass `mypy --strict`. Use explicit type annotations.
+- **No Unicode/Emojis**: Use plain ASCII text. For math symbols, use LaTeX in inline code blocks.
+- **Line Length**: Maximum 127 characters (configured in ruff).
+- **Indentation**: 4 spaces (never tabs).
+- **Breaking Changes OK**: v0.x has no backward compatibility guarantees - prefer refactoring over deprecation.
+
+### Imports
+- Always use `from __future__ import annotations` at the top.
+- Order: stdlib, third-party, local (ruff handles this automatically).
+- Use absolute imports from package roots:
+  - `from automatix.operators import MatrixOperator`
+  - `from morphata.examples.nfa import NFA` (NOT `morphata.automata`)
+  - `from algebraic.semirings import tropical_semiring`
+- Prefer importing specific items over module imports.
+- Type-only imports should use `typing.TYPE_CHECKING` when needed to avoid circular dependencies.
+
+### Naming Conventions
+- Classes: `PascalCase` (e.g., `MatrixOperator`, `WeightFunction`)
+- Functions/methods: `snake_case` (e.g., `cost_transitions`, `add_location`)
+- Constants: `UPPER_SNAKE_CASE` for true constants
+- Type variables: Single uppercase letter or descriptive name (e.g., `S`, `In`, `State`)
+- Private: Prefix with `_` (e.g., `_transition_cache`)
+
+### Type Annotations
+- Use modern type syntax: `type` aliases, `|` for unions, generic classes with `[T]`
+- JAX array types: Use `jaxtyping` annotations (e.g., `Num[Array, "..."]`, `Shaped[Array, "q q"]`)
+- Protocol classes: Mark with `@runtime_checkable` when appropriate
+- Generic classes: Use PEP 695 syntax `class Foo[T]:`
+- Return types: Always specify, including `-> None`
+
+### Documentation
+- Use triple-quoted docstrings for all public classes, functions, and methods.
+- Format: NumPy-style docstrings with sections: Parameters, Returns, Notes, Examples.
+- Keep module-level docstrings concise (1-3 sentences).
+- Inline comments: Use sparingly, prefer self-documenting code.
+
+### Error Handling
+- Prefer explicit errors over silent failures.
+- Use built-in exception types when appropriate.
+- For JAX code: Be aware of tracer semantics - avoid Python control flow on traced values.
+- Validate inputs at construction time, not runtime (design decision).
+
+### JAX-Specific Patterns
+- Use `equinox.Module` for JAX-compatible classes (not dataclasses).
+- Wrap transformations with `quax.quaxify` when using `AlgebraicArray`.
+- Use `@eqx.filter_jit` for method JIT compilation.
+- Functional style: Avoid mutation, return new objects.
+- Array operations: Use `jax.numpy`, not `numpy`.
+
+### Testing
+- Test files: `test_*.py` in `tests/` or `packages/*/tests/`
+- Test classes: `class Test<Feature>:` with methods `def test_<case>(self) -> None:`
+- Use descriptive test names that explain what is being tested.
+- Disable specific mypy errors in test files with `# mypy: disable-error-code="..."`
+- Use `assert` for test assertions (pytest style).
+
 ### Workspace Structure
-This is a Jujutsu monorepo with three main packages:
+This is a monorepo with the main `automatix` package and two workspace packages:
 
 ```
 automatix/
@@ -53,31 +150,48 @@ automatix/
 │   └── weights/
 │       └── guard_weights.py    # Guard-based weight functions
 │
-├── packages/morphata/          # Foundation: graph-based automata
-│   ├── spec.py                 # Base automaton interfaces (Domain, TransitionRelation, etc.)
-│   ├── acceptance.py           # Expression-based acceptance conditions (HOA specs)
-│   ├── examples/
-│   │   ├── nfa.py              # NFA implementation (graph-based)
-│   │   ├── strel.py            # STREL automaton (spatio-temporal specs)
-│   │   └── ltl.py              # LTL/LTLf to AFA conversion
-│   └── hoa/
-│       ├── parser.py           # HOA format parser
-│       └── acc_expr.py         # HOA acceptance expressions
+├── packages/morphata/          # Foundation: graph-based automata (pure structural)
+│   ├── src/morphata/
+│   │   ├── spec.py             # Base automaton interfaces (Domain, TransitionRelation, etc.)
+│   │   ├── acceptance.py       # Expression-based acceptance conditions (HOA specs)
+│   │   ├── automaton.py        # Core automaton dataclass
+│   │   ├── utils.py            # Utility functions
+│   │   ├── examples/
+│   │   │   ├── nfa.py          # NFA implementation (graph-based)
+│   │   │   ├── strel.py        # STREL automaton (spatio-temporal specs)
+│   │   │   └── ltl.py          # LTL/LTLf to AFA conversion
+│   │   └── hoa/
+│   │       ├── parser.py       # HOA format parser
+│   │       ├── acc_expr.py     # HOA acceptance expressions
+│   │       ├── exporter.py     # HOA format exporter
+│   │       └── hoa.lark        # HOA grammar file
+│   └── tests/
+│       ├── examples/           # Tests for NFA, STREL, LTL
+│       └── hoa/                # HOA format test files
 │
-├── packages/algebraic/         # Semiring algebra and polynomials
-│   ├── spec.py                 # Semiring, BoundedDistributiveLattice interfaces
-│   ├── semirings.py            # Semiring implementations
-│   ├── array/
-│   │   └── core.py             # AlgebraicArray (semiring-aware JAX arrays)
-│   └── polynomials/
-│       ├── sparse.py           # SparsePolynomial (dict-based)
-│       ├── monomial_basis.py   # MonomialBasis (dense tensor)
-│       └── rank_decomp.py      # RankDecomposition (CP decomposition)
+├── packages/algebraic/         # Semiring algebra and polynomials (JAX-focused)
+│   ├── src/algebraic/
+│   │   ├── spec.py             # Semiring, BoundedDistributiveLattice interfaces
+│   │   ├── semirings.py        # Semiring implementations
+│   │   ├── array/
+│   │   │   ├── core.py         # AlgebraicArray (semiring-aware JAX arrays)
+│   │   │   └── _index_update.py # Indexing operations
+│   │   ├── numpy.py            # Semiring-aware numpy operations
+│   │   ├── kernels/            # JAX kernels for semiring operations
+│   │   └── polynomials/
+│   │       ├── sparse.py       # SparsePolynomial (dict-based)
+│   │       ├── monomial_basis.py # MonomialBasis (dense tensor)
+│   │       └── rank_decomp.py  # RankDecomposition (CP decomposition)
+│   └── tests/
+│       ├── array/              # AlgebraicArray tests
+│       └── polynomials/        # Polynomial tests
 │
 ├── tests/                      # Automatix tests
-│   ├── nfa/
-│   │   └── test_jax_automaton_operator.py
-│   └── test_weight_functions.py
+│   ├── test_weight_functions.py
+│   ├── operators/
+│   │   └── test_polynomial_operator.py
+│   └── nfa/
+│       └── test_jax_automaton_operator.py
 │
 └── examples/                   # Example applications
     ├── weight_functions_demo.py
@@ -158,8 +272,15 @@ Pure structural automata representations (no JAX, no semirings)
   Returns single `State`
 - `AcceptanceCondition`:
   Abstract base for acceptance
+
+**automaton.py**:
 - `Automaton[State, Symbol]`:
   Frozen dataclass with domain, initial, delta, acceptance
+- Core data structure representing automata
+
+**utils.py**:
+- Utility functions for automata operations
+- Helper methods for common automata manipulations
 
 **acceptance.py**:
 Expression-based acceptance conditions for HOA specifications:
@@ -199,6 +320,14 @@ Expression-based acceptance conditions for HOA specifications:
 - Supports finite and omega-regular automata
 - Returns `morphata.Automaton` instances
 
+**hoa/exporter.py**:
+- HOA format exporter
+- Converts automata to HOA format for external tools
+
+**hoa/hoa.lark**:
+- LALR grammar for HOA format parsing
+- Complete v1 specification support
+
 ### Algebraic Package (Semirings)
 
 **Purpose**:
@@ -237,6 +366,19 @@ Concrete semiring implementations:
   `zeros(shape, semiring)`, `ones(shape, semiring)`
 - Full JAX transformation support (jit, vmap, grad)
 - Use `quax.quaxify` to wrap JAX transformations when crossing JIT boundaries
+
+**array/_index_update.py**:
+- Indexing operations for AlgebraicArray
+- Efficient updates using JAX's indexing primitives
+
+**numpy.py**:
+- Semiring-aware numpy operations
+- Drop-in replacement for numpy with semiring arithmetic
+- Type stubs provided in `numpy.pyi`
+
+**kernels/**:
+- JAX kernels for semiring operations
+- Optimized implementations of semiring primitives
 
 **polynomials/**:
 Three complementary polynomial representations:
@@ -314,7 +456,7 @@ applications
 **No circular dependencies**:
 morphata does not import from automatix.
 
-## Design Decisions (Locked In)
+## Design Principles
 
 1. **Weight Function Scope**:
    Guard-based weight functions (input + boolean expression -> semiring value)
@@ -322,55 +464,32 @@ morphata does not import from automatix.
    Validation at automaton construction time
 3. **Semiring-Agnostic**:
    Weight functions don't know target semiring
-4. **Breaking Changes OK**:
-   No backward compatibility guarantees for v0.x
-5. **Version Control**:
-   Use `jj` (Jujutsu), not git
-6. **Code Style**:
+4. **API Stability**:
+   v0.x; breaking changes may occur between releases
+5. **Code Style**:
    No emojis/unicode; use LaTeX for math symbols (inline code blocks)
-7. **Import Paths**:
+6. **Import Paths**:
    Use `morphata.examples` (not `morphata.automata`)
 
-## Current Implementation Status
+## Usage Notes and Limitations
 
-### What Works
-- ✅ NFA operators with guard-based weight functions
-- ✅ JAX semiring implementations (counting, tropical, max-min, boolean)
-- ✅ Polynomial representations (Sparse, MonomialBasis, RankDecomposition)
-- ✅ LTL/LTLf to AFA conversion
-- ✅ Polynomial operator for AFAs (Boolean algebra)
-- ✅ STREL automaton (Boolean-only)
-- ✅ HOA format parser
-- ✅ AlgebraicArray with full JAX transformation support
-
-### In Progress
-- 🚧 General semiring support for STREL (Boolean-only currently)
-
-### Known Limitations
-- STREL is Boolean-only (polynomial evaluation over semirings not yet
-  implemented)
-- MatrixOperator only for finite-word acceptance (omega-regular deferred)
-- PolynomialOperator tested with Boolean algebra only (other semirings not yet
-  tested)
+- STREL automata use Boolean semantics; semiring-valued STREL is not available.
+- MatrixOperator targets finite-word acceptance; omega-regular acceptance is not implemented.
+- PolynomialOperator usage is tested with Boolean algebra; other semirings may require additional validation.
 
 ## Important Notes for Agents
 
-1. **Single User**:
-   Anand is the primary user; breaking changes are acceptable
-2. **JAX-First**:
+1. **JAX-First**:
    Optimize for JAX initially
-3. **No Deprecation**:
+2. **No Deprecation**:
    Delete old code instead of wrapping it
-4. **Type Safety**:
+3. **Type Safety**:
    All new code must pass `mypy --strict`
-5. **Prefer Refactoring**:
+4. **Prefer Refactoring**:
    Update existing patterns rather than special-casing
-6. **Documentation**:
+5. **Documentation**:
    Keep design decisions documented in markdown files
-7. **Commit Format**:
-   Use present tense (`add`, `fix`, `refactor`); reference issues/papers when
-   relevant
-8. **quax.quaxify**:
+6. **quax.quaxify**:
    Always wrap JAX transformations (jit, vmap, scan) when working with
    AlgebraicArray
 
@@ -547,18 +666,6 @@ print(f"Accepting states: {poly_op.accepting_states}")
 run_poly = poly_op.run_polynomial(word)
 print(f"Run polynomial rank: {run_poly.rank}")
 ```
-
-## Future Directions (Deferred)
-
-### General Semiring STREL
-- STREL support beyond Boolean
-- Polynomial evaluation over arbitrary semirings
-- Requires polynomial infrastructure completion
-
-### Omega-Regular Automata
-- Büchi and co-Büchi operators
-- Limit-based weight semantics
-- OmegaAutomatonOperator
 
 ## Key Files Reference
 
