@@ -37,7 +37,7 @@ dev = [
 ]
 
 [build-system]
-requires = ["uv_build>=0.9.9,<0.10.0"]
+requires = ["uv_build>=0.10.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
@@ -59,7 +59,7 @@ packages = ["automatix", "algebraic", "morphata"]
 
 exclude = '''(?x)(
     ^examples/    # files in examples/
-)'''  # TOML's single-quoted strings do not require escaping backslashes
+)''' # TOML's single-quoted strings do not require escaping backslashes
 
 [[tool.mypy.overrides]]
 module = ["dd", "dd.*"]
@@ -101,4 +101,3 @@ root = ["./src", "./packages"]
 
 [tool.ty.src]
 exclude = ["./examples"]
-
