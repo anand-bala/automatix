@@ -21,10 +21,6 @@ from algebraic.types import Array
 
 from .utils import dispatch, validate_semiring
 
-# ---------------------------------------------------------------------------
-# Elementwise operations (delegate to dunders)
-# ---------------------------------------------------------------------------
-
 
 def add(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
     """Element-wise semiring addition.
@@ -81,11 +77,6 @@ def square(x: AlgebraicArray) -> AlgebraicArray:
     return x * x
 
 
-# ---------------------------------------------------------------------------
-# Statistical reductions (use abstract ``reduce``)
-# ---------------------------------------------------------------------------
-
-
 @dispatch.abstract
 def sum(  # noqa: A001  (intentional shadowing of built-in)
     x: AlgebraicArray, /, *, axis: int | Sequence[int] | None = None, keepdims: bool = False
@@ -116,11 +107,6 @@ def prod(
         keepdims: When `True`, reduced axes are replaced by size-1 dimensions.
     """
     raise NotImplementedError
-
-
-# ---------------------------------------------------------------------------
-# Cumulative operations (use abstract ``scan``)
-# ---------------------------------------------------------------------------
 
 
 @dispatch.abstract
@@ -159,11 +145,6 @@ def cumulative_prod(
             `result.shape[axis] == x.shape[axis] + 1`.
     """
     raise NotImplementedError
-
-
-# ---------------------------------------------------------------------------
-# Linear algebra (use abstract ``dot_general``)
-# ---------------------------------------------------------------------------
 
 
 def matmul(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
@@ -236,11 +217,6 @@ def tensordot(
         lhs_contract = tuple(axes[0])
         rhs_contract = tuple(axes[1])
     return x.dot_general(y, ((lhs_contract, rhs_contract), ((), ())))
-
-
-# ---------------------------------------------------------------------------
-# linalg extensions (built on the above + array_api_compat)
-# ---------------------------------------------------------------------------
 
 
 def trace(x: AlgebraicArray, /, *, offset: int = 0) -> AlgebraicArray:

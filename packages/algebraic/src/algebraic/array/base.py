@@ -43,10 +43,6 @@ class AlgebraicArray(metaclass=ABCMeta):
         object.__setattr__(clone, "data", data)
         return clone
 
-    # ------------------------------------------------------------------
-    # Category 1: semiring-affected arithmetic dunders
-    # ------------------------------------------------------------------
-
     def __add__(self, other: Self | Scalar) -> Self:
         other_data = other.data if isinstance(other, AlgebraicArray) else other
         return self._wrap(self.semiring.add(self.data, other_data))
@@ -104,10 +100,6 @@ class AlgebraicArray(metaclass=ABCMeta):
             batch = tuple(range(ndim - 2))
             dimension_numbers = (((ndim - 1,), (ndim - 2,)), (batch, batch))
         return self.dot_general(other, dimension_numbers)
-
-    # ------------------------------------------------------------------
-    # Category 2: pass-through dunders and properties
-    # ------------------------------------------------------------------
 
     def __eq__(self, other: object) -> Array:  # type: ignore[override]
         """Element-wise equality; returns a raw bool array (not wrapped)."""

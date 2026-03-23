@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import typing
 from collections.abc import Sequence
-from typing import Any
 
 import array_api_compat
 
@@ -248,11 +247,6 @@ def unstack(x: AlgebraicArray, *, axis: int = 0) -> Sequence[AlgebraicArray]:
     return tuple(x._wrap(s) for s in slices)
 
 
-# ---------------------------------------------------------------------------
-# Searching
-# ---------------------------------------------------------------------------
-
-
 def where(condition: Array, x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
     """Select elements from *x* or *y* depending on *condition*.
 
@@ -268,11 +262,6 @@ def where(condition: Array, x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicAr
     xp = array_api_compat.array_namespace(x.data)
     result: Array = xp.where(condition, x.data, y.data)
     return x._wrap(result)
-
-
-# ---------------------------------------------------------------------------
-# Set / unique functions
-# ---------------------------------------------------------------------------
 
 
 def unique_all(x: AlgebraicArray) -> UniqueAllResult:
@@ -335,11 +324,6 @@ def unique_values(x: AlgebraicArray) -> AlgebraicArray:
     return x._wrap(result)
 
 
-# ---------------------------------------------------------------------------
-# Indexing
-# ---------------------------------------------------------------------------
-
-
 def take(
     x: AlgebraicArray,
     indices: Array,
@@ -376,12 +360,7 @@ def take_along_axis(
     return x._wrap(result)
 
 
-# ---------------------------------------------------------------------------
-# Elementwise pass-through (return raw bool arrays, NOT wrapped)
-# ---------------------------------------------------------------------------
-
-
-def equal(x: AlgebraicArray[Any], y: AlgebraicArray[Any]) -> Array:
+def equal(x: AlgebraicArray, y: AlgebraicArray) -> Array:
     """Element-wise equality; returns a raw bool array.
 
     Args:
@@ -393,7 +372,7 @@ def equal(x: AlgebraicArray[Any], y: AlgebraicArray[Any]) -> Array:
     return result
 
 
-def not_equal(x: AlgebraicArray[Any], y: AlgebraicArray[Any]) -> Array:
+def not_equal(x: AlgebraicArray, y: AlgebraicArray) -> Array:
     """Element-wise inequality; returns a raw bool array.
 
     Args:
@@ -411,11 +390,6 @@ def positive(x: AlgebraicArray) -> AlgebraicArray:
     Equivalent to `__pos__`.
     """
     return +x
-
-
-# ---------------------------------------------------------------------------
-# linalg pass-throughs
-# ---------------------------------------------------------------------------
 
 
 def matrix_transpose(x: AlgebraicArray) -> AlgebraicArray:
