@@ -43,7 +43,6 @@ from algebraic.ops._passthrough import unique_values as unique_values
 from algebraic.ops._passthrough import unstack as unstack
 from algebraic.ops._passthrough import where as where
 from algebraic.ops._semiring_ops import add as add
-from algebraic.ops._semiring_ops import cross as cross
 from algebraic.ops._semiring_ops import cumulative_prod as cumulative_prod
 from algebraic.ops._semiring_ops import cumulative_sum as cumulative_sum
 from algebraic.ops._semiring_ops import diff as diff

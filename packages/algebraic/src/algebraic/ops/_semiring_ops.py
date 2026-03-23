@@ -17,45 +17,11 @@ from typing_extensions import overload
 
 from algebraic.array.base import AlgebraicArray
 from algebraic.spec import Semiring, is_ring
-from algebraic.types import AccumulationFn, Array, BinaryOp, ScanFn
+from algebraic.types import AccumulationFn, Array
+
+from .utils import dispatch
 
 K = typing.TypeVar("K", bound=Semiring)
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
-def _normalize_axes(axis: int | Sequence[int] | None, ndim: int) -> tuple[int, ...]:
-    """Return a sorted tuple of non-negative axis indices.
-
-    Args:
-        axis: `None` (all axes), a single `int`, or a sequence of `int`s.
-            Negative values are resolved modulo *ndim*.
-        ndim: Number of dimensions of the array being operated on.
-    """
-    if axis is None:
-        return tuple(range(ndim))
-    if isinstance(axis, int):
-        return (axis % ndim,)
-    return tuple(sorted(a % ndim for a in axis))
-
-
-def _make_prefix_scan_fn(binary_op: BinaryOp) -> ScanFn:
-    """Return a `ScanFn` that accumulates elements using *binary_op*.
-
-    The returned function has signature `(carry, x) -> (new_carry, output)`
-    where `new_carry == output == binary_op(carry, x)`.  This produces a
-    standard inclusive prefix scan when passed to `AlgebraicArray.scan`.
-    """
-
-    def scan_fn(carry: Array, x: Array) -> tuple[Array, Array]:
-        new_carry: Array = binary_op(carry, x)
-        return new_carry, new_carry
-
-    # cast: plain function satisfies ScanFn protocol; mypy struggles with
-    # Callable vs Protocol when parameter types differ in their supertype chains.
-    return typing.cast(ScanFn, scan_fn)
 
 
 # ---------------------------------------------------------------------------
@@ -120,12 +86,9 @@ def square(x: AlgebraicArray[K]) -> AlgebraicArray[K]:
 # ---------------------------------------------------------------------------
 
 
+@dispatch.abstract
 def sum(  # noqa: A001  (intentional shadowing of built-in)
-    x: AlgebraicArray[K],
-    /,
-    *,
-    axis: int | Sequence[int] | None = None,
-    keepdims: bool = False,
+    x: AlgebraicArray[K], /, *, axis: int | Sequence[int] | None = None, keepdims: bool = False
 ) -> AlgebraicArray[K]:
     """Reduce *x* using the semiring's addition along *axis*.
 
@@ -134,20 +97,10 @@ def sum(  # noqa: A001  (intentional shadowing of built-in)
         axis: Axis or axes to reduce. `None` reduces all axes.
         keepdims: When `True`, reduced axes are replaced by size-1 dimensions.
     """
-    dims = _normalize_axes(axis, x.ndim)
-    zero = x._wrap(x.semiring.zeros(()))
-    # cast: BinaryOp is contravariant-compatible with AccumulationFn but
-    # mypy does not resolve this structural subtyping automatically.
-    result = x.reduce(typing.cast(AccumulationFn, x.semiring.add), [zero], [x], dimensions=dims)
-    if keepdims:
-        xp = array_api_compat.array_namespace(result.data)
-        new_data: Array = result.data
-        for dim in sorted(dims):
-            new_data = xp.expand_dims(new_data, axis=dim)
-        result = result._wrap(new_data)
-    return result
+    raise NotImplementedError
 
 
+@dispatch.abstract
 def prod(
     x: AlgebraicArray[K],
     /,
@@ -162,17 +115,7 @@ def prod(
         axis: Axis or axes to reduce. `None` reduces all axes.
         keepdims: When `True`, reduced axes are replaced by size-1 dimensions.
     """
-    dims = _normalize_axes(axis, x.ndim)
-    one = x._wrap(x.semiring.ones(()))
-    # cast: same reasoning as in `sum`.
-    result = x.reduce(typing.cast(AccumulationFn, x.semiring.mul), [one], [x], dimensions=dims)
-    if keepdims:
-        xp = array_api_compat.array_namespace(result.data)
-        new_data: Array = result.data
-        for dim in sorted(dims):
-            new_data = xp.expand_dims(new_data, axis=dim)
-        result = result._wrap(new_data)
-    return result
+    raise NotImplementedError
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +123,7 @@ def prod(
 # ---------------------------------------------------------------------------
 
 
+@dispatch.abstract
 def cumulative_sum(
     x: AlgebraicArray[K],
     /,
@@ -195,42 +139,10 @@ def cumulative_sum(
         include_initial: When `True`, prepend a zero slice before the scan output so that
             `result.shape[axis] == x.shape[axis] + 1`.
     """
-    xp = array_api_compat.array_namespace(x.data)
-    ndim = x.ndim
-    ax = axis % ndim
-
-    # Permute so the scan axis is leading.
-    if ax != 0:
-        perm = (ax,) + tuple(i for i in range(ndim) if i != ax)
-        x_permuted = x._wrap(xp.permute_dims(x.data, perm))
-    else:
-        perm = None
-        x_permuted = x
-
-    # Initial carry: zero of shape matching a single slice along the leading axis.
-    slice_shape = x_permuted.data.shape[1:]
-    zero_init = x._wrap(x.semiring.zeros(slice_shape))
-
-    scan_fn = _make_prefix_scan_fn(x.semiring.add)
-    result_permuted = x.scan(scan_fn, zero_init, [x_permuted])
-
-    # Optionally prepend the initial zero slice.
-    if include_initial:
-        zero_slice: Array = xp.expand_dims(x.semiring.zeros(slice_shape), axis=0)
-        combined: Array = xp.concat([zero_slice, result_permuted.data], axis=0)
-        result_permuted = result_permuted._wrap(combined)
-
-    # Permute back if we moved the axis.
-    if perm is not None:
-        inv_perm = [0] * ndim
-        for i, p in enumerate(perm):
-            inv_perm[p] = i
-        result_data: Array = xp.permute_dims(result_permuted.data, tuple(inv_perm))
-        return x._wrap(result_data)
-
-    return result_permuted
+    raise NotImplementedError
 
 
+@dispatch.abstract
 def cumulative_prod(
     x: AlgebraicArray[K],
     /,
@@ -246,40 +158,7 @@ def cumulative_prod(
         include_initial: When `True`, prepend a one slice before the scan output so that
             `result.shape[axis] == x.shape[axis] + 1`.
     """
-    xp = array_api_compat.array_namespace(x.data)
-    ndim = x.ndim
-    ax = axis % ndim
-
-    # Permute so the scan axis is leading.
-    if ax != 0:
-        perm = (ax,) + tuple(i for i in range(ndim) if i != ax)
-        x_permuted = x._wrap(xp.permute_dims(x.data, perm))
-    else:
-        perm = None
-        x_permuted = x
-
-    # Initial carry: one of shape matching a single slice along the leading axis.
-    slice_shape = x_permuted.data.shape[1:]
-    one_init = x._wrap(x.semiring.ones(slice_shape))
-
-    scan_fn = _make_prefix_scan_fn(x.semiring.mul)
-    result_permuted = x.scan(scan_fn, one_init, [x_permuted])
-
-    # Optionally prepend the initial one slice.
-    if include_initial:
-        one_slice: Array = xp.expand_dims(x.semiring.ones(slice_shape), axis=0)
-        combined: Array = xp.concat([one_slice, result_permuted.data], axis=0)
-        result_permuted = result_permuted._wrap(combined)
-
-    # Permute back if we moved the axis.
-    if perm is not None:
-        inv_perm = [0] * ndim
-        for i, p in enumerate(perm):
-            inv_perm[p] = i
-        result_data: Array = xp.permute_dims(result_permuted.data, tuple(inv_perm))
-        return x._wrap(result_data)
-
-    return result_permuted
+    raise NotImplementedError
 
 
 # ---------------------------------------------------------------------------
@@ -402,8 +281,7 @@ def matrix_power(x: AlgebraicArray[K], n: int) -> AlgebraicArray[K]:
         raise ValueError(f"matrix_power requires n >= 0; got n={n}")
     if n == 0:
         raise NotImplementedError(
-            "matrix_power n=0 requires creation of an identity matrix, "
-            "which depends on backend-specific creation functions."
+            "matrix_power n=0 requires creation of an identity matrix, which depends on backend-specific creation functions."
         )
 
     result: AlgebraicArray[K] | None = None
@@ -417,51 +295,6 @@ def matrix_power(x: AlgebraicArray[K], n: int) -> AlgebraicArray[K]:
     # result is None only when n==0, which is ruled out above.
     assert result is not None
     return result
-
-
-def cross(x: AlgebraicArray[K], y: AlgebraicArray[K], /, *, axis: int = -1) -> AlgebraicArray[K]:
-    """3-D cross product using semiring operations (requires a Ring).
-
-    Args:
-        x: Array whose size along *axis* is exactly 3.
-        y: Array whose size along *axis* is exactly 3.
-        axis: The axis that indexes the three components (default `-1`).
-
-    Raises:
-        NotImplementedError: If the semiring is not a Ring (no `additive_inverse`).
-        ValueError: If the size along *axis* is not 3.
-    """
-    if not is_ring(x.semiring):
-        raise NotImplementedError(
-            f"cross product requires a Ring with additive_inverse; "
-            f"semiring {type(x.semiring).__name__} does not support subtraction."
-        )
-    ndim = x.ndim
-    ax = axis % ndim
-    if x.data.shape[ax] != 3:
-        raise ValueError(f"cross product requires size-3 axis; got shape {x.data.shape} with axis={ax}")
-
-    def _slice(arr: AlgebraicArray[K], i: int) -> AlgebraicArray[K]:
-        """Extract the i-th element along *ax*."""
-        idx: list[Any] = [slice(None)] * arr.ndim
-        idx[ax] = i
-        return arr[tuple(idx)]
-
-    x0, x1, x2 = _slice(x, 0), _slice(x, 1), _slice(x, 2)
-    y0, y1, y2 = _slice(y, 0), _slice(y, 1), _slice(y, 2)
-
-    c0 = x1 * y2 - x2 * y1
-    c1 = x2 * y0 - x0 * y2
-    c2 = x0 * y1 - x1 * y0
-
-    xp = array_api_compat.array_namespace(x.data)
-    result_data: Array = xp.stack([c0.data, c1.data, c2.data], axis=ax)
-    return x._wrap(result_data)
-
-
-# ---------------------------------------------------------------------------
-# Utility
-# ---------------------------------------------------------------------------
 
 
 def diff(
@@ -489,8 +322,7 @@ def diff(
     """
     if not is_ring(x.semiring):
         raise NotImplementedError(
-            f"diff requires a Ring with additive_inverse; "
-            f"semiring {type(x.semiring).__name__} does not support subtraction."
+            f"diff requires a Ring with additive_inverse; semiring {type(x.semiring).__name__} does not support subtraction."
         )
 
     xp = array_api_compat.array_namespace(x.data)
