@@ -21,6 +21,9 @@ from algebraic._better_abc import BetterABCMeta as ABCMeta
 from algebraic.spec import Semiring, has_complement, is_ring
 from algebraic.types import Array, DType, MatmulFn, Number, Scalar, VdotFn
 
+if typing.TYPE_CHECKING:
+    from algebraic.array._index_update import _IndexUpdateHelper
+
 
 class AlgebraicArray(metaclass=ABCMeta):
     """A multidimensional array with elements from a semiring.
@@ -134,6 +137,17 @@ class AlgebraicArray(metaclass=ABCMeta):
             "Use the `.at[...].set(...)` syntax for functional index updates."
         )
 
+    @property
+    def at(self) -> "_IndexUpdateHelper":
+        """Return a helper for functional index updates.
+
+        Example:
+            result = arr.at[idx].set(value)
+        """
+        from algebraic.array._index_update import _IndexUpdateHelper
+
+        return _IndexUpdateHelper(self)
+
     def __pos__(self) -> Self:
         """Unary positive; returns a shallow copy."""
         return copy.copy(self)
@@ -185,49 +199,6 @@ class AlgebraicArray(metaclass=ABCMeta):
     def mT(self) -> Self:  # noqa: N802
         """Batch matrix transpose (same as `T`; alias for Array-API compatibility)."""
         return self.T
-
-    # @classmethod
-    # @abstractmethod
-    # def reduce[Acc, X](cls, computation: AccumulationFn[Acc, X], init: Acc, operand: X, *, dimensions: Sequence[int]) -> Self:
-    #     """Apply a reduction to the `operand` over the given `dimensions`.
-
-    #     `init` and `computation` together must form a monoid for correctness.
-    #     That is `init` must be an identity of `computation`, and `computation` must be
-    #     associative. `init` must consist of scalars.
-
-    #     Args:
-    #         computation: Binary function applied element-wise during the reduction.
-    #         init: Scalar identity value for the reduction.
-    #         operand: Array to reduce.
-    #         dimensions: Axes along which to reduce.
-    #     """
-
-    # @classmethod
-    # @abstractmethod
-    # def scan[Carry, X, Y](
-    #     cls,
-    #     computation: ScanFn[Carry, X, Y],
-    #     init: Carry,
-    #     operand: X | None = None,
-    #     *,
-    #     length: int | None = None,
-    #     reverse: bool = False,
-    # ) -> tuple[Self, Self]:
-    #     """Scan a function over leading array axis while carrying along state.
-
-    #     Args:
-    #         computation: Binary function mapping `(carry, x) -> (carry, y)`.
-    #         init: Initial carry value.
-    #         operands: Array whose leading axis is scanned over.
-    #         length: Optional explicit scan length.
-    #         reverse: If `True`, scan from right to left.
-
-    #     Returns:
-    #         A tuple ``(final_carry, stacked_outputs)`` where *final_carry* is
-    #         the carry after processing the last element and *stacked_outputs*
-    #         is an array with the same structure as *operands* but with all
-    #         intermediate outputs stacked along the leading axis.
-    #     """
 
     @abstractmethod
     def dot_general(
