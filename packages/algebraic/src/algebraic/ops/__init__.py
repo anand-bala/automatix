@@ -20,6 +20,7 @@ from algebraic.ops._creation import zeros_like as zeros_like
 from algebraic.ops._passthrough import UniqueAllResult as UniqueAllResult
 from algebraic.ops._passthrough import UniqueCountsResult as UniqueCountsResult
 from algebraic.ops._passthrough import UniqueInverseResult as UniqueInverseResult
+from algebraic.ops._passthrough import allclose as allclose
 from algebraic.ops._passthrough import broadcast_arrays as broadcast_arrays
 from algebraic.ops._passthrough import broadcast_to as broadcast_to
 from algebraic.ops._passthrough import concat as concat
@@ -27,6 +28,7 @@ from algebraic.ops._passthrough import diagonal as diagonal
 from algebraic.ops._passthrough import equal as equal
 from algebraic.ops._passthrough import expand_dims as expand_dims
 from algebraic.ops._passthrough import flip as flip
+from algebraic.ops._passthrough import isclose as isclose
 from algebraic.ops._passthrough import matrix_transpose as matrix_transpose
 from algebraic.ops._passthrough import moveaxis as moveaxis
 from algebraic.ops._passthrough import not_equal as not_equal

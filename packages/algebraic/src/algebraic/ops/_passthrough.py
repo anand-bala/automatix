@@ -338,7 +338,14 @@ def take(
         axis: Axis along which to take. `None` treats *x* as flattened.
     """
     xp = array_api_compat.array_namespace(x.data)
+    # Array API spec requires indices to be a 1-d array, not a plain int.
+    scalar_index = isinstance(indices, int)
+    if scalar_index:
+        indices = xp.asarray([indices])
     result: Array = xp.take(x.data, indices, axis=axis)
+    if scalar_index:
+        squeeze_axis = axis if axis is not None else 0
+        result = xp.squeeze(result, axis=squeeze_axis)
     return x._wrap(result)
 
 
@@ -360,7 +367,95 @@ def take_along_axis(
     return x._wrap(result)
 
 
-def equal(x: AlgebraicArray, y: AlgebraicArray) -> Array:
+def allclose(a: AlgebraicArray | Array, b: AlgebraicArray | Array | Number, *, rtol: float = 1e-5, atol: float = 1e-8) -> bool:
+    a_data: Array
+    b_data: Array | Number
+    if isinstance(a, AlgebraicArray) and isinstance(b, AlgebraicArray):
+        validate_semiring(a, b)
+        a_data = a.data
+        b_data = b.data
+    elif isinstance(a, AlgebraicArray):
+        assert is_array(b)
+        a_data = a.data
+        b_data = b
+    elif isinstance(b, AlgebraicArray):
+        assert is_array(a)
+        a_data = a
+        b_data = b.data
+    else:
+        a_data = a
+        b_data = b
+
+    xp = array_api_compat.array_namespace(a_data, b_data)
+    if array_api_compat.is_jax_namespace(xp):
+        import jax.numpy as jnp
+
+        a_data = jnp.asarray(a_data)
+        b_data = jnp.asarray(b_data)
+
+        return jnp.allclose(a_data, b_data, rtol=rtol, atol=atol).item()
+    elif array_api_compat.is_torch_namespace(xp):
+        import torch
+
+        a_data = torch.asarray(a_data)
+        b_data = torch.asarray(b_data)
+
+        return torch.allclose(a_data, b_data, rtol=rtol, atol=atol)
+    elif array_api_compat.is_numpy_array(xp):
+        import numpy as np
+
+        a_data = np.asarray(a_data)
+        b_data = np.asarray(b_data)
+
+        return np.allclose(a_data, b_data, rtol=rtol, atol=atol)
+    raise TypeError(f"Unknown array type: {type(a)}, {type(b)}")
+
+
+def isclose(a: AlgebraicArray | Array, b: AlgebraicArray | Array | Number, *, rtol: float = 1e-5, atol: float = 1e-8) -> Array:
+    a_data: Array
+    b_data: Array | Number
+    if isinstance(a, AlgebraicArray) and isinstance(b, AlgebraicArray):
+        validate_semiring(a, b)
+        a_data = a.data
+        b_data = b.data
+    elif isinstance(a, AlgebraicArray):
+        assert is_array(b)
+        a_data = a.data
+        b_data = b
+    elif isinstance(b, AlgebraicArray):
+        assert is_array(a)
+        a_data = a
+        b_data = b.data
+    else:
+        a_data = a
+        b_data = b
+
+    xp = array_api_compat.array_namespace(a_data, b_data)
+    if array_api_compat.is_jax_namespace(xp):
+        import jax.numpy as jnp
+
+        a_data = jnp.asarray(a_data)
+        b_data = jnp.asarray(b_data)
+
+        return jnp.isclose(a_data, b_data, rtol=rtol, atol=atol)
+    elif array_api_compat.is_torch_namespace(xp):
+        import torch
+
+        a_data = torch.asarray(a_data)
+        b_data = torch.asarray(b_data)
+
+        return torch.isclose(a_data, b_data, rtol=rtol, atol=atol)
+    elif array_api_compat.is_numpy_array(xp):
+        import numpy as np
+
+        a_data = np.asarray(a_data)
+        b_data = np.asarray(b_data)
+
+        return np.isclose(a_data, b_data, rtol=rtol, atol=atol)
+    raise TypeError(f"Unknown array type: {type(a)}, {type(b)}")
+
+
+def equal(x: AlgebraicArray, y: AlgebraicArray | Number) -> Array:
     """Element-wise equality; returns a raw bool array.
 
     Args:
@@ -368,11 +463,12 @@ def equal(x: AlgebraicArray, y: AlgebraicArray) -> Array:
         y: Input arrays (semirings may differ -- comparison is data-only).
     """
     xp = array_api_compat.array_namespace(x.data)
-    result: Array = xp.equal(x.data, y.data)
+    y_data = y.data if isinstance(y, AlgebraicArray) else y
+    result: Array = xp.equal(x.data, y_data)
     return result
 
 
-def not_equal(x: AlgebraicArray, y: AlgebraicArray) -> Array:
+def not_equal(x: AlgebraicArray, y: AlgebraicArray | Number) -> Array:
     """Element-wise inequality; returns a raw bool array.
 
     Args:
@@ -380,7 +476,8 @@ def not_equal(x: AlgebraicArray, y: AlgebraicArray) -> Array:
         y: Input arrays (semirings may differ -- comparison is data-only).
     """
     xp = array_api_compat.array_namespace(x.data)
-    result: Array = xp.not_equal(x.data, y.data)
+    y_data = y.data if isinstance(y, AlgebraicArray) else y
+    result: Array = xp.not_equal(x.data, y_data)
     return result
 
 

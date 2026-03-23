@@ -7,6 +7,7 @@ from algebraic.array import AlgebraicArray as AlgebraicArray
 
 # Re-export all the Array API-like operations
 from algebraic.ops import add as add
+from algebraic.ops import allclose as allclose
 from algebraic.ops import array as array
 from algebraic.ops import broadcast_arrays as broadcast_arrays
 from algebraic.ops import broadcast_to as broadcast_to
@@ -19,6 +20,7 @@ from algebraic.ops import equal as equal
 from algebraic.ops import expand_dims as expand_dims
 from algebraic.ops import flip as flip
 from algebraic.ops import full as full
+from algebraic.ops import isclose as isclose
 from algebraic.ops import matmul as matmul
 from algebraic.ops import matrix_power as matrix_power
 from algebraic.ops import matrix_transpose as matrix_transpose
