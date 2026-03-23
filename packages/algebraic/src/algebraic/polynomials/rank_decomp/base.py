@@ -20,7 +20,7 @@ from algebraic._better_abc import AbstractClassVar, AbstractVar, BetterABCMeta
 from algebraic.array import AlgebraicArray
 from algebraic.polynomials.dok.base import PolyDict, _make_poly_dict
 from algebraic.spec import BoundedDistributiveLattice as Lattice
-from algebraic.types import Array, Backend, Scalar, is_scalar
+from algebraic.types import Array, Backend, Number, Scalar, is_scalar
 
 
 class RankDecomposition(metaclass=BetterABCMeta):
@@ -53,7 +53,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
         try:
             return cls.backend
         except AttributeError:
-            return Backend.JAX
+            return Backend.NUMPY
 
     @property
     def rank(self) -> int:
@@ -86,7 +86,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
         max_replacement_degree: int | None = None,
         *,
         backend: str | Backend | None = None,
-    ) -> "RankDecomposition":
+    ) -> Self:
         """Create rank-1 polynomial representing variable ``x_i``.
 
         Creates a CP decomposition with rank=1, degree=1.

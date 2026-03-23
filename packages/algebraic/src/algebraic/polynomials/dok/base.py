@@ -67,9 +67,17 @@ class PolyDict(metaclass=BetterABCMeta):
         return self.data.items()
 
     @classmethod
-    def constant(
-        cls, value: Scalar, num_vars: int, *, algebra: Lattice, backend: str | Backend | None = None
-    ) -> "PolyDict":
+    def _get_backend(cls, backend: str | Backend | None) -> str | Backend:
+        """Resolve backend: use explicit arg, class default, or fall back to JAX."""
+        if backend is not None:
+            return backend
+        try:
+            return cls.backend
+        except AttributeError:
+            return Backend.NUMPY
+
+    @classmethod
+    def constant(cls, value: Scalar, num_vars: int, *, algebra: Lattice, backend: str | Backend | None = None) -> "PolyDict":
         """
         Examples
         --------
@@ -81,7 +89,7 @@ class PolyDict(metaclass=BetterABCMeta):
         Array(True, dtype=bool)
         """
         zeros_idx = frozenbitarray(ba_util.zeros(num_vars))
-        backend = backend or cls.backend
+        backend = cls._get_backend(backend)
         coeff = alge.array(value, semiring=algebra, backend=backend)
         return _make_poly_dict(algebra, num_vars, {zeros_idx: coeff}, backend=backend)
 
@@ -94,13 +102,11 @@ class PolyDict(metaclass=BetterABCMeta):
         return cls.constant(algebra.one, num_vars, algebra=algebra, backend=backend)
 
     @classmethod
-    def variable(
-        cls, index: int, num_vars: int, *, algebra: Lattice, backend: str | Backend | None = None
-    ) -> "PolyDict":
+    def variable(cls, index: int, num_vars: int, *, algebra: Lattice, backend: str | Backend | None = None) -> "PolyDict":
         """Create polynomial representing a single variable x_i."""
         monomial = ba_util.zeros(num_vars)
         monomial[index] = 1
-        backend = backend or cls.backend
+        backend = cls._get_backend(backend)
         coefficient = alge.ones((), semiring=algebra, backend=backend)
         return _make_poly_dict(algebra, num_vars, {frozenbitarray(monomial): coefficient}, backend)
 

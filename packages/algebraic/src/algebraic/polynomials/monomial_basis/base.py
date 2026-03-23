@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from itertools import product
 
 from bitarray import frozenbitarray
+from jaxtyping import Shaped
 from typing_extensions import Self
 
 import algebraic.ops as alge
@@ -17,7 +18,7 @@ from algebraic._better_abc import AbstractClassVar, AbstractVar, BetterABCMeta
 from algebraic.array import AlgebraicArray
 from algebraic.polynomials.dok.base import PolyDict, _make_poly_dict
 from algebraic.spec import BoundedDistributiveLattice as Lattice
-from algebraic.types import Backend, Scalar, is_scalar
+from algebraic.types import Array, Backend, Scalar, is_array, is_scalar
 
 
 class MonomialBasis(metaclass=BetterABCMeta):
@@ -30,6 +31,16 @@ class MonomialBasis(metaclass=BetterABCMeta):
     coeffs: AbstractVar[AlgebraicArray]
     algebra: AbstractVar[Lattice]
     backend: AbstractClassVar[str | Backend]
+
+    @classmethod
+    def _get_backend(cls, backend: str | Backend | None) -> str | Backend:
+        """Resolve backend: use explicit arg, class default, or fall back to JAX."""
+        if backend is not None:
+            return backend
+        try:
+            return cls.backend
+        except AttributeError:
+            return Backend.NUMPY
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -81,11 +92,9 @@ class MonomialBasis(metaclass=BetterABCMeta):
     ) -> "MonomialBasis":
         """Create polynomial representing a single variable :math:`x_i`."""
         idx = tuple(1 if i == index else 0 for i in range(num_vars))
-        backend = backend or cls.backend
+        backend = cls._get_backend(backend)
         return _make_monomial_basis(
-            cls._build_coeffs_with_one_set(
-                (2,) * num_vars, idx, algebra.one, algebra, backend
-            ),
+            cls._build_coeffs_with_one_set((2,) * num_vars, idx, algebra.one, algebra, backend),
             algebra,
             backend,
         )
@@ -101,11 +110,9 @@ class MonomialBasis(metaclass=BetterABCMeta):
     ) -> "MonomialBasis":
         """Create a constant polynomial."""
         idx = (0,) * num_vars
-        backend = backend or cls.backend
+        backend = cls._get_backend(backend)
         return _make_monomial_basis(
-            cls._build_coeffs_with_one_set(
-                (2,) * num_vars, idx, value, algebra, backend
-            ),
+            cls._build_coeffs_with_one_set((2,) * num_vars, idx, value, algebra, backend),
             algebra,
             backend,
         )
