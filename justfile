@@ -46,7 +46,7 @@ test:
 
 # Sync virtual environment
 sync-venv:
-    uv sync --all-packages --frozen --inexact --all-groups
+    uv sync --all-packages --frozen --inexact --all-groups --all-extras
 
 [private]
 _jax_extra := if which("nvidia-smi") == "" { "cpu" } else { f"cuda{{CUDA_VERSION}}" }
