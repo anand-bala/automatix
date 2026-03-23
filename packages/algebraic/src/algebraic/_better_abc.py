@@ -12,12 +12,16 @@ from __future__ import annotations
 
 import abc
 import dataclasses
+import functools
 import inspect
+from collections.abc import Callable
 from typing import (
     TYPE_CHECKING,
     Annotated,
+    Any,
     ClassVar,
     Generic,
+    NoReturn,
     TypeAlias,
     TypeVar,
     get_args,
@@ -27,6 +31,7 @@ from typing import (
 from typing_extensions import dataclass_transform
 
 _T = TypeVar("_T")
+_C = TypeVar("_C")
 
 
 if TYPE_CHECKING:
@@ -136,7 +141,7 @@ else:
         """
 
 
-def _process_annotation(annotation):
+def _process_annotation(annotation: object) -> tuple[bool, bool]:
     if isinstance(annotation, str):
         if annotation.startswith("AbstractVar[") or annotation.startswith("AbstractClassVar["):
             raise NotImplementedError("Stringified abstract annotations are not supported")
@@ -170,11 +175,11 @@ class BetterABCMeta(abc.ABCMeta):
     __abstractvars__: frozenset[str]
     __abstractclassvars__: frozenset[str]
 
-    def register(cls, subclass):
+    def register(cls, subclass: type) -> NoReturn:
         del subclass
         raise ValueError
 
-    def __new__(mcs, name, bases, namespace, /, **kwargs):
+    def __new__(mcs, name: str, bases: tuple[type, ...], namespace: dict[str, Any], /, **kwargs: Any) -> BetterABCMeta:  # noqa: ANN401
         cls = super().__new__(mcs, name, bases, namespace, **kwargs)
 
         # We don't try and check that our AbstractVars and AbstractClassVars are
@@ -186,33 +191,33 @@ class BetterABCMeta(abc.ABCMeta):
         abstract_class_vars = set()
         for kls in reversed(cls.__mro__):
             ann = inspect.get_annotations(kls)
-            for name, annotation in ann.items():
+            for attr_name, annotation in ann.items():
                 is_abstract, is_class = _process_annotation(annotation)
                 if is_abstract:
                     if is_class:
-                        if name in kls.__dict__:
-                            raise TypeError(f"Abstract class attribute {name} cannot have value")
-                        abstract_vars.discard(name)
-                        abstract_class_vars.add(name)
+                        if attr_name in kls.__dict__:
+                            raise TypeError(f"Abstract class attribute {attr_name} cannot have value")
+                        abstract_vars.discard(attr_name)
+                        abstract_class_vars.add(attr_name)
                     else:
-                        if name in kls.__dict__:
-                            raise TypeError(f"Abstract attribute {name} cannot have value")
+                        if attr_name in kls.__dict__:
+                            raise TypeError(f"Abstract attribute {attr_name} cannot have value")
                         # If it's already an abstract class var, then superfluous to
                         # also consider it an abstract var.
-                        if name not in abstract_class_vars:
-                            abstract_vars.add(name)
+                        if attr_name not in abstract_class_vars:
+                            abstract_vars.add(attr_name)
                 else:
-                    abstract_class_vars.discard(name)
+                    abstract_class_vars.discard(attr_name)
                     if not is_class:
-                        abstract_vars.discard(name)
-            for name in kls.__dict__.keys():
-                abstract_vars.discard(name)
-                abstract_class_vars.discard(name)
+                        abstract_vars.discard(attr_name)
+            for attr_name in kls.__dict__.keys():
+                abstract_vars.discard(attr_name)
+                abstract_class_vars.discard(attr_name)
         cls.__abstractvars__ = frozenset(abstract_vars)  # pyright: ignore
         cls.__abstractclassvars__ = frozenset(abstract_class_vars)  # pyright: ignore
         return cls
 
-    def __call__(cls, *args, **kwargs):
+    def __call__(cls, *args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
         __tracebackhide__ = True
         if len(cls.__abstractclassvars__) > 0:  # pyright: ignore
             abstract_class_vars = set(cls.__abstractclassvars__)  # pyright: ignore
@@ -227,28 +232,30 @@ class BetterABCMeta(abc.ABCMeta):
 
 
 @dataclass_transform()
-def better_dataclass(**kwargs):
-    def make_dataclass(cls):
+def better_dataclass(cls: type[_C] | None = None, /, **kwargs: Any) -> type[_C] | Callable[[type[_C]], type[_C]]:  # noqa: ANN401
+    def make_dataclass(kls: type[_C]) -> type[_C]:
         try:
-            annotations = inspect.get_annotations(cls)
+            annotations = inspect.get_annotations(kls)
         except KeyError:
-            cls = dataclasses.dataclass(**kwargs)(cls)
+            kls = dataclasses.dataclass(**kwargs)(kls)
         else:
             new_annotations = dict(annotations)
-            for name, annotation in annotations.items():
+            for attr_name, annotation in annotations.items():
                 is_abstract, _ = _process_annotation(annotation)
                 if is_abstract:
-                    new_annotations.pop(name)
-            cls.__annotations__ = new_annotations
-            cls = dataclasses.dataclass(**kwargs)(cls)
-            cls.__annotations__ = annotations
-        return cls
+                    new_annotations.pop(attr_name)
+            kls.__annotations__ = new_annotations
+            kls = dataclasses.dataclass(**kwargs)(kls)
+            kls.__annotations__ = annotations
+        return kls
 
-    return make_dataclass
+    if cls is None:
+        return make_dataclass
+    return make_dataclass(cls)
 
 
 @dataclass_transform()
-def frozen(**kwargs):
+def frozen(cls: type[_C] | None = None, /, **kwargs: Any) -> type[_C] | Callable[[type[_C]], type[_C]]:  # noqa: ANN401
     """Shorthand for ``better_dataclass(frozen=True, ...)``."""
     kwargs.setdefault("frozen", True)
-    return better_dataclass(**kwargs)
+    return better_dataclass(cls, **kwargs)

@@ -66,7 +66,7 @@ class Semiring(AlgebraicStructure):
             raise ValueError(f"Semiring `one` should be a scalar, got {self.one}")
 
 
-@frozen()
+@frozen
 class BoundedDistributiveLattice(Semiring):
     """A bounded distributive lattice is a specialization of a semiring, where the `oplus` operator corresponds to `join` operator, `otimes` is the `meet` operator."""
 
