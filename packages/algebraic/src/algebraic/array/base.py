@@ -21,10 +21,8 @@ from algebraic._better_abc import BetterABCMeta as ABCMeta
 from algebraic.spec import Semiring, has_complement, is_ring
 from algebraic.types import Array, DType, MatmulFn, Number, Scalar, VdotFn
 
-K = typing.TypeVar("K", bound=Semiring)
 
-
-class AlgebraicArray(typing.Generic[K], metaclass=ABCMeta):
+class AlgebraicArray(metaclass=ABCMeta):
     """A multidimensional array with elements from a semiring.
 
     This array overrides multiplication and addition to be defined with respect to the
@@ -32,7 +30,7 @@ class AlgebraicArray(typing.Generic[K], metaclass=ABCMeta):
     """
 
     data: AbstractVar[Array]
-    semiring: AbstractVar[K]
+    semiring: AbstractVar[Semiring]
 
     _vdot: VdotFn | None = None
     _matmul: MatmulFn | None = None
@@ -41,7 +39,7 @@ class AlgebraicArray(typing.Generic[K], metaclass=ABCMeta):
         """Create a new instance with the given data, preserving all other attributes."""
         clone = copy.copy(self)
         array_ns = array_api_compat.array_namespace(self.data)
-        data: Array = array_ns.asarray(data)
+        data = typing.cast(Array, array_ns.asarray(data))
         object.__setattr__(clone, "data", data)
         return clone
 
@@ -80,7 +78,7 @@ class AlgebraicArray(typing.Generic[K], metaclass=ABCMeta):
 
         # Try complement (for Boolean/DeMorgan/Heyting/Stone algebras)
         if has_complement(semiring):
-            result_data = semiring.complement(self.data)  # type: ignore[assignment]
+            result_data = semiring.complement(self.data)
             return self._wrap(result_data)
 
         raise NotImplementedError(

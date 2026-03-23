@@ -16,40 +16,39 @@ import array_api_compat
 from typing_extensions import overload
 
 from algebraic.array.base import AlgebraicArray
-from algebraic.spec import Semiring, is_ring
-from algebraic.types import AccumulationFn, Array
+from algebraic.spec import is_ring
+from algebraic.types import Array
 
-from .utils import dispatch
-
-K = typing.TypeVar("K", bound=Semiring)
-
+from .utils import dispatch, validate_semiring
 
 # ---------------------------------------------------------------------------
 # Elementwise operations (delegate to dunders)
 # ---------------------------------------------------------------------------
 
 
-def add(x: AlgebraicArray[K], y: AlgebraicArray[K]) -> AlgebraicArray[K]:
+def add(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
     """Element-wise semiring addition.
 
     Args:
         x: Arrays with the same semiring.
         y: Arrays with the same semiring.
     """
+    validate_semiring(x, y)
     return x + y
 
 
-def multiply(x: AlgebraicArray[K], y: AlgebraicArray[K]) -> AlgebraicArray[K]:
+def multiply(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
     """Element-wise semiring multiplication.
 
     Args:
         x: Arrays with the same semiring.
         y: Arrays with the same semiring.
     """
+    validate_semiring(x, y)
     return x * y
 
 
-def subtract(x: AlgebraicArray[K], y: AlgebraicArray[K]) -> AlgebraicArray[K]:
+def subtract(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
     """Element-wise semiring subtraction (requires a Ring).
 
     Args:
@@ -61,10 +60,11 @@ def subtract(x: AlgebraicArray[K], y: AlgebraicArray[K]) -> AlgebraicArray[K]:
     Raises:
         NotImplementedError: If `x.semiring` is not a Ring.
     """
+    validate_semiring(x, y)
     return x - y
 
 
-def negative(x: AlgebraicArray[K]) -> AlgebraicArray[K]:
+def negative(x: AlgebraicArray) -> AlgebraicArray:
     """Element-wise negation.
 
     Uses `additive_inverse` for Rings or `complement` for Boolean /
@@ -76,7 +76,7 @@ def negative(x: AlgebraicArray[K]) -> AlgebraicArray[K]:
     return -x
 
 
-def square(x: AlgebraicArray[K]) -> AlgebraicArray[K]:
+def square(x: AlgebraicArray) -> AlgebraicArray:
     """Element-wise semiring square (`x * x`)."""
     return x * x
 
@@ -88,8 +88,8 @@ def square(x: AlgebraicArray[K]) -> AlgebraicArray[K]:
 
 @dispatch.abstract
 def sum(  # noqa: A001  (intentional shadowing of built-in)
-    x: AlgebraicArray[K], /, *, axis: int | Sequence[int] | None = None, keepdims: bool = False
-) -> AlgebraicArray[K]:
+    x: AlgebraicArray, /, *, axis: int | Sequence[int] | None = None, keepdims: bool = False
+) -> AlgebraicArray:
     """Reduce *x* using the semiring's addition along *axis*.
 
     Args:
@@ -102,12 +102,12 @@ def sum(  # noqa: A001  (intentional shadowing of built-in)
 
 @dispatch.abstract
 def prod(
-    x: AlgebraicArray[K],
+    x: AlgebraicArray,
     /,
     *,
     axis: int | Sequence[int] | None = None,
     keepdims: bool = False,
-) -> AlgebraicArray[K]:
+) -> AlgebraicArray:
     """Reduce *x* using the semiring's multiplication along *axis*.
 
     Args:
@@ -125,12 +125,12 @@ def prod(
 
 @dispatch.abstract
 def cumulative_sum(
-    x: AlgebraicArray[K],
+    x: AlgebraicArray,
     /,
     *,
     axis: int = 0,
     include_initial: bool = False,
-) -> AlgebraicArray[K]:
+) -> AlgebraicArray:
     """Inclusive prefix sum along *axis* using the semiring's addition.
 
     Args:
@@ -144,12 +144,12 @@ def cumulative_sum(
 
 @dispatch.abstract
 def cumulative_prod(
-    x: AlgebraicArray[K],
+    x: AlgebraicArray,
     /,
     *,
     axis: int = 0,
     include_initial: bool = False,
-) -> AlgebraicArray[K]:
+) -> AlgebraicArray:
     """Inclusive prefix product along *axis* using the semiring's multiplication.
 
     Args:
@@ -166,15 +166,16 @@ def cumulative_prod(
 # ---------------------------------------------------------------------------
 
 
-def matmul(x: AlgebraicArray[K], y: AlgebraicArray[K]) -> AlgebraicArray[K]:
+def matmul(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
     """Matrix multiplication using semiring operations.
 
     Equivalent to the `@` operator; delegates to `AlgebraicArray.__matmul__`.
     """
+    validate_semiring(x, y)
     return x @ y
 
 
-def vecdot(x: AlgebraicArray[K], y: AlgebraicArray[K], /, *, axis: int = -1) -> AlgebraicArray[K]:
+def vecdot(x: AlgebraicArray, y: AlgebraicArray, /, *, axis: int = -1) -> AlgebraicArray:
     """Inner (dot) product of two arrays contracted along *axis*.
 
     Args:
@@ -182,6 +183,7 @@ def vecdot(x: AlgebraicArray[K], y: AlgebraicArray[K], /, *, axis: int = -1) -> 
         y: Arrays with identical shapes except possibly along *axis*.
         axis: The axis along which to contract (default `-1`).
     """
+    validate_semiring(x, y)
     ndim = x.ndim
     ax = axis % ndim
     batch = tuple(i for i in range(ndim) if i != ax)
@@ -190,31 +192,31 @@ def vecdot(x: AlgebraicArray[K], y: AlgebraicArray[K], /, *, axis: int = -1) -> 
 
 @overload
 def tensordot(
-    x: AlgebraicArray[K],
-    y: AlgebraicArray[K],
+    x: AlgebraicArray,
+    y: AlgebraicArray,
     /,
     *,
     axes: int,
-) -> AlgebraicArray[K]: ...
+) -> AlgebraicArray: ...
 
 
 @overload
 def tensordot(
-    x: AlgebraicArray[K],
-    y: AlgebraicArray[K],
+    x: AlgebraicArray,
+    y: AlgebraicArray,
     /,
     *,
     axes: tuple[Sequence[int], Sequence[int]],
-) -> AlgebraicArray[K]: ...
+) -> AlgebraicArray: ...
 
 
 def tensordot(
-    x: AlgebraicArray[K],
-    y: AlgebraicArray[K],
+    x: AlgebraicArray,
+    y: AlgebraicArray,
     /,
     *,
     axes: int | tuple[Sequence[int], Sequence[int]] = 2,
-) -> AlgebraicArray[K]:
+) -> AlgebraicArray:
     """Generalised tensor contraction using semiring operations.
 
     Args:
@@ -225,6 +227,7 @@ def tensordot(
             for 2-D arrays). Alternatively, `(lhs_axes, rhs_axes)` -- explicit
             contracting axis sequences.
     """
+    validate_semiring(x, y)
     if isinstance(axes, int):
         n = axes
         lhs_contract = tuple(range(x.ndim - n, x.ndim))
@@ -240,7 +243,7 @@ def tensordot(
 # ---------------------------------------------------------------------------
 
 
-def trace(x: AlgebraicArray[K], /, *, offset: int = 0) -> AlgebraicArray[K]:
+def trace(x: AlgebraicArray, /, *, offset: int = 0) -> AlgebraicArray:
     """Sum of diagonal elements using the semiring's addition.
 
     Args:
@@ -249,21 +252,22 @@ def trace(x: AlgebraicArray[K], /, *, offset: int = 0) -> AlgebraicArray[K]:
     """
     xp = array_api_compat.array_namespace(x.data)
     diag_data: Array = xp.linalg.diagonal(x.data, offset=offset)
-    return sum(x._wrap(diag_data), axis=-1)
+    return typing.cast(AlgebraicArray, sum(x._wrap(diag_data), axis=-1))
 
 
-def outer(x: AlgebraicArray[K], y: AlgebraicArray[K]) -> AlgebraicArray[K]:
+def outer(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
     """Outer product of two 1-D arrays using semiring multiplication.
 
     Args:
         x: 1-D array. The result has shape `(x.shape[0], y.shape[0])`.
         y: 1-D array. The result has shape `(x.shape[0], y.shape[0])`.
     """
+    validate_semiring(x, y)
     # No contracting dims, no batch dims — result[i, j] = x[i] * y[j].
     return x.dot_general(y, (((), ()), ((), ())))
 
 
-def matrix_power(x: AlgebraicArray[K], n: int) -> AlgebraicArray[K]:
+def matrix_power(x: AlgebraicArray, n: int) -> AlgebraicArray:
     """Raise a square matrix to the non-negative integer power *n*.
 
     Uses binary exponentiation (O(log n) multiplications).
@@ -284,7 +288,7 @@ def matrix_power(x: AlgebraicArray[K], n: int) -> AlgebraicArray[K]:
             "matrix_power n=0 requires creation of an identity matrix, which depends on backend-specific creation functions."
         )
 
-    result: AlgebraicArray[K] | None = None
+    result: AlgebraicArray | None = None
     base = x
     exp = n
     while exp > 0:
@@ -298,14 +302,14 @@ def matrix_power(x: AlgebraicArray[K], n: int) -> AlgebraicArray[K]:
 
 
 def diff(
-    x: AlgebraicArray[K],
+    x: AlgebraicArray,
     /,
     *,
     n: int = 1,
     axis: int = -1,
-    prepend: AlgebraicArray[K] | None = None,
-    append: AlgebraicArray[K] | None = None,
-) -> AlgebraicArray[K]:
+    prepend: AlgebraicArray | None = None,
+    append: AlgebraicArray | None = None,
+) -> AlgebraicArray:
     """Discrete differences along *axis* (requires a Ring).
 
     Computes the *n*-th-order forward difference: `out[i] = x[i+1] - x[i]`.
@@ -324,6 +328,14 @@ def diff(
         raise NotImplementedError(
             f"diff requires a Ring with additive_inverse; semiring {type(x.semiring).__name__} does not support subtraction."
         )
+
+    arrays: list[AlgebraicArray] = [x]
+    if prepend is not None:
+        arrays.append(prepend)
+    if append is not None:
+        arrays.append(append)
+    if len(arrays) > 1:
+        validate_semiring(*arrays)
 
     xp = array_api_compat.array_namespace(x.data)
 

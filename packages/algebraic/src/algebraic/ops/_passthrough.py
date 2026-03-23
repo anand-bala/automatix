@@ -16,42 +16,14 @@ from typing import Any
 import array_api_compat
 
 from algebraic.array.base import AlgebraicArray
-from algebraic.spec import Semiring
+from algebraic.ops.utils import validate_semiring
 from algebraic.types import Array
 
-K = typing.TypeVar("K", bound=Semiring)
 
-# ---------------------------------------------------------------------------
-# Semiring validation helper
-# ---------------------------------------------------------------------------
-
-
-def _validate_semiring(*arrays: AlgebraicArray[Any]) -> None:
-    """Raise `ValueError` if any two inputs have different semiring instances.
-
-    Args:
-        *arrays: One or more `AlgebraicArray` instances.
-
-    Raises:
-        ValueError: If two arrays carry different semirings (compared with `==`).
-    """
-    if len(arrays) < 2:
-        return
-    first = arrays[0].semiring
-    for arr in arrays[1:]:
-        if arr.semiring != first:
-            raise ValueError(f"All AlgebraicArray inputs must share the same semiring; got {first!r} and {arr.semiring!r}.")
-
-
-# ---------------------------------------------------------------------------
-# Return types for set/unique functions
-# ---------------------------------------------------------------------------
-
-
-class UniqueAllResult(typing.NamedTuple, typing.Generic[K]):
+class UniqueAllResult(typing.NamedTuple):
     """Return type for `unique_all`."""
 
-    values: AlgebraicArray[K]
+    values: AlgebraicArray
     """Unique values (wrapped AlgebraicArray)."""
     indices: Array
     """Indices of the first occurrence of each unique value in the input."""
@@ -61,45 +33,40 @@ class UniqueAllResult(typing.NamedTuple, typing.Generic[K]):
     """Number of times each unique value appears."""
 
 
-class UniqueCountsResult(typing.NamedTuple, typing.Generic[K]):
+class UniqueCountsResult(typing.NamedTuple):
     """Return type for `unique_counts`."""
 
-    values: AlgebraicArray[K]
+    values: AlgebraicArray
     """Unique values (wrapped AlgebraicArray)."""
     counts: Array
     """Number of times each unique value appears."""
 
 
-class UniqueInverseResult(typing.NamedTuple, typing.Generic[K]):
+class UniqueInverseResult(typing.NamedTuple):
     """Return type for `unique_inverse`."""
 
-    values: AlgebraicArray[K]
+    values: AlgebraicArray
     """Unique values (wrapped AlgebraicArray)."""
     inverse_indices: Array
     """Indices such that `values[inverse_indices] == x.ravel()`."""
 
 
-# ---------------------------------------------------------------------------
-# Shape manipulation
-# ---------------------------------------------------------------------------
-
-
-def broadcast_arrays(*arrays: AlgebraicArray[K]) -> Sequence[AlgebraicArray[K]]:
+def broadcast_arrays(*arrays: AlgebraicArray) -> Sequence[AlgebraicArray]:
     """Broadcast a collection of arrays to a common shape.
 
     Args:
         *arrays: One or more arrays with the same semiring.
 
     Returns:
-        Sequence[AlgebraicArray[K]]: Each array broadcast to the common shape.
+        Sequence[AlgebraicArray]: Each array broadcast to the common shape.
     """
-    _validate_semiring(*arrays)
+    validate_semiring(*arrays)
     xp = array_api_compat.array_namespace(arrays[0].data)
     raw: list[Array] = list(xp.broadcast_arrays(*[a.data for a in arrays]))
     return tuple(arrays[0]._wrap(r) for r in raw)
 
 
-def broadcast_to(x: AlgebraicArray[K], shape: tuple[int, ...]) -> AlgebraicArray[K]:
+def broadcast_to(x: AlgebraicArray, shape: tuple[int, ...]) -> AlgebraicArray:
     """Broadcast *x* to the given *shape*.
 
     Args:
@@ -110,7 +77,7 @@ def broadcast_to(x: AlgebraicArray[K], shape: tuple[int, ...]) -> AlgebraicArray
     return x._wrap(xp.broadcast_to(x.data, shape))
 
 
-def concat(arrays: Sequence[AlgebraicArray[K]], *, axis: int = 0) -> AlgebraicArray[K]:
+def concat(arrays: Sequence[AlgebraicArray], *, axis: int = 0) -> AlgebraicArray:
     """Concatenate arrays along an existing axis.
 
     Args:
@@ -118,13 +85,13 @@ def concat(arrays: Sequence[AlgebraicArray[K]], *, axis: int = 0) -> AlgebraicAr
         axis: Axis along which to concatenate (default 0).
     """
     arr_list = list(arrays)
-    _validate_semiring(*arr_list)
+    validate_semiring(*arr_list)
     xp = array_api_compat.array_namespace(arr_list[0].data)
     result: Array = xp.concat([a.data for a in arr_list], axis=axis)
     return arr_list[0]._wrap(result)
 
 
-def expand_dims(x: AlgebraicArray[K], *, axis: int) -> AlgebraicArray[K]:
+def expand_dims(x: AlgebraicArray, *, axis: int) -> AlgebraicArray:
     """Insert a size-1 axis at position *axis*.
 
     Args:
@@ -135,7 +102,7 @@ def expand_dims(x: AlgebraicArray[K], *, axis: int) -> AlgebraicArray[K]:
     return x._wrap(xp.expand_dims(x.data, axis=axis))
 
 
-def flip(x: AlgebraicArray[K], *, axis: int | tuple[int, ...] | None = None) -> AlgebraicArray[K]:
+def flip(x: AlgebraicArray, *, axis: int | tuple[int, ...] | None = None) -> AlgebraicArray:
     """Reverse the order of elements along one or more axes.
 
     Args:
@@ -147,10 +114,10 @@ def flip(x: AlgebraicArray[K], *, axis: int | tuple[int, ...] | None = None) -> 
 
 
 def moveaxis(
-    x: AlgebraicArray[K],
+    x: AlgebraicArray,
     source: int | Sequence[int],
     destination: int | Sequence[int],
-) -> AlgebraicArray[K]:
+) -> AlgebraicArray:
     """Move axes of an array to new positions.
 
     Args:
@@ -162,7 +129,7 @@ def moveaxis(
     return x._wrap(xp.moveaxis(x.data, source, destination))
 
 
-def permute_dims(x: AlgebraicArray[K], axes: tuple[int, ...]) -> AlgebraicArray[K]:
+def permute_dims(x: AlgebraicArray, axes: tuple[int, ...]) -> AlgebraicArray:
     """Permute array dimensions.
 
     Args:
@@ -174,11 +141,11 @@ def permute_dims(x: AlgebraicArray[K], axes: tuple[int, ...]) -> AlgebraicArray[
 
 
 def repeat(
-    x: AlgebraicArray[K],
+    x: AlgebraicArray,
     repeats: int | Array,
     *,
     axis: int | None = None,
-) -> AlgebraicArray[K]:
+) -> AlgebraicArray:
     """Repeat elements of an array.
 
     Args:
@@ -191,11 +158,11 @@ def repeat(
 
 
 def reshape(
-    x: AlgebraicArray[K],
+    x: AlgebraicArray,
     shape: tuple[int, ...],
     *,
     copy: bool | None = None,
-) -> AlgebraicArray[K]:
+) -> AlgebraicArray:
     """Give a new shape to an array without changing its data.
 
     Args:
@@ -209,11 +176,11 @@ def reshape(
 
 
 def roll(
-    x: AlgebraicArray[K],
+    x: AlgebraicArray,
     shift: int | tuple[int, ...],
     *,
     axis: int | tuple[int, ...] | None = None,
-) -> AlgebraicArray[K]:
+) -> AlgebraicArray:
     """Roll array elements along an axis.
 
     Args:
@@ -226,10 +193,10 @@ def roll(
 
 
 def squeeze(
-    x: AlgebraicArray[K],
+    x: AlgebraicArray,
     *,
     axis: int | tuple[int, ...] | None = None,
-) -> AlgebraicArray[K]:
+) -> AlgebraicArray:
     """Remove size-1 dimensions.
 
     Args:
@@ -240,7 +207,7 @@ def squeeze(
     return x._wrap(xp.squeeze(x.data, axis=axis))
 
 
-def stack(arrays: Sequence[AlgebraicArray[K]], *, axis: int = 0) -> AlgebraicArray[K]:
+def stack(arrays: Sequence[AlgebraicArray], *, axis: int = 0) -> AlgebraicArray:
     """Join a sequence of arrays along a new axis.
 
     Args:
@@ -248,13 +215,13 @@ def stack(arrays: Sequence[AlgebraicArray[K]], *, axis: int = 0) -> AlgebraicArr
         axis: Position of the new axis in the output array.
     """
     arr_list = list(arrays)
-    _validate_semiring(*arr_list)
+    validate_semiring(*arr_list)
     xp = array_api_compat.array_namespace(arr_list[0].data)
     result: Array = xp.stack([a.data for a in arr_list], axis=axis)
     return arr_list[0]._wrap(result)
 
 
-def tile(x: AlgebraicArray[K], repetitions: int | tuple[int, ...]) -> AlgebraicArray[K]:
+def tile(x: AlgebraicArray, repetitions: int | tuple[int, ...]) -> AlgebraicArray:
     """Tile an array by repeating it the given number of times.
 
     Args:
@@ -266,7 +233,7 @@ def tile(x: AlgebraicArray[K], repetitions: int | tuple[int, ...]) -> AlgebraicA
     return x._wrap(result)
 
 
-def unstack(x: AlgebraicArray[K], *, axis: int = 0) -> Sequence[AlgebraicArray[K]]:
+def unstack(x: AlgebraicArray, *, axis: int = 0) -> Sequence[AlgebraicArray]:
     """Split an array into a list of arrays along *axis*.
 
     Args:
@@ -274,7 +241,7 @@ def unstack(x: AlgebraicArray[K], *, axis: int = 0) -> Sequence[AlgebraicArray[K
         axis: Axis to unstack (default 0).
 
     Returns:
-        list[AlgebraicArray[K]]: One array per slice along *axis*.
+        list[AlgebraicArray]: One array per slice along *axis*.
     """
     xp = array_api_compat.array_namespace(x.data)
     slices = tuple(xp.unstack(x.data, axis=axis))
@@ -286,7 +253,7 @@ def unstack(x: AlgebraicArray[K], *, axis: int = 0) -> Sequence[AlgebraicArray[K
 # ---------------------------------------------------------------------------
 
 
-def where(condition: Array, x: AlgebraicArray[K], y: AlgebraicArray[K]) -> AlgebraicArray[K]:
+def where(condition: Array, x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
     """Select elements from *x* or *y* depending on *condition*.
 
     Args:
@@ -297,7 +264,7 @@ def where(condition: Array, x: AlgebraicArray[K], y: AlgebraicArray[K]) -> Algeb
     Raises:
         ValueError: If *x* and *y* have different semirings.
     """
-    _validate_semiring(x, y)
+    validate_semiring(x, y)
     xp = array_api_compat.array_namespace(x.data)
     result: Array = xp.where(condition, x.data, y.data)
     return x._wrap(result)
@@ -308,7 +275,7 @@ def where(condition: Array, x: AlgebraicArray[K], y: AlgebraicArray[K]) -> Algeb
 # ---------------------------------------------------------------------------
 
 
-def unique_all(x: AlgebraicArray[K]) -> UniqueAllResult[K]:
+def unique_all(x: AlgebraicArray) -> UniqueAllResult:
     """Find unique values and their positions in *x*.
 
     Args:
@@ -328,7 +295,7 @@ def unique_all(x: AlgebraicArray[K]) -> UniqueAllResult[K]:
     )
 
 
-def unique_counts(x: AlgebraicArray[K]) -> UniqueCountsResult[K]:
+def unique_counts(x: AlgebraicArray) -> UniqueCountsResult:
     """Find unique values and their occurrence counts in *x*.
 
     Args:
@@ -342,7 +309,7 @@ def unique_counts(x: AlgebraicArray[K]) -> UniqueCountsResult[K]:
     return UniqueCountsResult(values=x._wrap(out.values), counts=out.counts)
 
 
-def unique_inverse(x: AlgebraicArray[K]) -> UniqueInverseResult[K]:
+def unique_inverse(x: AlgebraicArray) -> UniqueInverseResult:
     """Find unique values and the inverse permutation in *x*.
 
     Args:
@@ -357,7 +324,7 @@ def unique_inverse(x: AlgebraicArray[K]) -> UniqueInverseResult[K]:
     return UniqueInverseResult(values=x._wrap(out.values), inverse_indices=out.inverse_indices)
 
 
-def unique_values(x: AlgebraicArray[K]) -> AlgebraicArray[K]:
+def unique_values(x: AlgebraicArray) -> AlgebraicArray:
     """Return the unique values in *x* (sorted).
 
     Args:
@@ -374,17 +341,17 @@ def unique_values(x: AlgebraicArray[K]) -> AlgebraicArray[K]:
 
 
 def take(
-    x: AlgebraicArray[K],
+    x: AlgebraicArray,
     indices: Array,
     *,
     axis: int | None = None,
-) -> AlgebraicArray[K]:
+) -> AlgebraicArray:
     """Take elements from *x* at *indices*.
 
     Args:
         x: Input array.
         indices: Integer array of indices.
-        axis: Axis along which to take.  `None` treats *x* as flattened.
+        axis: Axis along which to take. `None` treats *x* as flattened.
     """
     xp = array_api_compat.array_namespace(x.data)
     result: Array = xp.take(x.data, indices, axis=axis)
@@ -392,11 +359,11 @@ def take(
 
 
 def take_along_axis(
-    x: AlgebraicArray[K],
+    x: AlgebraicArray,
     indices: Array,
     *,
     axis: int,
-) -> AlgebraicArray[K]:
+) -> AlgebraicArray:
     """Take values from *x* by matching *indices* along *axis*.
 
     Args:
@@ -438,7 +405,7 @@ def not_equal(x: AlgebraicArray[Any], y: AlgebraicArray[Any]) -> Array:
     return result
 
 
-def positive(x: AlgebraicArray[K]) -> AlgebraicArray[K]:
+def positive(x: AlgebraicArray) -> AlgebraicArray:
     """Identity operation (unary positive); returns a shallow copy.
 
     Equivalent to `__pos__`.
@@ -451,7 +418,7 @@ def positive(x: AlgebraicArray[K]) -> AlgebraicArray[K]:
 # ---------------------------------------------------------------------------
 
 
-def matrix_transpose(x: AlgebraicArray[K]) -> AlgebraicArray[K]:
+def matrix_transpose(x: AlgebraicArray) -> AlgebraicArray:
     """Transpose of the last two dimensions.
 
     Args:
@@ -462,7 +429,7 @@ def matrix_transpose(x: AlgebraicArray[K]) -> AlgebraicArray[K]:
     return x._wrap(result)
 
 
-def diagonal(x: AlgebraicArray[K], /, *, offset: int = 0) -> AlgebraicArray[K]:
+def diagonal(x: AlgebraicArray, /, *, offset: int = 0) -> AlgebraicArray:
     """Return the diagonal of a 2-D (or batched) array.
 
     Args:
