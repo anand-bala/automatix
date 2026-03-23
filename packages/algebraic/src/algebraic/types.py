@@ -9,7 +9,6 @@ import array_api_compat
 from jaxtyping import Shaped
 from typing_extensions import TypeIs
 
-
 if typing.TYPE_CHECKING:
     import jax
     import numpy.typing as npt
@@ -61,7 +60,6 @@ type UnaryOp = Callable[[Number | Array], Number | Array]
 type BinaryOp = Callable[[Number | Array, Number | Array], Number | Array]
 type VdotFn = Callable[[Shaped[Array, " n"], Shaped[Array, " n"]], Shaped[Array, ""]]
 type MatmulFn = Callable[[Shaped[Array, "n k"], Shaped[Array, "k m"]], Shaped[Array, "n m"]]
-type IdentityFn = Callable[[], Number]
 
 
 @runtime_checkable

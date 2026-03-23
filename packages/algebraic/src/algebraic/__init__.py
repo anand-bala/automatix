@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from algebraic import array as array
 from algebraic import semirings as semirings
 from algebraic.array import AlgebraicArray as AlgebraicArray
