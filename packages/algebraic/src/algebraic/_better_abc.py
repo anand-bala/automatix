@@ -245,3 +245,10 @@ def better_dataclass(**kwargs):
         return cls
 
     return make_dataclass
+
+
+@dataclass_transform()
+def frozen(**kwargs):
+    """Shorthand for ``better_dataclass(frozen=True, ...)``."""
+    kwargs.setdefault("frozen", True)
+    return better_dataclass(**kwargs)

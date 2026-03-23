@@ -9,16 +9,15 @@ must follow. These are pure interfaces with no implementation.
 from __future__ import annotations
 
 import dataclasses
-from functools import cached_property
 from typing import Literal, TypeGuard
 
-from algebraic._better_abc import BetterABCMeta, better_dataclass
+from algebraic._better_abc import BetterABCMeta, frozen
 from algebraic.types import Array, BinaryOp, IdentityFn, Scalar, UnaryOp
 
 type Property = Literal["idempotent_add", "idempotent_mul", "commutative", "simple", "complemented"] | str  # noqa: PYI051
 
 
-@better_dataclass()
+@frozen()
 class AlgebraicStructure(metaclass=BetterABCMeta):
     properties: set[Property] = dataclasses.field(default_factory=set, kw_only=True)
     """Set of algebraic properties.
@@ -42,7 +41,7 @@ class AlgebraicStructure(metaclass=BetterABCMeta):
         return "simple" in self.properties
 
 
-@better_dataclass()
+@frozen()
 class Semiring(AlgebraicStructure):
     """A simple runtime representation of an algebraic semiring."""
 
@@ -58,11 +57,11 @@ class Semiring(AlgebraicStructure):
     ones: IdentityFn = dataclasses.field()
     """Multiplicative identity of the semiring"""
 
-    @cached_property
+    @property
     def zero(self) -> Scalar:
         return self.zeros(())
 
-    @cached_property
+    @property
     def one(self) -> Scalar:
         return self.ones(())
 
@@ -75,13 +74,17 @@ class Semiring(AlgebraicStructure):
             raise ValueError("Semiring `one` should be a scalar")
 
 
-@better_dataclass()
+@frozen()
 class BoundedDistributiveLattice(Semiring):
     """A bounded distributive lattice is a specialization of a semiring, where the `oplus` operator corresponds to `join` operator, `otimes` is the `meet` operator."""
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        self.properties |= {"idempotent_add", "idempotent_mul", "commutative", "simple"}
+        object.__setattr__(
+            self,
+            "properties",
+            self.properties | {"idempotent_add", "idempotent_mul", "commutative", "simple"},
+        )
 
     @property
     def join(self) -> BinaryOp:
@@ -104,14 +107,14 @@ class BoundedDistributiveLattice(Semiring):
         return self.zero
 
 
-@better_dataclass()
+@frozen()
 class Ring(Semiring):
     """A ring is a semiring with the additional requirement that each element must have an additive inverse"""
 
     additive_inverse: UnaryOp = dataclasses.field()
 
 
-@better_dataclass()
+@frozen()
 class DeMorganAlgebra(BoundedDistributiveLattice):
     """
     A De Morgan Algebra is a bounded distributive lattice equipped with
@@ -122,7 +125,7 @@ class DeMorganAlgebra(BoundedDistributiveLattice):
     complement: UnaryOp = dataclasses.field()
 
 
-@better_dataclass()
+@frozen()
 class HeytingAlgebra(BoundedDistributiveLattice):
     """
     A Heyting algebra is a bounded lattice equipped with a binary operation `a -> b`
@@ -138,7 +141,7 @@ class HeytingAlgebra(BoundedDistributiveLattice):
         return self.implication(value, self.zero)
 
 
-@better_dataclass()
+@frozen()
 class StoneAlgebra(BoundedDistributiveLattice):
     """
     A Stone Algebra is a bounded distributive lattice equipped with a pseudo-complement
@@ -149,7 +152,7 @@ class StoneAlgebra(BoundedDistributiveLattice):
     complement: UnaryOp = dataclasses.field()
 
 
-@better_dataclass()
+@frozen()
 class BooleanAlgebra(DeMorganAlgebra):
     """
     A full Boolean algebra, i.e., the operators with complementation follow:
