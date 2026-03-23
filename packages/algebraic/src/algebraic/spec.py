@@ -8,41 +8,21 @@ must follow. These are pure interfaces with no implementation.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+import dataclasses
 from functools import cached_property
-from typing import Literal, Protocol, TypeGuard, runtime_checkable
+from typing import Literal, TypeGuard
 
-import equinox as eqx
-import jax.numpy as jnp
-from jaxtyping import Array, Num, Scalar, Shaped
-
-type Axis = int | Sequence[int]
-type MaybeAxis = None | Axis
-type Shape = int | tuple[int, ...]
-
-type UnaryOp = Callable[[Scalar | Array], Scalar | Array]
-type BinaryOp = Callable[[Scalar | Array, Scalar | Array], Scalar | Array]
-type VdotFn = Callable[[Num[Array, " n"], Num[Array, " n"]], Num[Array, ""]]
-type MatmulFn = Callable[[Num[Array, "n k"], Num[Array, "k m"]], Num[Array, "n m"]]
-
-
-@runtime_checkable
-class IdentityFn(Protocol):
-    def __call__(self, shape: Shape) -> Shaped[Array, " {shape}"]: ...
-
-
-@runtime_checkable
-class ReductionOp(Protocol):
-    def __call__(self, a: Array, axis: MaybeAxis = None) -> Array: ...
-
+from algebraic._better_abc import BetterABCMeta, better_dataclass
+from algebraic.types import Array, BinaryOp, IdentityFn, Scalar, UnaryOp
 
 type Property = Literal["idempotent_add", "idempotent_mul", "commutative", "simple", "complemented"] | str  # noqa: PYI051
 
 
-class AlgebraicStructure(eqx.Module):
-    properties: set[Property] = eqx.field(default_factory=set, kw_only=True, static=True)
+@better_dataclass()
+class AlgebraicStructure(metaclass=BetterABCMeta):
+    properties: set[Property] = dataclasses.field(default_factory=set, kw_only=True)
     """Set of algebraic properties.
-    Valid values: "idempotent_add", "idempotent_mul", "commutative", "simple", "has_negation" 
+    Valid values: "idempotent_add", "idempotent_mul", "commutative", "simple", "has_negation"
     """
 
     def is_idempotent_add(self) -> bool:
@@ -62,19 +42,20 @@ class AlgebraicStructure(eqx.Module):
         return "simple" in self.properties
 
 
+@better_dataclass()
 class Semiring(AlgebraicStructure):
     """A simple runtime representation of an algebraic semiring."""
 
-    add: BinaryOp = eqx.field(static=True)
+    add: BinaryOp = dataclasses.field()
     """Semiring addition operation (oplus)"""
 
-    mul: BinaryOp = eqx.field(static=True)
+    mul: BinaryOp = dataclasses.field()
     """Semiring multiplication (otimes)"""
 
-    zeros: IdentityFn = eqx.field(static=True)
+    zeros: IdentityFn = dataclasses.field()
     """Additive identity of the semiring"""
 
-    ones: IdentityFn = eqx.field(static=True)
+    ones: IdentityFn = dataclasses.field()
     """Multiplicative identity of the semiring"""
 
     @cached_property
@@ -85,17 +66,21 @@ class Semiring(AlgebraicStructure):
     def one(self) -> Scalar:
         return self.ones(())
 
-    def __check_init__(self) -> None:
-        if not jnp.isscalar(self.zero):
+    def __post_init__(self) -> None:
+        from algebraic.types import is_scalar
+
+        if not is_scalar(self.zero):
             raise ValueError("Semiring `zero` should be a scalar")
-        if not jnp.isscalar(self.zero):
-            raise ValueError("Semiring `zero` should be a scalar")
+        if not is_scalar(self.one):
+            raise ValueError("Semiring `one` should be a scalar")
 
 
+@better_dataclass()
 class BoundedDistributiveLattice(Semiring):
     """A bounded distributive lattice is a specialization of a semiring, where the `oplus` operator corresponds to `join` operator, `otimes` is the `meet` operator."""
 
     def __post_init__(self) -> None:
+        super().__post_init__()
         self.properties |= {"idempotent_add", "idempotent_mul", "commutative", "simple"}
 
     @property
@@ -119,12 +104,14 @@ class BoundedDistributiveLattice(Semiring):
         return self.zero
 
 
+@better_dataclass()
 class Ring(Semiring):
     """A ring is a semiring with the additional requirement that each element must have an additive inverse"""
 
-    additive_inverse: UnaryOp = eqx.field(static=True)
+    additive_inverse: UnaryOp = dataclasses.field()
 
 
+@better_dataclass()
 class DeMorganAlgebra(BoundedDistributiveLattice):
     """
     A De Morgan Algebra is a bounded distributive lattice equipped with
@@ -132,9 +119,10 @@ class DeMorganAlgebra(BoundedDistributiveLattice):
     Morgan's laws.
     """
 
-    complement: UnaryOp = eqx.field(static=True)
+    complement: UnaryOp = dataclasses.field()
 
 
+@better_dataclass()
 class HeytingAlgebra(BoundedDistributiveLattice):
     """
     A Heyting algebra is a bounded lattice equipped with a binary operation `a -> b`
@@ -143,13 +131,14 @@ class HeytingAlgebra(BoundedDistributiveLattice):
     A Heyting algebra has a pseudo-complement such that `~a` is equivalent to `a -> 0`.
     """
 
-    implication: BinaryOp = eqx.field(static=True)
+    implication: BinaryOp = dataclasses.field()
 
     def complement(self, value: Scalar | Array) -> Scalar | Array:
         """Pseudo-complement in Heyting algebra."""
         return self.implication(value, self.zero)
 
 
+@better_dataclass()
 class StoneAlgebra(BoundedDistributiveLattice):
     """
     A Stone Algebra is a bounded distributive lattice equipped with a pseudo-complement
@@ -157,9 +146,10 @@ class StoneAlgebra(BoundedDistributiveLattice):
     Morgan's laws.
     """
 
-    complement: UnaryOp = eqx.field(static=True)
+    complement: UnaryOp = dataclasses.field()
 
 
+@better_dataclass()
 class BooleanAlgebra(DeMorganAlgebra):
     """
     A full Boolean algebra, i.e., the operators with complementation follow:
