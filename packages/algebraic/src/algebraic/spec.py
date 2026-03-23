@@ -12,7 +12,7 @@ import dataclasses
 from typing import Literal, TypeGuard
 
 from algebraic._better_abc import BetterABCMeta, frozen
-from algebraic.types import Array, BinaryOp, IdentityFn, Scalar, UnaryOp
+from algebraic.types import Array, BinaryOp, Number, Scalar, UnaryOp
 
 type Property = Literal["idempotent_add", "idempotent_mul", "commutative", "simple", "complemented"] | str  # noqa: PYI051
 
@@ -45,33 +45,25 @@ class AlgebraicStructure(metaclass=BetterABCMeta):
 class Semiring(AlgebraicStructure):
     """A simple runtime representation of an algebraic semiring."""
 
-    add: BinaryOp = dataclasses.field()
+    add: BinaryOp
     """Semiring addition operation (oplus)"""
 
-    mul: BinaryOp = dataclasses.field()
+    mul: BinaryOp
     """Semiring multiplication (otimes)"""
 
-    zeros: IdentityFn = dataclasses.field()
+    zero: Number
     """Additive identity of the semiring"""
 
-    ones: IdentityFn = dataclasses.field()
+    one: Number
     """Multiplicative identity of the semiring"""
-
-    @property
-    def zero(self) -> Scalar:
-        return self.zeros(())
-
-    @property
-    def one(self) -> Scalar:
-        return self.ones(())
 
     def __post_init__(self) -> None:
         from algebraic.types import is_scalar
 
         if not is_scalar(self.zero):
-            raise ValueError("Semiring `zero` should be a scalar")
+            raise ValueError(f"Semiring `zero` should be a scalar, got {self.zero}")
         if not is_scalar(self.one):
-            raise ValueError("Semiring `one` should be a scalar")
+            raise ValueError(f"Semiring `one` should be a scalar, got {self.one}")
 
 
 @frozen()
@@ -111,7 +103,7 @@ class BoundedDistributiveLattice(Semiring):
 class Ring(Semiring):
     """A ring is a semiring with the additional requirement that each element must have an additive inverse"""
 
-    additive_inverse: UnaryOp = dataclasses.field()
+    additive_inverse: UnaryOp
 
 
 @frozen()
@@ -122,7 +114,7 @@ class DeMorganAlgebra(BoundedDistributiveLattice):
     Morgan's laws.
     """
 
-    complement: UnaryOp = dataclasses.field()
+    complement: UnaryOp
 
 
 @frozen()
@@ -134,7 +126,7 @@ class HeytingAlgebra(BoundedDistributiveLattice):
     A Heyting algebra has a pseudo-complement such that `~a` is equivalent to `a -> 0`.
     """
 
-    implication: BinaryOp = dataclasses.field()
+    implication: BinaryOp
 
     def complement(self, value: Scalar | Array) -> Scalar | Array:
         """Pseudo-complement in Heyting algebra."""
@@ -149,7 +141,7 @@ class StoneAlgebra(BoundedDistributiveLattice):
     Morgan's laws.
     """
 
-    complement: UnaryOp = dataclasses.field()
+    complement: UnaryOp
 
 
 @frozen()
