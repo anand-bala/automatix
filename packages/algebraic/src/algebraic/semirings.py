@@ -32,7 +32,10 @@ def _try_array_else_scalar(
     else:
         # We have an array namespace
         fn = getattr(array_ns, array_fn)
-        result: Array = fn(*xs)
+        # We need to get the common dtype
+        dtype = array_ns.result_type(*xs)
+        result: Array = array_ns.astype(fn(*xs), dtype, copy=False)
+
         return result
 
 
