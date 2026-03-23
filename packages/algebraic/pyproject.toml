@@ -12,6 +12,8 @@ dependencies = [
   "bitarray>=3.0.0",
   "optree>=0.18.0",
   "plum-dispatch>=2.6.1",
+  "numpy>=2.0",
+  "array-api-compat>=1.14.0",
 ]
 
 [project.optional-dependencies]
