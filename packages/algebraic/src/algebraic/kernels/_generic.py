@@ -19,7 +19,7 @@ def soft_boolean_and(x: Array | Number, y: Array | Number) -> Array | Number:
 
     In LaTeX: :math:`x \\wedge y \\approx x \\cdot y`
     """
-    return x * y
+    return x * y  # type: ignore[operator]  # ty:ignore[unsupported-operator]
 
 
 def soft_boolean_or(x: Array | Number, y: Array | Number) -> Array | Number:
@@ -32,7 +32,7 @@ def soft_boolean_or(x: Array | Number, y: Array | Number) -> Array | Number:
 
     In LaTeX: :math:`x \\vee y \\approx x + y - xy`
     """
-    return x + y - x * y
+    return x + y - x * y  # type: ignore[operator]  # ty:ignore[unsupported-operator]
 
 
 def soft_boolean_not(x: Array | Number) -> Array | Number:

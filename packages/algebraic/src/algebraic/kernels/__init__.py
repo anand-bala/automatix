@@ -8,9 +8,10 @@ backend at call time using lazy imports.
 Backend detection uses `array_api_compat.is_*_array` checks.
 Scalar inputs fall back to the JAX implementation by default.
 """
-# mypy: disable-error-code="no-untyped-call, no-any-return"
 
 from __future__ import annotations
+
+import typing
 
 from array_api_compat import is_jax_array, is_torch_array
 
@@ -39,7 +40,7 @@ def logaddexp(x: Array | Number, y: Array | Number) -> Array | Number:
         return _jax_logaddexp(x, y)
     import numpy as np
 
-    return np.logaddexp(np.asarray(x), np.asarray(y))  # type: ignore[no-any-return]
+    return typing.cast(np.ndarray, np.logaddexp(np.asarray(x), np.asarray(y)))
 
 
 def logsumexp(a: Array | Number, axis: MaybeAxis = None) -> Array | Number:
@@ -86,9 +87,9 @@ def smooth_boolean_and(
         return _jax.smooth_boolean_and(x, y, temperature)
     # assume numpy / scalar
     import numpy as np
-    from scipy.special import expit  # type: ignore[import-untyped]
+    from scipy.special import expit
 
-    return expit(temperature * (np.asarray(x) + np.asarray(y) - 1))  # type: ignore[no-any-return]
+    return typing.cast(np.ndarray, expit(temperature * (np.asarray(x) + np.asarray(y) - 1)))
 
 
 def smooth_boolean_or(
@@ -112,9 +113,9 @@ def smooth_boolean_or(
         return _jax.smooth_boolean_or(x, y, temperature)
     # Otherwise, assume numpy
     import numpy as np
-    from scipy.special import expit  # type: ignore[import-untyped]
+    from scipy.special import expit
 
-    return expit(temperature * (np.asarray(x) + np.asarray(y)))  # type: ignore[no-any-return]
+    return typing.cast(np.ndarray, expit(temperature * (np.asarray(x) + np.asarray(y))))
 
 
 def smooth_boolean_not(
@@ -131,9 +132,9 @@ def smooth_boolean_not(
 
         return _jax(x, temperature)
     import numpy as np
-    from scipy.special import expit  # type: ignore[import-untyped]
+    from scipy.special import expit
 
-    return expit(temperature * (0.5 - np.asarray(x)))  # type: ignore[no-any-return]
+    return typing.cast(np.ndarray, expit(temperature * (0.5 - np.asarray(x))))
 
 
 def smooth_maximum(x: Array | Number, y: Array | Number, temperature: float = 1.0) -> Array | Number:
@@ -155,7 +156,7 @@ def smooth_maximum(x: Array | Number, y: Array | Number, temperature: float = 1.
         return _jax.smooth_maximum(x, y, temperature)
     import numpy as np
 
-    return np.logaddexp(temperature * np.asarray(x), temperature * np.asarray(y)) / temperature  # type: ignore[no-any-return]
+    return np.logaddexp(temperature * np.asarray(x), temperature * np.asarray(y)) / temperature
 
 
 def smooth_minimum(x: Array | Number, y: Array | Number, temperature: float = 1.0) -> Array | Number:
@@ -177,7 +178,7 @@ def smooth_minimum(x: Array | Number, y: Array | Number, temperature: float = 1.
         return _jax.smooth_minimum(x, y, temperature)
     import numpy as np
 
-    return -np.logaddexp(-temperature * np.asarray(x), -temperature * np.asarray(y)) / temperature  # type: ignore[no-any-return]
+    return -np.logaddexp(-temperature * np.asarray(x), -temperature * np.asarray(y)) / temperature
 
 
 def smooth_max(x: Array | Number, axis: MaybeAxis = None, temperature: float = 1.0) -> Array | Number:
@@ -193,9 +194,9 @@ def smooth_max(x: Array | Number, axis: MaybeAxis = None, temperature: float = 1
 
         return _jax(x, axis, temperature)
     import numpy as np
-    from scipy.special import logsumexp as _scipy_logsumexp  # type: ignore[import-untyped]
+    from scipy.special import logsumexp as _scipy_logsumexp
 
-    return _scipy_logsumexp(temperature * np.asarray(x), axis=axis) / temperature  # type: ignore[no-any-return]
+    return _scipy_logsumexp(temperature * np.asarray(x), axis=axis) / temperature
 
 
 def smooth_min(x: Array | Number, axis: MaybeAxis = None, temperature: float = 1.0) -> Array | Number:
@@ -211,6 +212,6 @@ def smooth_min(x: Array | Number, axis: MaybeAxis = None, temperature: float = 1
 
         return _jax(x, axis, temperature)
     import numpy as np
-    from scipy.special import logsumexp as _scipy_logsumexp  # type: ignore[import-untyped]
+    from scipy.special import logsumexp as _scipy_logsumexp
 
-    return -_scipy_logsumexp(-temperature * np.asarray(x), axis=axis) / temperature  # type: ignore[no-any-return]
+    return -_scipy_logsumexp(-temperature * np.asarray(x), axis=axis) / temperature

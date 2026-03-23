@@ -1,4 +1,3 @@
-# mypy: disable-error-code="operator"
 # ty: ignore[unsupported-operator]
 from __future__ import annotations
 

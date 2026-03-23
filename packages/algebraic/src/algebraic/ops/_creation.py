@@ -62,6 +62,7 @@ def zeros(shape: tuple[int, ...], *, semiring: Semiring, backend: str | Backend)
         A concrete `AlgebraicArray` filled with `semiring.zero`.
     """
     b = Backend(backend)
+    data: Array
     match b:
         case Backend.JAX:
             import jax.numpy as jnp

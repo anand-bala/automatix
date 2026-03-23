@@ -64,10 +64,6 @@ exclude = '''(?x)(
     ^examples/    # files in examples/
 )''' # TOML's single-quoted strings do not require escaping backslashes
 
-[[tool.mypy.overrides]]
-module = ["dd", "dd.*"]
-ignore_missing_imports = true
-
 [tool.zuban]
 strict = true
 
