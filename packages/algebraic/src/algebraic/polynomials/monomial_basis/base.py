@@ -198,13 +198,16 @@ class MonomialBasis(metaclass=BetterABCMeta):
 
     def evaluate(
         self,
-        points: Mapping[int, Scalar],
+        points: Mapping[int, Scalar] | Shaped[AlgebraicArray | Array, " {self.num_vars}"],
     ) -> Self:
         """Evaluate polynomial at the given points using Horner-like scheme."""
         map_points: dict[int, Scalar] = {}
         if isinstance(points, Mapping):
-            for var_idx, scalar_value in points.items():
-                map_points[var_idx] = scalar_value
+            map_points = dict(points)
+        else:
+            assert is_array(points) or isinstance(points, AlgebraicArray)
+            assert points.shape == (self.num_vars,)
+            map_points = {i: typing.cast(Scalar, points[i]) for i in range(self.num_vars)}
         return self.compose(map_points)
 
     def compose(
@@ -222,7 +225,7 @@ class MonomialBasis(metaclass=BetterABCMeta):
         """
         repl_keys: list[int] = list(sorted(replacements.keys()))
 
-        def _compose(poly: MonomialBasis, at: int) -> MonomialBasis:
+        def _compose(poly: Self, at: int) -> Self:
             if at >= len(repl_keys):
                 return poly
             coeffs = poly.coeffs
@@ -305,22 +308,14 @@ def _set_at_index(
     xp: typing.Any,  # noqa: ANN401
 ) -> typing.Any:  # noqa: ANN401
     """Set a value at an index, handling JAX immutability and mutable backends."""
-    # For JAX arrays, use .at[].set()
-    if hasattr(data, "at") and hasattr(data.at[idx], "set"):
-        return data.at[idx].set(value)
-    # For mutable backends (numpy, torch), copy and mutate
-    new_data = xp.asarray(data)
-    if hasattr(new_data, "clone"):
-        new_data = new_data.clone()
-    elif hasattr(new_data, "copy"):
-        new_data = new_data.copy()
-    new_data[idx] = value if not isinstance(value, AlgebraicArray) else value.data
-    return new_data
+    from algebraic.array._index_update import _set_at_index as _set_at_index_impl
+
+    if isinstance(value, AlgebraicArray):
+        value = value.data
+    return _set_at_index_impl(data, idx, value)
 
 
-def _multiply_recursive(
-    lhs: AlgebraicArray, rhs: AlgebraicArray
-) -> AlgebraicArray:
+def _multiply_recursive(lhs: AlgebraicArray, rhs: AlgebraicArray) -> AlgebraicArray:
     """A recursive function to compute the Horner's expansion multiplication."""
     assert lhs.shape == rhs.shape
     assert lhs.semiring == rhs.semiring
@@ -345,11 +340,7 @@ def _multiply_recursive(
         ret_1 = (lhs_0 * rhs_1) + (lhs_1 * rhs_0) + (lhs_1 * rhs_1)
     else:
         ret_0 = _multiply_recursive(lhs_0, rhs_0)
-        ret_1 = (
-            _multiply_recursive(lhs_0, rhs_1)
-            + _multiply_recursive(lhs_1, rhs_0)
-            + _multiply_recursive(lhs_1, rhs_1)
-        )
+        ret_1 = _multiply_recursive(lhs_0, rhs_1) + _multiply_recursive(lhs_1, rhs_0) + _multiply_recursive(lhs_1, rhs_1)
     assert ret_0.shape == ret_1.shape == expected_shape_post_idx
     ret = alge.stack([ret_0, ret_1], axis=0)
     assert ret.shape == return_shape
