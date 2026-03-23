@@ -23,6 +23,12 @@ class TorchAlgebraicArray(nn.Module, AlgebraicArray):
     stored as a plain attribute (not a parameter or buffer).
     """
 
+    data: torch.Tensor
+    semiring: Semiring
+
+    _vdot: VdotFn | None = None
+    _matmul: MatmulFn | None = None
+
     def __init__(
         self,
         data: torch.Tensor,
