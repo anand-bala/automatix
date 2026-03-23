@@ -96,14 +96,17 @@ class RankDecomposition(metaclass=BetterABCMeta):
         xp = _get_xp(factors)
         factors = factors._wrap(_set_at_index(factors.data, (0, 0, i + 1), algebra.one, xp))
 
-        return _make_rank_decomposition(
-            factors,
-            algebra,
-            max_rank,
-            max_degree,
-            max_replacement_degree,
-            num_vars,
-            backend,
+        return typing.cast(
+            Self,
+            _make_rank_decomposition(
+                factors,
+                algebra,
+                max_rank,
+                max_degree,
+                max_replacement_degree,
+                num_vars,
+                backend,
+            ),
         )
 
     @classmethod
@@ -117,7 +120,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
         max_replacement_degree: int | None = None,
         *,
         backend: str | Backend | None = None,
-    ) -> "RankDecomposition":
+    ) -> Self:
         """Create rank-1 polynomial representing constant.
 
         Creates a CP decomposition with rank=1, degree=1.
@@ -147,7 +150,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
         max_replacement_degree: int | None = None,
         *,
         backend: str | Backend | None = None,
-    ) -> "RankDecomposition":
+    ) -> Self:
         return cls.constant(algebra.zero, num_vars, algebra, max_rank, max_degree, max_replacement_degree, backend=backend)
 
     @classmethod
@@ -160,10 +163,10 @@ class RankDecomposition(metaclass=BetterABCMeta):
         max_replacement_degree: int | None = None,
         *,
         backend: str | Backend | None = None,
-    ) -> "RankDecomposition":
+    ) -> Self:
         return cls.constant(algebra.one, num_vars, algebra, max_rank, max_degree, max_replacement_degree, backend=backend)
 
-    def _var_at(self, idx: int) -> "RankDecomposition":
+    def _var_at(self, idx: int) -> Self:
         cls = type(self)
         return cls.variable(
             idx,
@@ -175,7 +178,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
             backend=self.backend,
         )
 
-    def _make_const(self, val: Scalar) -> "RankDecomposition":
+    def _make_const(self, val: Scalar) -> Self:
         cls = type(self)
         return cls.constant(
             val,
@@ -217,7 +220,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
         For CP decomposition: ``p + q`` = sum of all components from both.
         """
         if is_scalar(other):
-            other = self._make_const(typing.cast(Scalar, other))
+            other = self._make_const(other)
         assert isinstance(other, RankDecomposition)
         assert other.num_vars == self.num_vars
 
@@ -256,7 +259,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
         result = alge.reshape(result, (rank_p * rank_q, degree_p + degree_q, n_plus_1))
         return result
 
-    def __mul__(self, other: "RankDecomposition") -> Self:
+    def __mul__(self, other: Self) -> Self:
         """Multiply two CP-decomposed polynomials.
 
         Delegates core multiplication to ``_multiply_arrays()``, then applies
@@ -280,12 +283,12 @@ class RankDecomposition(metaclass=BetterABCMeta):
         sparse = self.to_sparse()
 
         if len(sparse) == 0:
-            return self._make_const(self.algebra.zero)
+            return self._make_const(self.algebra.zero)  # ty:ignore[invalid-return-type]
 
         max_deg = max(sum(monomial) for monomial in sparse.keys())
         max_deg = max(1, min(max_deg, self.num_vars))
 
-        return self.from_sparse(sparse, max_degree=max_deg)
+        return self.from_sparse(sparse, max_degree=max_deg)  # ty:ignore[invalid-return-type]
 
     def _simplify_multilinear_fast(self) -> Self:
         """Fast heuristic simplification using deduplication.
@@ -393,7 +396,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
         """
         xp = _get_xp(self.factors)
 
-        is_zero_coeff = _isclose(self.factors.data, self.algebra.zero, xp)
+        is_zero_coeff = alge.isclose(self.factors, self.algebra.zero)
         is_zero_factor = xp.all(is_zero_coeff, axis=2)
         has_zero_factor = xp.any(is_zero_factor, axis=1)
         keep_mask = ~has_zero_factor  # type: ignore[operator]
@@ -447,7 +450,11 @@ class RankDecomposition(metaclass=BetterABCMeta):
             Constant polynomial (RankDecomposition) after evaluation
         """
         if isinstance(points, Mapping):
-            replacements: dict[int, RankDecomposition] = {i: self._make_const(v) for i, v in points.items()}
+            if set(points.keys()) >= set(range(self.num_vars)):
+                point_list = [points[i] for i in range(self.num_vars)]
+                xp = _get_xp(self.factors)
+                return self.evaluate(xp.asarray(point_list))
+            replacements: dict[int, Self] = {i: self._make_const(v) for i, v in points.items()}  # ty:ignore[invalid-assignment, invalid-argument-type]
             return self.compose(replacements)
 
         rank, d, _ = self.factors.shape
@@ -467,9 +474,9 @@ class RankDecomposition(metaclass=BetterABCMeta):
                 component_value = component_value * dim_value
             result = result + component_value
 
-        return self._make_const(result.data)
+        return self._make_const(result.data)  # ty:ignore[invalid-return-type]
 
-    def _prepare_replacement_array(self, replacements: dict[int, "RankDecomposition"]) -> AlgebraicArray:
+    def _prepare_replacement_array(self, replacements: dict[int, Self]) -> AlgebraicArray:
         """Prepare padded array of replacement polynomials.
 
         Returns:
@@ -477,7 +484,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
             Index 0: constant (identity: always 1)
             Index i+1: variable x_i (or its replacement)
         """
-        full_replacements: list[RankDecomposition] = [self._make_const(self.algebra.one)] + [
+        full_replacements: list[Self] = [self._make_const(self.algebra.one)] + [
             replacements.get(i, self._var_at(i)) for i in range(self.num_vars)
         ]
 
@@ -526,7 +533,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
         q_array = alge.stack(padded_list, axis=0)
         return q_array
 
-    def compose(self, replacements: dict[int, "RankDecomposition"]) -> Self:
+    def compose(self, replacements: dict[int, Self]) -> Self:
         """Compose p with replacement polynomials.
 
         Args:
@@ -544,7 +551,9 @@ class RankDecomposition(metaclass=BetterABCMeta):
         for r in range(self.rank):
             p_component = self.factors[r]
 
-            is_nonzero = ~_isclose(p_component.data, self.algebra.zero, xp)  # type: ignore[operator]
+            # Get the boolean array of all places where the array is not semiring 0
+            # multiply by 1 to convert from bool to int if needed
+            is_nonzero = 1 * ~alge.isclose(p_component.data, self.algebra.zero)
 
             var_indices: list[int] = []
             is_zero_factor_list: list[bool] = []
@@ -612,17 +621,18 @@ class RankDecomposition(metaclass=BetterABCMeta):
                 [any(assignment[k] == i + 1 for k in range(self.degree)) for i in range(self.num_vars)]
             )
 
-            coeff = self.algebra.zero
+            coeff: AlgebraicArray | Number = self.algebra.zero
             for r in range(self.rank):
-                component = self.algebra.one
+                component: AlgebraicArray | Number = self.algebra.one
                 for k in range(self.degree):
-                    factor_value = self.factors[r, k, assignment[k]]
-                    factor_data = factor_value.data if isinstance(factor_value, AlgebraicArray) else factor_value
-                    component = self.algebra.mul(component, factor_data)
-                coeff = self.algebra.add(coeff, component)
+                    factor_value: AlgebraicArray = self.factors[r, k, assignment[k]]
+                    component = factor_value * component
+                coeff = component + coeff
 
-            if not bool(_allclose(coeff, self.algebra.zero, xp)):
-                coeff_arr = alge.array(coeff, semiring=self.algebra, backend=backend)
+            if not bool(alge.allclose(coeff, self.algebra.zero)):
+                coeff_arr = (
+                    coeff if isinstance(coeff, AlgebraicArray) else alge.array(coeff, semiring=self.algebra, backend=backend)
+                )
                 if vars_present in result:
                     result[vars_present] = result[vars_present] + coeff_arr
                 else:
@@ -639,7 +649,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
         max_replacement_degree: int | None = None,
         *,
         backend: str | Backend | None = None,
-    ) -> "RankDecomposition":
+    ) -> Self:
         """Convert sparse to CP form (each monomial becomes rank-1 component).
 
         Args:
@@ -717,47 +727,11 @@ def _set_at_index(
     xp: typing.Any,  # noqa: ANN401
 ) -> typing.Any:  # noqa: ANN401
     """Set a value at an index, handling JAX immutability and mutable backends."""
+    from algebraic.array._index_update import _set_at_index as _set_at_index_impl
+
     if isinstance(value, AlgebraicArray):
         value = value.data
-    if hasattr(data, "at") and hasattr(data.at[idx], "set"):
-        return data.at[idx].set(value)
-    new_data = xp.asarray(data)
-    if hasattr(new_data, "clone"):
-        new_data = new_data.clone()
-    elif hasattr(new_data, "copy"):
-        new_data = new_data.copy()
-    new_data[idx] = value
-    return new_data
-
-
-def _isclose(a: typing.Any, b: typing.Any, xp: typing.Any) -> typing.Any:  # noqa: ANN401
-    """Backend-agnostic isclose."""
-    import numpy as np
-
-    if array_api_compat.is_jax_array(a):
-        import jax.numpy as jnp
-
-        return jnp.isclose(a, b, atol=1e-7, rtol=0)
-    if array_api_compat.is_torch_array(a):
-        import torch
-
-        return torch.isclose(torch.as_tensor(a), torch.as_tensor(b), atol=1e-7, rtol=0)
-    return np.isclose(np.asarray(a), np.asarray(b), atol=1e-7, rtol=0)
-
-
-def _allclose(a: typing.Any, b: typing.Any, xp: typing.Any) -> typing.Any:  # noqa: ANN401
-    """Backend-agnostic allclose."""
-    import numpy as np
-
-    if array_api_compat.is_jax_array(a):
-        import jax.numpy as jnp
-
-        return jnp.allclose(jnp.asarray(a), jnp.asarray(b), atol=1e-7, rtol=0)
-    if array_api_compat.is_torch_array(a):
-        import torch
-
-        return torch.allclose(torch.as_tensor(a), torch.as_tensor(b), atol=1e-7, rtol=0)
-    return np.allclose(np.asarray(a), np.asarray(b), atol=1e-7, rtol=0)
+    return _set_at_index_impl(data, idx, value)
 
 
 def _argmax(a: typing.Any, xp: typing.Any) -> typing.Any:  # noqa: ANN401
