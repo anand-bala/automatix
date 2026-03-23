@@ -20,6 +20,9 @@ from algebraic.spec import is_ring
 from algebraic.types import Array
 from algebraic.utils import dispatch, validate_semiring
 
+if typing.TYPE_CHECKING:
+    from opt_einsum.contract import OptimizeKind, _MemoryLimit
+
 
 def add(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
     """Element-wise semiring addition.
@@ -274,6 +277,156 @@ def matrix_power(x: AlgebraicArray, n: int) -> AlgebraicArray:
     # result is None only when n==0, which is ruled out above.
     assert result is not None
     return result
+
+
+def _take_diagonal_axes(x: AlgebraicArray, axis1: int, axis2: int) -> AlgebraicArray:
+    """Extract the diagonal along two axes, placing the result at the lower axis position."""
+    from algebraic.ops._passthrough import diagonal, moveaxis, permute_dims
+
+    if axis1 > axis2:
+        axis1, axis2 = axis2, axis1
+    perm = tuple(i for i in range(x.ndim) if i not in (axis1, axis2)) + (axis1, axis2)
+    y = permute_dims(x, perm)
+    y = diagonal(y)
+    return moveaxis(y, -1, axis1)
+
+
+def _collapse_repeated_labels(x: AlgebraicArray, subs: str) -> tuple[AlgebraicArray, str]:
+    """Diagonalise repeated indices within a single operand."""
+    labels = list(subs)
+    for c in list(dict.fromkeys(labels)):
+        while labels.count(c) > 1:
+            i1 = labels.index(c)
+            i2 = labels.index(c, i1 + 1)
+            x = _take_diagonal_axes(x, i1, i2)
+            labels.pop(i2)
+    return x, "".join(labels)
+
+
+def _reduce_unneeded_axes(x: AlgebraicArray, subs: str, keep: set[str]) -> tuple[AlgebraicArray, str]:
+    """Sum-reduce axes whose labels are not in *keep*."""
+    axes = tuple(i for i, c in enumerate(subs) if c not in keep)
+    if axes:
+        x = typing.cast(AlgebraicArray, sum(x, axis=list(axes)))
+        subs = "".join(c for i, c in enumerate(subs) if i not in axes)
+    return x, subs
+
+
+def _execute_unary_einsum_step(x: AlgebraicArray, in_sub: str, out_sub: str) -> AlgebraicArray:
+    """Handle a single-operand einsum step (diagonal, trace, reduction, transpose)."""
+    from algebraic.ops._passthrough import permute_dims
+
+    x, in_sub = _collapse_repeated_labels(x, in_sub)
+    x, in_sub = _reduce_unneeded_axes(x, in_sub, set(out_sub))
+    if in_sub != out_sub:
+        perm = tuple(in_sub.index(c) for c in out_sub)
+        x = permute_dims(x, perm)
+    return x
+
+
+def _execute_binary_einsum_step(
+    lhs: AlgebraicArray,
+    rhs: AlgebraicArray,
+    lhs_sub: str,
+    rhs_sub: str,
+    out_sub: str,
+) -> AlgebraicArray:
+    """Handle a two-operand einsum step via ``dot_general``."""
+    from algebraic.ops._passthrough import permute_dims
+
+    lhs, lhs_sub = _collapse_repeated_labels(lhs, lhs_sub)
+    rhs, rhs_sub = _collapse_repeated_labels(rhs, rhs_sub)
+
+    out_set = set(out_sub)
+    lhs_labels = set(lhs_sub)
+    rhs_labels = set(rhs_sub)
+
+    # Pre-reduce labels that appear in only one operand and are absent from output.
+    lhs, lhs_sub = _reduce_unneeded_axes(lhs, lhs_sub, rhs_labels | out_set)
+    rhs, rhs_sub = _reduce_unneeded_axes(rhs, rhs_sub, set(lhs_sub) | out_set)
+
+    lhs_set = set(lhs_sub)
+
+    batch_labels = [c for c in lhs_sub if c in rhs_sub and c in out_set]
+    contract_labels = [c for c in lhs_sub if c in rhs_sub and c not in out_set]
+    lhs_free_labels = [c for c in lhs_sub if c not in rhs_sub]
+    rhs_free_labels = [c for c in rhs_sub if c not in lhs_set]
+
+    lhs_batch = tuple(lhs_sub.index(c) for c in batch_labels)
+    rhs_batch = tuple(rhs_sub.index(c) for c in batch_labels)
+    lhs_contract = tuple(lhs_sub.index(c) for c in contract_labels)
+    rhs_contract = tuple(rhs_sub.index(c) for c in contract_labels)
+
+    result = lhs.dot_general(
+        rhs,
+        ((lhs_contract, rhs_contract), (lhs_batch, rhs_batch)),
+    )
+
+    # dot_general output order: batch + lhs_free + rhs_free
+    result_sub = "".join(batch_labels + lhs_free_labels + rhs_free_labels)
+    if result_sub != out_sub:
+        perm = tuple(result_sub.index(c) for c in out_sub)
+        result = permute_dims(result, perm)
+    return result
+
+
+def _execute_einsum_step(step_eq: str, step_ops: list[AlgebraicArray]) -> AlgebraicArray:
+    """Dispatch a single contraction step produced by ``opt_einsum``."""
+    lhs_rhs, out_sub = step_eq.split("->")
+    input_subs = lhs_rhs.split(",")
+
+    if len(step_ops) == 1:
+        return _execute_unary_einsum_step(step_ops[0], input_subs[0], out_sub)
+    if len(step_ops) == 2:
+        return _execute_binary_einsum_step(step_ops[0], step_ops[1], input_subs[0], input_subs[1], out_sub)
+    raise NotImplementedError(f"Expected a unary or pairwise contraction step, got {len(step_ops)} operands.")
+
+
+def einsum(
+    subscripts: str,
+    *operands: AlgebraicArray,
+    optimize: OptimizeKind = "auto",
+    memory_limit: _MemoryLimit = None,
+) -> AlgebraicArray:
+    """Evaluate an Einstein summation using semiring operations.
+
+    Uses ``opt_einsum`` to find an efficient contraction path, then executes
+    each pairwise step with ``dot_general`` (semiring-aware contraction).
+
+    Args:
+        subscripts: Einsum subscript string (e.g. ``"ij,jk->ik"``).
+        *operands: Input arrays. All must share the same semiring.
+        optimize: Contraction path optimisation strategy passed to
+            ``opt_einsum.contract_path``. ``"auto"`` (the default) lets
+            ``opt_einsum`` choose.
+        memory_limit: Memory limit for the optimiser (bytes). ``None`` means
+            unlimited.
+
+    Returns:
+        The contracted result as an ``AlgebraicArray``.
+    """
+    import opt_einsum
+
+    if not operands:
+        raise ValueError("einsum requires at least one operand.")
+    validate_semiring(*operands)
+
+    _, path_info = opt_einsum.contract_path(
+        subscripts,
+        *(op.shape for op in operands),
+        shapes=True,
+        optimize=optimize,
+        use_blas=False,
+        memory_limit=memory_limit,
+    )
+
+    work: list[AlgebraicArray] = list(operands)
+    for inds, _idx_rm, step_eq, _remaining, _do_blas in path_info.contraction_list:
+        step_ops = [work.pop(i) for i in inds]
+        work.append(_execute_einsum_step(step_eq, step_ops))
+
+    assert len(work) == 1
+    return work[0]
 
 
 def diff(

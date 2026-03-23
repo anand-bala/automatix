@@ -52,6 +52,7 @@ from algebraic.ops._semiring_ops import add as add
 from algebraic.ops._semiring_ops import cumulative_prod as cumulative_prod
 from algebraic.ops._semiring_ops import cumulative_sum as cumulative_sum
 from algebraic.ops._semiring_ops import diff as diff
+from algebraic.ops._semiring_ops import einsum as einsum
 from algebraic.ops._semiring_ops import matmul as matmul
 from algebraic.ops._semiring_ops import matrix_power as matrix_power
 from algebraic.ops._semiring_ops import multiply as multiply

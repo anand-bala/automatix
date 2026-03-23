@@ -16,6 +16,7 @@ from algebraic.ops import cumulative_prod as cumulative_prod
 from algebraic.ops import cumulative_sum as cumulative_sum
 from algebraic.ops import diagonal as diagonal
 from algebraic.ops import diff as diff
+from algebraic.ops import einsum as einsum
 from algebraic.ops import equal as equal
 from algebraic.ops import expand_dims as expand_dims
 from algebraic.ops import flip as flip
