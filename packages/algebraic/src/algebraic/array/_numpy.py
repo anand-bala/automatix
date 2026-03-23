@@ -11,9 +11,9 @@ from typing_extensions import Self, override
 
 from algebraic._better_abc import frozen
 from algebraic.array.base import AlgebraicArray
-from algebraic.ops.utils import dispatch, normalize_axes
 from algebraic.spec import Semiring
 from algebraic.types import Array, MatmulFn, Number, VdotFn
+from algebraic.utils import dispatch, normalize_axes
 
 
 @frozen()

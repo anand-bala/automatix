@@ -15,6 +15,7 @@ if typing.TYPE_CHECKING:
     from algebraic.array.base import AlgebraicArray
 
 
+# TODO: this needs to handle the case of `data` being a `Number`
 def array(data: Array, *, semiring: Semiring, backend: str | Backend | None = None) -> AlgebraicArray:
     """Create an `AlgebraicArray` from an existing backend array.
 

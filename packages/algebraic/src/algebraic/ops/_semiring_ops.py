@@ -18,8 +18,7 @@ from typing_extensions import overload
 from algebraic.array.base import AlgebraicArray
 from algebraic.spec import is_ring
 from algebraic.types import Array
-
-from .utils import dispatch, validate_semiring
+from algebraic.utils import dispatch, validate_semiring
 
 
 def add(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:

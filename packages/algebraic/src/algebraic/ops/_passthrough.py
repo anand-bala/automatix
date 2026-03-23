@@ -15,8 +15,8 @@ from collections.abc import Sequence
 import array_api_compat
 
 from algebraic.array.base import AlgebraicArray
-from algebraic.ops.utils import validate_semiring
 from algebraic.types import Array
+from algebraic.utils import validate_semiring
 
 
 class UniqueAllResult(typing.NamedTuple):

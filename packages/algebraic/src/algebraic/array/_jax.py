@@ -11,22 +11,14 @@ import jax
 import jax.numpy as jnp
 from typing_extensions import Self, override
 
-from algebraic._better_abc import BetterABCMeta
 from algebraic.array.base import AlgebraicArray
-from algebraic.ops.utils import dispatch, normalize_axes
 from algebraic.spec import Semiring
 from algebraic.types import Array, MatmulFn, Number, VdotFn
-
-# Combined metaclass to resolve conflict between equinox's _ModuleMeta and BetterABCMeta.
-# Both are subclasses of abc.ABCMeta but neither is a subclass of the other,
-# so we need a combined metaclass.
+from algebraic.utils import dispatch, normalize_axes
+from algebraic.utils.jax import EqxMeta
 
 
-class _JaxMeta(type(eqx.Module), BetterABCMeta):  # type: ignore[misc]
-    pass
-
-
-class JaxAlgebraicArray(eqx.Module, AlgebraicArray, metaclass=_JaxMeta):  # type: ignore[misc]
+class JaxAlgebraicArray(eqx.Module, AlgebraicArray, metaclass=EqxMeta):
     """JAX backend implementation of `AlgebraicArray`.
 
     Uses `equinox.Module` for JAX pytree compatibility and

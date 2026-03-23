@@ -1,5 +1,3 @@
-"""Utility functions for defining custom array operations"""
-
 from __future__ import annotations
 
 import typing
@@ -8,7 +6,8 @@ from collections.abc import Sequence
 from plum import Dispatcher
 
 if typing.TYPE_CHECKING:
-    from algebraic.array.base import AlgebraicArray
+    from algebraic import AlgebraicArray
+from algebraic.types import Array, Number, is_array
 
 dispatch = Dispatcher()
 
@@ -28,7 +27,7 @@ def normalize_axes(axis: int | Sequence[int] | None, ndim: int) -> tuple[int, ..
     return tuple(sorted(a % ndim for a in axis))
 
 
-def validate_semiring(*arrays: AlgebraicArray) -> None:
+def validate_semiring(*arrays: "AlgebraicArray") -> None:
     """Raise `ValueError` if any two inputs have different semiring instances.
 
     Args:
@@ -43,3 +42,31 @@ def validate_semiring(*arrays: AlgebraicArray) -> None:
     for arr in arrays[1:]:
         if arr.semiring != first:
             raise ValueError(f"All AlgebraicArray inputs must share the same semiring; got {first!r} and {arr.semiring!r}.")
+
+
+def asanyarray(x: "AlgebraicArray" | Array | Number) -> Array:
+    """Convert an object to an array.
+
+    If scalar or unsupported type, will convert to NumPy array.
+    """
+    from algebraic import AlgebraicArray
+
+    if isinstance(x, AlgebraicArray):
+        return x.data
+    if is_array(x):
+        return x
+    # default to numpy array
+    import numpy as np
+
+    return np.asanyarray(x)
+
+
+def maybe_unwrap(x: "AlgebraicArray" | Array | Number) -> Array | Number:
+    from algebraic import AlgebraicArray
+
+    if isinstance(x, AlgebraicArray):
+        return x.data
+    if is_array(x):
+        return x
+
+    return x

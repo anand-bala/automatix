@@ -18,8 +18,8 @@ from array_api_compat import is_jax_array, is_torch_array
 from algebraic.kernels._generic import soft_boolean_and as soft_boolean_and
 from algebraic.kernels._generic import soft_boolean_not as soft_boolean_not
 from algebraic.kernels._generic import soft_boolean_or as soft_boolean_or
-from algebraic.ops.utils import normalize_axes
 from algebraic.types import Array, MaybeAxis, Number
+from algebraic.utils import normalize_axes
 
 
 def logaddexp(x: Array | Number, y: Array | Number) -> Array | Number:
