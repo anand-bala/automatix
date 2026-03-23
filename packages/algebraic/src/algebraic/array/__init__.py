@@ -1,3 +1,3 @@
-from .core import AlgebraicArray as AlgebraicArray
+from .base import AlgebraicArray as AlgebraicArray
 
 __all__: list[str] = ["AlgebraicArray"]

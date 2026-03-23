@@ -3,13 +3,14 @@
 This module defines an abstract `AlgebraicArray` that defines the interface for backend-specific algebraic array implementations.
 """
 
-from __future__ import annotations
+# NOTE: Do NOT add `from __future__ import annotations` to this module.
+# The `AbstractVar` annotations from `algebraic._better_abc` are processed at class
+# definition time and must not be stringified (PEP 563 lazy evaluation would break them).
 
 import copy
 import math
 import typing
 from abc import abstractmethod
-from collections.abc import Sequence
 from typing import Any
 
 import array_api_compat
@@ -18,7 +19,7 @@ from typing_extensions import Self
 from algebraic._better_abc import AbstractVar
 from algebraic._better_abc import BetterABCMeta as ABCMeta
 from algebraic.spec import Semiring, has_complement, is_ring
-from algebraic.types import AccumulationFn, Array, MatmulFn, Scalar, ScanFn, VdotFn
+from algebraic.types import Array, DType, MatmulFn, Number, Scalar, VdotFn
 
 K = typing.TypeVar("K", bound=Semiring)
 
@@ -36,9 +37,11 @@ class AlgebraicArray(typing.Generic[K], metaclass=ABCMeta):
     _vdot: VdotFn | None = None
     _matmul: MatmulFn | None = None
 
-    def _wrap(self, data: Array) -> Self:
+    def _wrap(self, data: Array | Number) -> Self:
         """Create a new instance with the given data, preserving all other attributes."""
         clone = copy.copy(self)
+        array_ns = array_api_compat.array_namespace(self.data)
+        data: Array = array_ns.asarray(data)
         object.__setattr__(clone, "data", data)
         return clone
 
@@ -145,17 +148,6 @@ class AlgebraicArray(typing.Generic[K], metaclass=ABCMeta):
         """Unary positive; returns a shallow copy."""
         return copy.copy(self)
 
-    def __dlpack__(self, *, stream: int | None = None) -> object:
-        """Export the underlying array via the DLPack protocol."""
-        # JAX's Array.__dlpack__ does not accept `stream` in all versions;
-        # suppress the call-arg error from the version mismatch.
-        return self.data.__dlpack__(stream=stream)  # type: ignore[call-arg]
-
-    def __dlpack_device__(self) -> tuple[int, int]:
-        """Return the DLPack device identifier for the underlying array."""
-        # jax.Array does not expose __dlpack_device__ in its current stubs.
-        return self.data.__dlpack_device__()  # type: ignore[union-attr]
-
     def to_device(self, device: object, /, *, stream: int | None = None) -> Self:
         """Return a copy of this array on the specified device.
 
@@ -164,11 +156,11 @@ class AlgebraicArray(typing.Generic[K], metaclass=ABCMeta):
             stream: Optional device stream for async transfers.
         """
         # array_api_compat.to_device is the portable entry point across backends.
-        result: Array = array_api_compat.to_device(self.data, device)
+        result: Array = array_api_compat.to_device(self.data, device, stream=stream)
         return self._wrap(result)
 
     @property
-    def dtype(self) -> object:
+    def dtype(self) -> DType:
         """Element data type of the underlying array."""
         return self.data.dtype
 
@@ -194,58 +186,64 @@ class AlgebraicArray(typing.Generic[K], metaclass=ABCMeta):
         return array_api_compat.device(self.data)
 
     @property
-    def T(self) -> Self:
+    def T(self) -> Self:  # noqa: N802
         """Transpose of a 2-D matrix (swap last two axes)."""
         xp = array_api_compat.array_namespace(self.data)
         return self._wrap(xp.linalg.matrix_transpose(self.data))
 
     @property
-    def mT(self) -> Self:
+    def mT(self) -> Self:  # noqa: N802
         """Batch matrix transpose (same as `T`; alias for Array-API compatibility)."""
         return self.T
 
-    # ------------------------------------------------------------------
-    # Abstract primitives
-    # ------------------------------------------------------------------
+    # @classmethod
+    # @abstractmethod
+    # def reduce[Acc, X](cls, computation: AccumulationFn[Acc, X], init: Acc, operand: X, *, dimensions: Sequence[int]) -> Self:
+    #     """Apply a reduction to the `operand` over the given `dimensions`.
 
-    @abstractmethod
-    @classmethod
-    def reduce(
-        cls, computation: AccumulationFn, init: Sequence[Self], operands: Sequence[Self], *, dimensions: tuple[int, ...]
-    ) -> Self:
-        """Apply a reduction to one or more operands.
+    #     `init` and `computation` together must form a monoid for correctness.
+    #     That is `init` must be an identity of `computation`, and `computation` must be
+    #     associative. `init` must consist of scalars.
 
-        `init` and `computation` together must form a monoid for correctness.
-        That is `init` must be an identity of `computation`, and `computation` must be
-        associative. `init` must consist of scalars.
+    #     Args:
+    #         computation: Binary function applied element-wise during the reduction.
+    #         init: Scalar identity value for the reduction.
+    #         operand: Array to reduce.
+    #         dimensions: Axes along which to reduce.
+    #     """
 
-        Args:
-            computation: Binary function applied element-wise during the reduction.
-            init: Scalar identity values for the reduction (one per operand).
-            operands: Arrays to reduce.
-            dimensions: Axes along which to reduce.
-        """
+    # @classmethod
+    # @abstractmethod
+    # def scan[Carry, X, Y](
+    #     cls,
+    #     computation: ScanFn[Carry, X, Y],
+    #     init: Carry,
+    #     operand: X | None = None,
+    #     *,
+    #     length: int | None = None,
+    #     reverse: bool = False,
+    # ) -> tuple[Self, Self]:
+    #     """Scan a function over leading array axis while carrying along state.
 
-    @abstractmethod
-    @classmethod
-    def scan(
-        cls, computation: ScanFn, init: Self, operands: Sequence[Self], *, length: int | None = None, reverse: bool = False
-    ) -> Self:
-        """Scan a function over leading array axes while carrying along state.
+    #     Args:
+    #         computation: Binary function mapping `(carry, x) -> (carry, y)`.
+    #         init: Initial carry value.
+    #         operands: Array whose leading axis is scanned over.
+    #         length: Optional explicit scan length.
+    #         reverse: If `True`, scan from right to left.
 
-        Args:
-            computation: Binary function mapping `(carry, x) -> (carry, y)`.
-            init: Initial carry value.
-            operands: Arrays whose leading axis is scanned over.
-            length: Optional explicit scan length.
-            reverse: If `True`, scan from right to left.
-        """
+    #     Returns:
+    #         A tuple ``(final_carry, stacked_outputs)`` where *final_carry* is
+    #         the carry after processing the last element and *stacked_outputs*
+    #         is an array with the same structure as *operands* but with all
+    #         intermediate outputs stacked along the leading axis.
+    #     """
 
     @abstractmethod
     def dot_general(
         self,
         other: Self,
-        *dimension_numbers: tuple[tuple[tuple[int, ...], tuple[int, ...]], tuple[tuple[int, ...], tuple[int, ...]]],
+        dimension_numbers: tuple[tuple[tuple[int, ...], tuple[int, ...]], tuple[tuple[int, ...], tuple[int, ...]]],
     ) -> Self:
         """Compute generalized dot product using semiring operations.
 
