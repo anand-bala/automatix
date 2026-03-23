@@ -8,13 +8,13 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "algebraic-jax",
+    "algebraic-arrays",
     "argus-automatix",
     "morphata",
 ]
 
 [[package]]
-name = "algebraic-jax"
+name = "algebraic-arrays"
 version = "1.0.0"
 source = { editable = "packages/algebraic" }
 dependencies = [
@@ -45,7 +45,7 @@ name = "argus-automatix"
 version = "0.5.1"
 source = { editable = "." }
 dependencies = [
-    { name = "algebraic-jax" },
+    { name = "algebraic-arrays" },
     { name = "attrs" },
     { name = "bitarray" },
     { name = "equinox" },
@@ -77,7 +77,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "algebraic-jax", editable = "packages/algebraic" },
+    { name = "algebraic-arrays", editable = "packages/algebraic" },
     { name = "attrs", specifier = ">=25.4.0" },
     { name = "bitarray", specifier = ">=3.8.0" },
     { name = "equinox", specifier = ">=0.12" },

@@ -17,7 +17,7 @@ dependencies = [
   "typing-extensions",
   "types-networkx",
   "logic-asts>=1.4.1",
-  "algebraic-jax>=1.0.0",
+  "algebraic-arrays>=1.0.0",
   "morphata>=1.0.0",
 ]
 
@@ -37,17 +37,20 @@ dev = [
 ]
 
 [build-system]
-requires = ["uv_build>=0.10.0"]
-build-backend = "uv_build"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.uv.build-backend]
-module-name = "automatix"
+[tool.hatch.build]
+exclude = [".jj"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/automatix"]
 
 [tool.uv.workspace]
 members = ["packages/*"]
 
 [tool.uv.sources]
-algebraic-jax = { workspace = true }
+algebraic-arrays = { workspace = true }
 morphata = { workspace = true }
 
 [tool.mypy]
