@@ -1,186 +1,128 @@
-"""JAX transformations wrapper for algebraic arrays.
+# mypy: disable-error-code="misc"
+"""Backend-agnostic transformations for algebraic arrays.
 
-This module provides wrapped versions of common JAX transformations (jit, vmap) that
-automatically handle AlgebraicArray instances via quax.quaxify.
-Users can import these functions instead of the JAX versions and avoid manual quaxify
-calls.
+This module provides wrapped versions of common array transformations (jit, vmap) that
+work across JAX, PyTorch, and NumPy backends.
 
 Example:
     from algebraic._jax_wrappers import jit, vmap
-    from algebraic.array.core import zeros
-    from algebraic.semirings import counting_semiring
 
-    @jit
+    @jit(backend="jax")
     def compute(x):
         return x + x
 
-    @vmap
+    @vmap(backend="torch")
     def batch_compute(xs):
         return xs * xs
-
-    semiring = counting_semiring()
-    x = zeros((3, 3), semiring)
-    result = compute(x)  # Works seamlessly with AlgebraicArray
 """
-# mypy: disable-error-code="misc"
+
+from __future__ import annotations
 
 import functools
 import typing
-from collections.abc import Callable, Hashable, Iterable, Sequence
+from collections.abc import Callable, Hashable, Sequence
 
-import jax
-import jaxlib.xla_client as xc
-import quax
-from jax.sharding import Sharding
-from jaxtyping import PyTree
-from typing_extensions import overload
+from algebraic.types import Backend
 
 _FnParams = typing.ParamSpec("_FnParams")
 _ReturnType = typing.TypeVar("_ReturnType")
 
 
-@overload
-def jit(
-    fun: Callable[_FnParams, _ReturnType],
-    /,
-    in_shardings: None | Sharding | PyTree[Sharding] = ...,
-    out_shardings: None | Sharding | PyTree[Sharding] = ...,
-    static_argnums: int | Sequence[int] | None = ...,
-    static_argnames: str | Iterable[str] | None = ...,
-    donate_argnums: int | Sequence[int] | None = ...,
-    donate_argnames: str | Iterable[str] | None = ...,
-    keep_unused: bool = ...,
-    device: xc.Device | None = ...,
-    backend: str | None = ...,
-    inline: bool = ...,
-    compiler_options: dict[str, typing.Any] | None = ...,
-) -> Callable[_FnParams, _ReturnType]: ...
-
-
-@overload
-def jit(
-    *,
-    in_shardings: None | Sharding | PyTree[Sharding] = ...,
-    out_shardings: None | Sharding | PyTree[Sharding] = ...,
-    static_argnums: int | Sequence[int] | None = ...,
-    static_argnames: str | Iterable[str] | None = ...,
-    donate_argnums: int | Sequence[int] | None = ...,
-    donate_argnames: str | Iterable[str] | None = ...,
-    keep_unused: bool = ...,
-    device: xc.Device | None = ...,
-    backend: str | None = ...,
-    inline: bool = ...,
-    compiler_options: dict[str, typing.Any] | None = ...,
-) -> Callable[[Callable[_FnParams, _ReturnType]], Callable[_FnParams, _ReturnType]]: ...
-
-
 def jit(
     fun: Callable[_FnParams, _ReturnType] | None = None,
     *,
-    in_shardings: None | Sharding | PyTree[Sharding] = None,
-    out_shardings: None | Sharding | PyTree[Sharding] = None,
-    static_argnums: int | Sequence[int] | None = None,
-    static_argnames: str | Iterable[str] | None = None,
-    donate_argnums: int | Sequence[int] | None = None,
-    donate_argnames: str | Iterable[str] | None = None,
-    keep_unused: bool = False,
-    device: xc.Device | None = None,
-    backend: str | None = None,
-    inline: bool = False,
-    compiler_options: dict[str, typing.Any] | None = None,
-) -> Callable[_FnParams, _ReturnType] | Callable[[Callable[_FnParams, _ReturnType]], Callable[_FnParams, _ReturnType]]:
-    """JIT compilation with automatic AlgebraicArray support.
+    backend: str | Backend,
+) -> (
+    Callable[_FnParams, _ReturnType]
+    | Callable[[Callable[_FnParams, _ReturnType]], Callable[_FnParams, _ReturnType]]
+):
+    """JIT compilation with backend selection.
 
-    This is a wrapped version of jax.jit that automatically handles AlgebraicArray
-    instances via quax.quaxify.
+    Args:
+        fun: Function to compile. If ``None``, returns a decorator.
+        backend: Backend to use (``"jax"``, ``"torch"``, or ``"numpy"``).
 
-    See `jax.jit` documentation for parameter details.
+    Returns:
+        Compiled function, or a decorator if *fun* is ``None``.
     """
+    b = Backend(backend)
 
     def decorator(f: Callable[_FnParams, _ReturnType]) -> Callable[_FnParams, _ReturnType]:
-        jitted = jax.jit(
-            f,
-            in_shardings=in_shardings,
-            out_shardings=out_shardings,
-            static_argnums=static_argnums,
-            static_argnames=static_argnames,
-            donate_argnums=donate_argnums,
-            donate_argnames=donate_argnames,
-            keep_unused=keep_unused,
-            device=device,
-            backend=backend,
-            inline=inline,
-            compiler_options=compiler_options,
-        )
-        wrapped = quax.quaxify(jitted)
+        if b == Backend.JAX:
+            import equinox as eqx
 
-        @functools.wraps(f)
-        def wrapper(*args: _FnParams.args, **kwargs: _FnParams.kwargs) -> _ReturnType:
-            return typing.cast(_ReturnType, wrapped(*args, **kwargs))
+            return eqx.filter_jit(f)  # type: ignore[return-value]
+        elif b == Backend.TORCH:
+            import torch
 
-        return wrapper
+            compiled = torch.compile(f)
+
+            @functools.wraps(f)
+            def wrapper(*args: _FnParams.args, **kwargs: _FnParams.kwargs) -> _ReturnType:
+                return compiled(*args, **kwargs)
+
+            return wrapper
+        else:
+            return f
 
     if fun is None:
         return decorator
     return decorator(fun)
 
 
-@overload
-def vmap(
-    fun: Callable[_FnParams, _ReturnType],
-    /,
-    in_axes: int | None | Sequence[PyTree[int | None]] = ...,
-    out_axes: int | None | Sequence[PyTree[int | None]] = ...,
-    axis_name: Hashable | None = ...,
-    axis_size: int | None = ...,
-    spmd_axis_name: Hashable | tuple[Hashable, ...] | None = ...,
-) -> Callable[_FnParams, _ReturnType]: ...
-
-
-@overload
-def vmap(
-    *,
-    in_axes: int | None | Sequence[PyTree[int | None]] = ...,
-    out_axes: int | None | Sequence[PyTree[int | None]] = ...,
-    axis_name: Hashable | None = ...,
-    axis_size: int | None = ...,
-    spmd_axis_name: Hashable | tuple[Hashable, ...] | None = ...,
-) -> Callable[[Callable[_FnParams, _ReturnType]], Callable[_FnParams, _ReturnType]]: ...
-
-
 def vmap(
     fun: Callable[_FnParams, _ReturnType] | None = None,
     *,
-    in_axes: int | None | Sequence[PyTree[int | None]] = 0,
-    out_axes: int | None | Sequence[PyTree[int | None]] = 0,
+    backend: str | Backend,
+    in_axes: int | None | Sequence[int | None] = 0,
+    out_axes: int | None | Sequence[int | None] = 0,
     axis_name: Hashable | None = None,
     axis_size: int | None = None,
-    spmd_axis_name: Hashable | tuple[Hashable, ...] | None = None,
-) -> Callable[_FnParams, _ReturnType] | Callable[[Callable[_FnParams, _ReturnType]], Callable[_FnParams, _ReturnType]]:
-    """Vectorizing map with automatic AlgebraicArray support.
+) -> (
+    Callable[_FnParams, _ReturnType]
+    | Callable[[Callable[_FnParams, _ReturnType]], Callable[_FnParams, _ReturnType]]
+):
+    """Vectorizing map with backend selection.
 
-    This is a wrapped version of jax.vmap that automatically handles AlgebraicArray
-    instances via quax.quaxify.
+    Args:
+        fun: Function to vectorize. If ``None``, returns a decorator.
+        backend: Backend to use (``"jax"``, ``"torch"``, or ``"numpy"``).
+        in_axes: Input axis specifications (JAX/Torch).
+        out_axes: Output axis specifications (JAX/Torch).
+        axis_name: Axis name for collective operations (JAX only).
+        axis_size: Override for axis size (JAX only).
 
-    see `jax.vmap` documentation for parameter details.
+    Returns:
+        Vectorized function, or a decorator if *fun* is ``None``.
+
+    Raises:
+        NotImplementedError: If *backend* is ``"numpy"``.
     """
+    b = Backend(backend)
 
     def decorator(f: Callable[_FnParams, _ReturnType]) -> Callable[_FnParams, _ReturnType]:
-        vmapped = jax.vmap(
-            f,
-            in_axes=in_axes,
-            out_axes=out_axes,
-            axis_name=axis_name,
-            axis_size=axis_size,
-            spmd_axis_name=spmd_axis_name,
-        )
-        wrapped = quax.quaxify(vmapped)
+        if b == Backend.JAX:
+            import equinox as eqx
 
-        @functools.wraps(f)
-        def wrapper(*args: _FnParams.args, **kwargs: _FnParams.kwargs) -> _ReturnType:
-            return wrapped(*args, **kwargs)
+            return eqx.filter_vmap(  # type: ignore[return-value]
+                f,
+                in_axes=in_axes,
+                out_axes=out_axes,
+                axis_name=axis_name,
+                axis_size=axis_size,
+            )
+        elif b == Backend.TORCH:
+            import torch
 
-        return wrapper
+            vmapped = torch.vmap(f, in_dims=in_axes, out_dims=out_axes)  # type: ignore[arg-type]
+
+            @functools.wraps(f)
+            def wrapper(*args: _FnParams.args, **kwargs: _FnParams.kwargs) -> _ReturnType:
+                return vmapped(*args, **kwargs)
+
+            return wrapper
+        else:
+            raise NotImplementedError("vmap is not supported for the NumPy backend.")
 
     if fun is None:
         return decorator
