@@ -11,8 +11,6 @@ This package provides two categories of operations:
   re-wrap the result (`reshape`, `stack`, `where`, etc.).
 """
 
-from __future__ import annotations
-
 from algebraic.ops._creation import array as array
 from algebraic.ops._creation import full as full
 from algebraic.ops._creation import ones as ones
