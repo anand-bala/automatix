@@ -15,8 +15,8 @@ from collections.abc import Sequence
 import array_api_compat
 
 from algebraic.array.base import AlgebraicArray
-from algebraic.types import Array
-from algebraic.utils import validate_semiring
+from algebraic.types import Array, Number
+from algebraic.utils import maybe_unwrap, validate_semiring
 
 
 class UniqueAllResult(typing.NamedTuple):
@@ -368,23 +368,10 @@ def take_along_axis(
 
 
 def allclose(a: AlgebraicArray | Array, b: AlgebraicArray | Array | Number, *, rtol: float = 1e-5, atol: float = 1e-8) -> bool:
-    a_data: Array
-    b_data: Array | Number
     if isinstance(a, AlgebraicArray) and isinstance(b, AlgebraicArray):
         validate_semiring(a, b)
-        a_data = a.data
-        b_data = b.data
-    elif isinstance(a, AlgebraicArray):
-        assert is_array(b)
-        a_data = a.data
-        b_data = b
-    elif isinstance(b, AlgebraicArray):
-        assert is_array(a)
-        a_data = a
-        b_data = b.data
-    else:
-        a_data = a
-        b_data = b
+    a_data = maybe_unwrap(a)
+    b_data = maybe_unwrap(b)
 
     xp = array_api_compat.array_namespace(a_data, b_data)
     if array_api_compat.is_jax_namespace(xp):
@@ -401,7 +388,7 @@ def allclose(a: AlgebraicArray | Array, b: AlgebraicArray | Array | Number, *, r
         b_data = torch.asarray(b_data)
 
         return torch.allclose(a_data, b_data, rtol=rtol, atol=atol)
-    elif array_api_compat.is_numpy_array(xp):
+    elif array_api_compat.is_numpy_namespace(xp):
         import numpy as np
 
         a_data = np.asarray(a_data)
@@ -412,23 +399,10 @@ def allclose(a: AlgebraicArray | Array, b: AlgebraicArray | Array | Number, *, r
 
 
 def isclose(a: AlgebraicArray | Array, b: AlgebraicArray | Array | Number, *, rtol: float = 1e-5, atol: float = 1e-8) -> Array:
-    a_data: Array
-    b_data: Array | Number
     if isinstance(a, AlgebraicArray) and isinstance(b, AlgebraicArray):
         validate_semiring(a, b)
-        a_data = a.data
-        b_data = b.data
-    elif isinstance(a, AlgebraicArray):
-        assert is_array(b)
-        a_data = a.data
-        b_data = b
-    elif isinstance(b, AlgebraicArray):
-        assert is_array(a)
-        a_data = a
-        b_data = b.data
-    else:
-        a_data = a
-        b_data = b
+    a_data = maybe_unwrap(a)
+    b_data = maybe_unwrap(b)
 
     xp = array_api_compat.array_namespace(a_data, b_data)
     if array_api_compat.is_jax_namespace(xp):
@@ -445,7 +419,7 @@ def isclose(a: AlgebraicArray | Array, b: AlgebraicArray | Array | Number, *, rt
         b_data = torch.asarray(b_data)
 
         return torch.isclose(a_data, b_data, rtol=rtol, atol=atol)
-    elif array_api_compat.is_numpy_array(xp):
+    elif array_api_compat.is_numpy_namespace(xp):
         import numpy as np
 
         a_data = np.asarray(a_data)
