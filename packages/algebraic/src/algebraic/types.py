@@ -43,7 +43,8 @@ class Backend(enum.StrEnum):
             return cls.JAX
         if array_api_compat.is_torch_array(data):
             return cls.TORCH
-        if array_api_compat.is_numpy_array(data):
+        if array_api_compat.is_numpy_array(data) or isinstance(data, Number):
+            # NOTE: Use numpy as default backend for scalars.
             return cls.NUMPY
         raise TypeError(f"Cannot detect backend for type {type(data).__name__!r}")
 

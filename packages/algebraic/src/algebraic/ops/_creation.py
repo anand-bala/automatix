@@ -15,12 +15,11 @@ if typing.TYPE_CHECKING:
     from algebraic.array.base import AlgebraicArray
 
 
-# TODO: this needs to handle the case of `data` being a `Number`
-def array(data: Array, *, semiring: Semiring, backend: str | Backend | None = None) -> AlgebraicArray:
+def array(data: Array | Number, *, semiring: Semiring, backend: str | Backend | None = None) -> AlgebraicArray:
     """Create an `AlgebraicArray` from an existing backend array.
 
     Args:
-        data: Backend array (`jax.Array`, `torch.Tensor`, or `numpy.ndarray`).
+        data: Backend array (`jax.Array`, `torch.Tensor`, or `numpy.ndarray`) or number (defaults to `numpy` if no backend is given).
         semiring: Semiring for the algebraic structure.
         backend: Backend to use. If `None`, auto-detected from `data`.
 
