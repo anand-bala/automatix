@@ -1,32 +1,20 @@
 # Automatix: Weighted Automata over Semirings
 
-A Python library for weighted automata over semirings.
-The library currently includes:
-
-- NFA with Guard-Based Weights:
-  Nondeterministic finite automata with weight functions mapping `(input, guard)
-  -> semiring_value`
-- Semiring-Agnostic Design:
-  Support for counting, tropical (min/max-plus), max-min, and Boolean semirings
-- JAX Integration:
-  Differentiable operations via JAX with JIT compilation support
-- Alternating Finite Automata for Spatio-Temporal Reach Escape Logic (STREL)
-
+A Python library for weighted automata over semirings, with support for
+differentiable operations via JAX.
 
 This repository also contains the following packages in the `packages/`
 subdirectory:
 
 - `algebraic`:
-  Implementations of algebraic structures as tensors.
+  Multi-backend semiring algebra (NumPy, JAX, PyTorch) with `AlgebraicArray`,
+  concrete semiring implementations (tropical, max-min, boolean, counting),
+  and multilinear polynomial representations.
 
-- `hoaparser`:
-  A parser for the
-  [Hanoi Omega-Automata format](https://adl.github.io/hoaf/index.html).
-  It supports the entire `v1` format, but does not implement any of the
-  semantics of the automata.
-  The goal is to use it as a base package to handle parsing HOA files outputted
-  by the tools linked in <https://adl.github.io/hoaf/support.html> without
-  having to generate the automata yourself.
+- `morphata`:
+  Pure structural automata representations — graph-based NFAs, alternating
+  finite automata, HOA v1 format parser/exporter, and acceptance condition
+  algebra — without any weighted semantics.
 
 ## Quick Start
 
