@@ -19,43 +19,85 @@ type Property = Literal["idempotent_add", "idempotent_mul", "commutative", "simp
 
 @frozen()
 class AlgebraicStructure(metaclass=BetterABCMeta):
-    properties: set[Property] = dataclasses.field(default_factory=set, kw_only=True)
-    """Set of algebraic properties.
-    Valid values: "idempotent_add", "idempotent_mul", "commutative", "simple", "has_negation"
+    """Base class for all algebraic structures.
+
+    Attributes
+    ----------
+    properties : set of Property
+        Runtime-queryable set of algebraic properties.  Valid values are
+        ``"idempotent_add"``, ``"idempotent_mul"``, ``"commutative"``,
+        ``"simple"``, and ``"complemented"``.
     """
 
+    properties: set[Property] = dataclasses.field(default_factory=set, kw_only=True)
+
     def is_idempotent_add(self) -> bool:
-        r"""Check if :math:`a \oplus a = a` (additive idempotence)."""
+        r"""Check whether :math:`a \oplus a = a` (additive idempotence).
+
+        Returns
+        -------
+        bool
+            ``True`` if ``"idempotent_add"`` is in :attr:`properties`.
+        """
         return "idempotent_add" in self.properties
 
     def is_idempotent_mul(self) -> bool:
-        r"""Check if :math:`a \otimes a = a` (multiplicative idempotence)."""
+        r"""Check whether :math:`a \otimes a = a` (multiplicative idempotence).
+
+        Returns
+        -------
+        bool
+            ``True`` if ``"idempotent_mul"`` is in :attr:`properties`.
+        """
         return "idempotent_mul" in self.properties
 
     def is_commutative(self) -> bool:
-        r"""Check if :math:`a \oplus b = b \oplus a` and :math:`a \otimes b = b \otimes a`."""
+        r"""Check whether both operations are commutative.
+
+        That is, :math:`a \oplus b = b \oplus a` and
+        :math:`a \otimes b = b \otimes a`.
+
+        Returns
+        -------
+        bool
+            ``True`` if ``"commutative"`` is in :attr:`properties`.
+        """
         return "commutative" in self.properties
 
     def is_simple(self) -> bool:
-        """Check if structure is simple (all properties hold)."""
+        """Check whether the structure is marked simple.
+
+        Returns
+        -------
+        bool
+            ``True`` if ``"simple"`` is in :attr:`properties`.
+        """
         return "simple" in self.properties
 
 
 @frozen()
 class Semiring(AlgebraicStructure):
-    """A simple runtime representation of an algebraic semiring."""
+    r"""A runtime representation of an algebraic semiring :math:`(S, \oplus, \otimes, 0, 1)`.
+
+    Attributes
+    ----------
+    add : BinaryOp
+        Semiring addition :math:`\oplus`.  Must be associative, commutative,
+        and have :attr:`zero` as its identity.
+    mul : BinaryOp
+        Semiring multiplication :math:`\otimes`.  Must be associative,
+        distribute over :attr:`add`, and have :attr:`one` as its identity.
+        :attr:`zero` must absorb under multiplication.
+    zero : Number
+        Additive identity (:math:`0`).  Must be a scalar.
+    one : Number
+        Multiplicative identity (:math:`1`).  Must be a scalar.
+    """
 
     add: BinaryOp
-    r"""Semiring addition operation (:math:`\oplus`)."""
-
     mul: BinaryOp
-    r"""Semiring multiplication (:math:`\otimes`)."""
-
     zero: Number
-    """Additive identity of the semiring."""
-
     one: Number
-    """Multiplicative identity of the semiring."""
 
     def __post_init__(self) -> None:
         from algebraic.types import is_scalar
@@ -70,9 +112,13 @@ class Semiring(AlgebraicStructure):
 class BoundedDistributiveLattice(Semiring):
     r"""A bounded distributive lattice.
 
-    A specialization of a :class:`Semiring` where the :math:`\oplus` operator
-    corresponds to the *join* (:math:`\lor`) and :math:`\otimes` corresponds to
-    the *meet* (:math:`\land`).
+    A specialization of :class:`Semiring` where :math:`\oplus` is the lattice
+    *join* (:math:`\lor`) and :math:`\otimes` is the *meet* (:math:`\land`).
+    Both operations are idempotent and commutative, and the structure has a
+    greatest element (:attr:`top`) and a least element (:attr:`bottom`).
+
+    This class automatically sets ``"idempotent_add"``, ``"idempotent_mul"``,
+    ``"commutative"``, and ``"simple"`` in :attr:`~AlgebraicStructure.properties`.
     """
 
     def __post_init__(self) -> None:
@@ -85,38 +131,59 @@ class BoundedDistributiveLattice(Semiring):
 
     @property
     def join(self) -> BinaryOp:
-        r"""Lattice join operation (corresponds to :math:`\oplus`)."""
+        r"""Lattice join (:math:`\lor`), an alias for :attr:`~Semiring.add`."""
         return self.add
 
     @property
     def meet(self) -> BinaryOp:
-        r"""Lattice meet operation (corresponds to :math:`\otimes`)."""
+        r"""Lattice meet (:math:`\land`), an alias for :attr:`~Semiring.mul`."""
         return self.mul
 
     @property
     def top(self) -> Scalar | Array:
-        """Top element of the lattice (multiplicative identity)."""
+        """Greatest element of the lattice, an alias for :attr:`~Semiring.one`."""
         return self.one
 
     @property
     def bottom(self) -> Scalar | Array:
-        """Bottom element of the lattice (additive identity)."""
+        """Least element of the lattice, an alias for :attr:`~Semiring.zero`."""
         return self.zero
 
 
 @frozen()
 class Ring(Semiring):
-    """A ring is a semiring with the additional requirement that each element must have an additive inverse"""
+    r"""A semiring extended with an additive inverse.
+
+    Every element :math:`a` must have an inverse :math:`-a` such that
+    :math:`a \oplus (-a) = 0`.
+
+    Attributes
+    ----------
+    additive_inverse : UnaryOp
+        Unary operation returning the additive inverse of its argument.
+    """
 
     additive_inverse: UnaryOp
 
 
 @frozen()
 class DeMorganAlgebra(BoundedDistributiveLattice):
-    """
-    A De Morgan Algebra is a bounded distributive lattice equipped with
-    a complementation operator that is an involution (`~~a = a`) that follows De
-    Morgan's laws.
+    r"""A bounded distributive lattice with a De Morgan complement.
+
+    Extends :class:`BoundedDistributiveLattice` with a unary ``complement``
+    operation that is an involution (:math:`\neg \neg a = a`) and satisfies
+    De Morgan's laws:
+
+    .. math::
+
+        \neg (a \lor b) = \neg a \land \neg b
+        \qquad
+        \neg (a \land b) = \neg a \lor \neg b
+
+    Attributes
+    ----------
+    complement : UnaryOp
+        Unary complementation operation.
     """
 
     complement: UnaryOp
@@ -124,26 +191,56 @@ class DeMorganAlgebra(BoundedDistributiveLattice):
 
 @frozen()
 class HeytingAlgebra(BoundedDistributiveLattice):
-    """
-    A Heyting algebra is a bounded lattice equipped with a binary operation `a -> b`
-    called implication such that `(c and a) <= b` is equivalent to `c <= (a -> b)`
+    r"""A bounded lattice with an implication operation.
 
-    A Heyting algebra has a pseudo-complement such that `~a` is equivalent to `a -> 0`.
+    Extends :class:`BoundedDistributiveLattice` with a binary *implication*
+    :math:`a \to b` satisfying the adjunction:
+
+    .. math::
+
+        (c \land a) \leq b \iff c \leq (a \to b)
+
+    A pseudo-complement is derived as :math:`\neg a = a \to 0`.
+
+    Attributes
+    ----------
+    implication : BinaryOp
+        Binary implication operation :math:`a \to b`.
     """
 
     implication: BinaryOp
 
     def complement(self, value: Scalar | Array) -> Scalar | Array:
-        """Pseudo-complement in Heyting algebra."""
+        r"""Pseudo-complement, defined as :math:`\neg a = a \to 0`.
+
+        Parameters
+        ----------
+        value : Scalar or Array
+            The element to complement.
+
+        Returns
+        -------
+        Scalar or Array
+            ``self.implication(value, self.zero)``.
+        """
         return self.implication(value, self.zero)
 
 
 @frozen()
 class StoneAlgebra(BoundedDistributiveLattice):
-    """
-    A Stone Algebra is a bounded distributive lattice equipped with a pseudo-complement
-    such that `~a or ~~a = 1` (but is not necessarily an involution) but follows De
-    Morgan's laws.
+    r"""A bounded distributive lattice with a pseudo-complement satisfying Stone's law.
+
+    Extends :class:`BoundedDistributiveLattice` with a unary ``complement``
+    that need not be an involution but must satisfy:
+
+    .. math::
+
+        \neg a \lor \neg \neg a = 1
+
+    Attributes
+    ----------
+    complement : UnaryOp
+        Pseudo-complement operation.
     """
 
     complement: UnaryOp
@@ -151,21 +248,49 @@ class StoneAlgebra(BoundedDistributiveLattice):
 
 @frozen()
 class BooleanAlgebra(DeMorganAlgebra):
-    """
-    A full Boolean algebra, i.e., the operators with complementation follow:
+    r"""A full Boolean algebra.
 
-    1. De Morgan's Laws
-    2. The law of excluded middle (`~x or x = 1`)
-    3. The law of noncontradiction (`~x and x = 0`)
+    Extends :class:`DeMorganAlgebra` so that complementation satisfies:
 
-    This, by extension, satisfies the contracts of `Ring`, `StoneAlgebra`, and `HeytingAlgebra`.
+    1. **De Morgan's laws** -- :math:`\neg (a \lor b) = \neg a \land \neg b`.
+    2. **Excluded middle** -- :math:`\neg a \lor a = 1`.
+    3. **Non-contradiction** -- :math:`\neg a \land a = 0`.
+
+    By satisfying all three laws, a :class:`BooleanAlgebra` also fulfils the
+    contracts of :class:`Ring`, :class:`StoneAlgebra`, and
+    :class:`HeytingAlgebra`.
     """
 
     def additive_inverse(self, a: Scalar | Array) -> Scalar | Array:
+        r"""Additive inverse, implemented as :math:`\neg a` (complement).
+
+        Parameters
+        ----------
+        a : Scalar or Array
+            The element to negate.
+
+        Returns
+        -------
+        Scalar or Array
+            ``self.complement(a)``.
+        """
         return self.complement(a)
 
     def implication(self, a: Scalar | Array, b: Scalar | Array) -> Scalar | Array:
-        r"""Boolean implication ($a \to b$ = $\neg a \lor b$)."""
+        r"""Boolean implication :math:`a \to b = \neg a \lor b`.
+
+        Parameters
+        ----------
+        a : Scalar or Array
+            Antecedent.
+        b : Scalar or Array
+            Consequent.
+
+        Returns
+        -------
+        Scalar or Array
+            ``self.add(self.complement(a), b)``.
+        """
         return self.add(self.complement(a), b)
 
 

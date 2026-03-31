@@ -726,7 +726,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
 
         Parameters
         ----------
-        sparse : PolyDict
+        sparse : algebraic.polynomials.PolyDict
             Sparse polynomial to convert.
         max_rank : int or None, optional
             Maximum rank for the result.

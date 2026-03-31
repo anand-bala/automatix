@@ -1,15 +1,13 @@
 # Algebraic: Multi-Backend Semiring Algebra
 
-A Python package providing **semiring algebra implementations** with support for
-NumPy, JAX, and PyTorch backends.
+A Python package providing **semiring algebra implementations** with support for NumPy,
+JAX, and PyTorch backends.
 
 ## Overview
 
-This package provides abstract semiring interfaces and concrete implementations
-for:
+This package provides abstract semiring interfaces and concrete implementations for:
 
-- **Tropical semirings** (MinPlus, MaxPlus) with smooth variants for
-  differentiability
+- **Tropical semirings** (MinPlus, MaxPlus) with smooth variants for differentiability
 - **Max-Min algebras** for robustness semantics
 - **Boolean algebras** with De Morgan and Heyting algebra variants
 - **Counting semirings**
@@ -17,17 +15,13 @@ for:
 
 ## Features
 
-- **AlgebraicArray**:
-  Arrays with semiring semantics — override `+`, `*`, `@` to use custom
-  algebras
-- **Multi-Backend**:
-  Supports NumPy, JAX, and PyTorch backends with a unified API
-- **Differentiable Kernels**:
-  Smooth approximations of boolean and tropical operations for neural networks
-- **Rich Semiring Library**:
-  Tropical, Boolean, Max-Min, Counting, and custom semirings
-- **Polynomial Algebras**:
-  Sparse and dense multilinear polynomials over semirings
+- **AlgebraicArray** : Arrays with semiring semantics: override `+` , `*` , `@` to use
+  custom algebras
+- **Multi-Backend** : Supports NumPy, JAX, and PyTorch backends with a unified API
+- **Differentiable Kernels** : Smooth approximations of boolean and tropical operations
+  for neural networks
+- **Rich Semiring Library** : Tropical, Boolean, Max-Min, Counting, and custom semirings
+- **Polynomial Algebras** : Sparse and dense multilinear polynomials over semirings
 
 
 ## Quick Start
@@ -70,8 +64,8 @@ result = bool_alg.add(true, false)  # True OR False = True
 
 ### AlgebraicArray: Arrays with Semiring Semantics
 
-The `AlgebraicArray` class wraps backend arrays and overrides arithmetic
-operations to use semiring semantics.
+The `AlgebraicArray` class wraps backend arrays and overrides arithmetic operations to
+use semiring semantics.
 
 ```python
 import algebraic
@@ -162,8 +156,9 @@ def shortest_paths(dist_matrix):
     return result
 ```
 
-See `algebraic._jax_wrappers` for details. These wrappers also support
-PyTorch's `torch.compile` and `torch.vmap` when `backend="torch"`.
+See `algebraic._jax_wrappers` for details.
+These wrappers also support PyTorch's `torch.compile` and `torch.vmap` when
+`backend="torch"` .
 
 ### Advanced Features
 
@@ -216,25 +211,21 @@ q = mb0 * mb1  # Represented as dense tensor
 
 ### Semirings
 
-A semiring :math:`(S, \oplus, \otimes, \mathbf{0}, \mathbf{1})` consists of:
+A semiring :math: `(S, \oplus, \otimes, \mathbf{0}, \mathbf{1})` consists of:
 
-- **Addition** (:math:`\oplus`):
-  Combines alternative paths/outcomes
-- **Multiplication** (:math:`\otimes`):
-  Combines sequential compositions
-- **Additive identity** (:math:`\mathbf{0}`):
-  Identity for :math:`\oplus`
-- **Multiplicative identity** (:math:`\mathbf{1}`):
-  Identity for :math:`\otimes`
+- **Addition** (:math: `\oplus` ): Combines alternative paths/outcomes
+- **Multiplication** (:math: `\otimes` ): Combines sequential compositions
+- **Additive identity** (:math: `\mathbf{0}` ): Identity for :math: `\oplus`
+- **Multiplicative identity** (:math: `\mathbf{1}` ): Identity for :math: `\otimes`
 
 ### Lattices
 
 Bounded distributive lattices specialize semirings where:
 
-- **Join** (:math:`\lor`) = Addition (:math:`\oplus`)
-- **Meet** (:math:`\land`) = Multiplication (:math:`\otimes`)
-- **Top** = Multiplicative identity (:math:`\mathbf{1}`)
-- **Bottom** = Additive identity (:math:`\mathbf{0}`)
+- **Join** (:math: `\lor` ) = Addition (:math: `\oplus` )
+- **Meet** (:math: `\land` ) = Multiplication (:math: `\otimes` )
+- **Top** = Multiplicative identity (:math: `\mathbf{1}` )
+- **Bottom** = Additive identity (:math: `\mathbf{0}` )
 
 ## Available Semirings
 
@@ -244,42 +235,30 @@ Bounded distributive lattices specialize semirings where:
 | **Tropical (MaxPlus)** | max | + | Optimization, path problems |
 | **Tropical (MinPlus)** | min | + | Shortest paths, distances |
 | **Max-Min** | max | min | Robustness degrees, STL |
-| **Counting** | + | × | Counting paths |
+| **Counting** | + | $\times$ | Counting paths |
 
 ## Use Cases
 
 ### Graph Algorithms
 
-- **Shortest paths**:
-  Use tropical semirings for Floyd-Warshall algorithm
-- **Reachability**:
-  Boolean algebra for transitive closure
-- **Path counting**:
-  Counting semiring for enumeration
+- **Shortest paths** : Use tropical semirings for Floyd-Warshall algorithm
+- **Reachability** : Boolean algebra for transitive closure
+- **Path counting** : Counting semiring for enumeration
 
 ### Formal Verification
 
-- **Temporal logic**:
-  Signal Temporal Logic (STL) with max-min algebra
-- **Automata theory**:
-  Weighted automata with tropical semirings
-- **Model checking**:
-  Boolean polynomials for state space exploration
+- **Temporal logic** : Signal Temporal Logic (STL) with max-min algebra
+- **Automata theory** : Weighted automata with tropical semirings
+- **Model checking** : Boolean polynomials for state space exploration
 
 ### Machine Learning
 
-- **Differentiable logic**:
-  Soft/smooth boolean operations for neural networks
-- **Attention mechanisms**:
-  Tropical attention for robust aggregation
-- **Graph neural networks**:
-  Semiring-based message passing
+- **Differentiable logic** : Soft/smooth boolean operations for neural networks
+- **Attention mechanisms** : Tropical attention for robust aggregation
+- **Graph neural networks** : Semiring-based message passing
 
 ### Optimization
 
-- **Dynamic programming**:
-  Tropical semirings for Bellman equations
-- **Constraint satisfaction**:
-  Boolean algebra for SAT solving
-- **Resource allocation**:
-  Max-min algebra for bottleneck optimization
+- **Dynamic programming** : Tropical semirings for Bellman equations
+- **Constraint satisfaction** : Boolean algebra for SAT solving
+- **Resource allocation** : Max-min algebra for bottleneck optimization

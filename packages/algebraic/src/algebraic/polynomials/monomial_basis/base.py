@@ -357,7 +357,7 @@ class MonomialBasis(metaclass=BetterABCMeta):
 
         Parameters
         ----------
-        poly : PolyDict
+        poly : algebraic.polynomials.PolyDict
             Sparse polynomial to convert.
         backend : str or Backend or None, optional
             Backend to use. Defaults to ``poly.backend``.

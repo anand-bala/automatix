@@ -277,10 +277,9 @@ def tensordot(
     y : AlgebraicArray
         Right operand.
     axes : int or tuple of (sequence of int, sequence of int), default 2
-        ``int`` *n* — contract the last *n* axes of *x* with the first *n*
-        axes of *y* (``axes=2`` is equivalent to standard matrix multiply
-        for 2-D arrays). Alternatively, ``(lhs_axes, rhs_axes)`` — explicit
-        contracting axis sequences.
+        Contract the last *n* axes of *x* with the first *n* axes of *y* (``axes=2`` is
+        equivalent to standard matrix multiply for 2-D arrays). Alternatively, explicit
+        contracting axis sequences ``(lhs_axes, rhs_axes)``.
     """
     validate_semiring(x, y)
     if isinstance(axes, int):
@@ -319,7 +318,7 @@ def outer(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
         1-D array. The result has shape ``(x.shape[0], y.shape[0])``.
     """
     validate_semiring(x, y)
-    # No contracting dims, no batch dims — result[i, j] = x[i] * y[j].
+    # No contracting dims, no batch dims, result[i, j] = x[i] * y[j].
     return x.dot_general(y, (((), ()), ((), ())))
 
 

@@ -15,10 +15,18 @@ dispatch = Dispatcher()
 def normalize_axes(axis: int | Sequence[int] | None, ndim: int) -> tuple[int, ...]:
     """Return a sorted tuple of non-negative axis indices.
 
-    Args:
-        axis: `None` (all axes), a single `int`, or a sequence of `int`s.
-            Negative values are resolved modulo *ndim*.
-        ndim: Number of dimensions of the array being operated on.
+    Parameters
+    ----------
+    axis : int or sequence of int or None
+        ``None`` (all axes), a single ``int``, or a sequence of ``int``\\s.
+        Negative values are resolved modulo *ndim*.
+    ndim : int
+        Number of dimensions of the array being operated on.
+
+    Returns
+    -------
+    tuple of int
+        Sorted tuple of non-negative axis indices.
     """
     if axis is None:
         return tuple(range(ndim))
@@ -28,13 +36,17 @@ def normalize_axes(axis: int | Sequence[int] | None, ndim: int) -> tuple[int, ..
 
 
 def validate_semiring(*arrays: "AlgebraicArray") -> None:
-    """Raise `ValueError` if any two inputs have different semiring instances.
+    """Raise ``ValueError`` if any two inputs have different semiring instances.
 
-    Args:
-        *arrays: One or more `AlgebraicArray` instances.
+    Parameters
+    ----------
+    *arrays : AlgebraicArray
+        One or more ``AlgebraicArray`` instances.
 
-    Raises:
-        ValueError: If two arrays carry different semirings (compared with `==`).
+    Raises
+    ------
+    ValueError
+        If two arrays carry different semirings (compared with ``==``).
     """
     if len(arrays) < 2:
         return
@@ -48,6 +60,16 @@ def asanyarray(x: "AlgebraicArray" | Array | Number) -> Array:
     """Convert an object to an array.
 
     If scalar or unsupported type, will convert to NumPy array.
+
+    Parameters
+    ----------
+    x : AlgebraicArray or Array or Number
+        Object to convert.
+
+    Returns
+    -------
+    Array
+        The underlying array data.
     """
     from algebraic import AlgebraicArray
 

@@ -550,7 +550,7 @@ def equal(x: AlgebraicArray, y: AlgebraicArray | Number) -> Array:
     x : AlgebraicArray
         Input array.
     y : AlgebraicArray or Number
-        Comparison value (semirings may differ — comparison is data-only).
+        Comparison value (semirings may differ, comparison is data-only).
     """
     xp = array_api_compat.array_namespace(x.data)
     y_data = y.data if isinstance(y, AlgebraicArray) else y
@@ -566,7 +566,7 @@ def not_equal(x: AlgebraicArray, y: AlgebraicArray | Number) -> Array:
     x : AlgebraicArray
         Input array.
     y : AlgebraicArray or Number
-        Comparison value (semirings may differ — comparison is data-only).
+        Comparison value (semirings may differ, comparison is data-only).
     """
     xp = array_api_compat.array_namespace(x.data)
     y_data = y.data if isinstance(y, AlgebraicArray) else y

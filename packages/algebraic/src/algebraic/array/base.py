@@ -96,10 +96,12 @@ class AlgebraicArray(metaclass=ABCMeta):
     def __matmul__(self, other: Self) -> Self:
         """Matrix multiplication using semiring operations.
 
-        Delegates to `dot_general` with dimension numbers determined by `ndim`:
+        Delegates to ``dot_general`` with dimension numbers determined by ``ndim``:
+
         - 2D x 2D: standard matrix multiply (contract last of lhs, first of rhs).
-        - ND (batched): contract `(ndim-1,)` of lhs with `(ndim-2,)` of rhs;
-          all leading dimensions are treated as batch dimensions.
+
+        - ND (batched): contract ``(ndim-1,)`` of lhs with ``(ndim-2,)`` of rhs; all leading
+          dimensions are treated as batch dimensions.
         """
         ndim = self.ndim
         if ndim == 2:
@@ -133,7 +135,7 @@ class AlgebraicArray(metaclass=ABCMeta):
         return self._wrap(self.data[key])
 
     def __setitem__(self, key: Any, value: Any) -> None:  # noqa: ANN401
-        """Raise :class:`NotImplementedError` — ``AlgebraicArray`` is immutable.
+        """Raise :class:`NotImplementedError` as ``AlgebraicArray`` is immutable.
 
         Use the functional ``.at[...].set(...)`` pattern instead.
 
