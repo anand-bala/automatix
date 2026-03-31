@@ -1,9 +1,14 @@
 [project]
 name = "argus-automatix"
 authors = [{ name = "Anand Balakrishnan", email = "anandbala1597@gmail.com" }]
-description = "Symbolic (weighted) automata monitors"
-version = "0.5.1"
+description = "A package for manipulating automata via algebraic representation theory"
+version = "0.6.0"
 requires-python = ">=3.12"
+classifiers = [
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Mathematics",
+]
+license = "BSD-3-Clause"
 
 dependencies = [
   "bitarray>=3.8.0",
