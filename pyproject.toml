@@ -10,13 +10,13 @@ dependencies = [
   "numpy",
   "typing-extensions",
   "logic-asts>=1.4.1",
-  "algebraic-arrays>=1.1.0",
+  "algebraic-arrays>=1.2.0",
   "morphata>=1.0.0",
   "jaxtyping>=0.3",
 ]
 
 [project.optional-dependencies]
-jax = ["jax>=0.8", "equinox>=0.12"]
+jax = ["jax>=0.8"]
 torch = ["torch>=2.0"]
 
 [dependency-groups]

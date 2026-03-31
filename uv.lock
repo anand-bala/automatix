@@ -32,7 +32,7 @@ wheels = [
 
 [[package]]
 name = "algebraic-arrays"
-version = "1.1.0"
+version = "1.2.0"
 source = { editable = "packages/algebraic" }
 dependencies = [
     { name = "array-api-compat" },
@@ -94,7 +94,6 @@ dependencies = [
 
 [package.optional-dependencies]
 jax = [
-    { name = "equinox" },
     { name = "jax" },
 ]
 torch = [
@@ -123,7 +122,6 @@ docs = [
 requires-dist = [
     { name = "algebraic-arrays", editable = "packages/algebraic" },
     { name = "bitarray", specifier = ">=3.8.0" },
-    { name = "equinox", marker = "extra == 'jax'", specifier = ">=0.12" },
     { name = "jax", marker = "extra == 'jax'", specifier = ">=0.8" },
     { name = "jaxtyping", specifier = ">=0.3" },
     { name = "logic-asts", specifier = ">=1.4.1" },

@@ -1,44 +1,52 @@
+"""Matrix-based weighted automaton operator.
+
+Provides :class:`MatrixOperator` for constructing weighted finite-word
+automaton operators from an NFA and a weight function.
+
+The operator implements :class:`~algebraic.types.AlgebraicPyTree`.  Use
+``algebraic.utils.jax.jaxify()`` or ``algebraic.utils.torch.torchify()``
+for backend-specific integration.
+
+Usage
+-----
+Construct via :py:meth:`MatrixOperator.make`.
+"""
+
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import Any
 
 import algebraic
 from algebraic import AlgebraicArray, Semiring
-from algebraic.types import Backend
+from algebraic.types import AnyPyTree, Backend
 from jaxtyping import Shaped
 from morphata.examples.nfa import NFA
+from typing_extensions import Self
 
-from automatix._backend import resolve_backend
+from automatix._backend import _StaticAux, resolve_backend
 from automatix.spec import Guard, WeightFunction
 
 
 @dataclass
 class MatrixOperator:
-    """Backend-agnostic weighted NFA operator.
+    """Weighted NFA operator implementing :class:`~algebraic.types.AlgebraicPyTree`.
 
-    This class provides the shared :py:meth:`cost_transitions` method and the
-    :py:meth:`make` factory. Do not instantiate directly — use
-    :py:meth:`make` instead.
+    Construct via :py:meth:`make`; do not instantiate directly.
 
     Fields
     ------
-
     initial_weights : AlgebraicArray, shape ``(q,)``
         Semiring weight for each initial state.
     final_weights : AlgebraicArray, shape ``(q,)``
         Semiring weight for each final state.
     weight_function : Callable
-        Maps ``(input_symbol, guard) -> semiring_value``.  May be an
-        :class:`equinox.Module` or :class:`torch.nn.Module` for learnable
-        operators.
+        Maps ``(input_symbol, guard) -> semiring_value``.
     semiring : Semiring
         The semiring used to construct and fill the transition matrix.
     _transition_graph : tuple
         Frozen tuple of ``(src, dst, guard)`` triples from the NFA.
-    backend : ClassVar[Backend]
-        Which backend this subclass targets.
     """
 
     initial_weights: Shaped[AlgebraicArray, " q"]
@@ -46,8 +54,6 @@ class MatrixOperator:
     weight_function: WeightFunction
     semiring: Semiring
     _transition_graph: tuple[tuple[int, int, Guard[Any]], ...]
-
-    backend: ClassVar[Backend] = Backend.NUMPY
 
     def cost_transitions(self, x: object) -> AlgebraicArray:
         """Compute the ``q × q`` transition matrix for input *x*.
@@ -63,16 +69,46 @@ class MatrixOperator:
             ``matrix[src, dst]`` is the semiring weight assigned by the weight
             function to the ``(src, dst)`` transition under input *x*.
         """
-        n_q: int = self.initial_weights.shape[0]  # type: ignore[attr-defined]
+        n_q: int = self.initial_weights.shape[0]
+        backend = str(Backend.from_array(self.initial_weights.data))
         matrix = algebraic.zeros(
             (n_q, n_q),
-            semiring=self.semiring,  # type: ignore[attr-defined]
-            backend=str(self.backend),
+            semiring=self.semiring,
+            backend=backend,
         )
-        for src, dst, guard in self._transition_graph:  # type: ignore[attr-defined]
-            weight = self.weight_function(x, guard)  # type: ignore[attr-defined]
+        for src, dst, guard in self._transition_graph:
+            weight = self.weight_function(x, guard)
             matrix = matrix.at[src, dst].set(weight)
         return matrix
+
+    # ------------------------------------------------------------------
+    # AlgebraicPyTree
+    # ------------------------------------------------------------------
+
+    def tree_flatten(self) -> tuple[list[AlgebraicArray], tuple[Any, ...]]:
+        return [self.initial_weights, self.final_weights], (
+            _StaticAux(self.weight_function),
+            self.semiring,
+            self._transition_graph,
+        )
+
+    @classmethod
+    def tree_unflatten(
+        cls,
+        aux_data: tuple[Any, ...],
+        children: Sequence[AnyPyTree],
+    ) -> Self:
+        wf_wrapped, semiring, transition_graph = aux_data
+        initial_weights, final_weights = children
+        assert isinstance(initial_weights, AlgebraicArray)
+        assert isinstance(final_weights, AlgebraicArray)
+        return cls(
+            initial_weights=initial_weights,
+            final_weights=final_weights,
+            weight_function=wf_wrapped.value,
+            semiring=semiring,
+            _transition_graph=transition_graph,
+        )
 
     # ------------------------------------------------------------------
     # Factory
@@ -111,7 +147,8 @@ class MatrixOperator:
         Returns
         -------
         MatrixOperator
-            The appropriate backend-specific subclass instance.
+            The constructed operator.  Use ``jaxify()`` or ``torchify()``
+            from ``algebraic.utils`` for backend-specific integration.
 
         Raises
         ------
@@ -137,14 +174,6 @@ class MatrixOperator:
             (src, dst, guard) for src, dst, guard in aut.transitions
         )
 
-        if resolved == Backend.JAX:
-            from ._jax import JaxMatrixOperator
-
-            return JaxMatrixOperator._make(initial_weights, final_weights, weight_function, semiring, transition_graph)
-        if resolved == Backend.TORCH:
-            from ._torch import TorchMatrixOperator
-
-            return TorchMatrixOperator._make(initial_weights, final_weights, weight_function, semiring, transition_graph)
         return MatrixOperator(
             initial_weights=initial_weights,
             final_weights=final_weights,

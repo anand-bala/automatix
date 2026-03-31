@@ -16,7 +16,7 @@ from automatix import Guard
 from automatix.automata.nfa import NFA
 from automatix.operators import MatrixOperator
 
-type InputSymbol = object
+type InputSymbol = Array
 type SemiringValue = Array | Scalar | float | int
 
 maxplus = tropical_semiring(minplus=False)
@@ -110,7 +110,7 @@ class TestAutomatonOperatorIntegration:
         aut.add_transition(0, 1, guard=logic.Variable("a"))
 
         def input_weight(x: InputSymbol, guard: Guard[str]) -> SemiringValue:
-            return float(x[0])  # type: ignore[index]
+            return float(x[0])
 
         operator = MatrixOperator.make(
             aut,
@@ -274,7 +274,7 @@ class TestWeightFunctionClosures:
                 self.multiplier = multiplier
 
             def __call__(self, x: InputSymbol, guard: Guard[str]) -> SemiringValue:
-                return self.multiplier * float(x[0])  # type: ignore[index]
+                return self.multiplier * float(x[0])
 
         gen = WeightGenerator(10.0)
         aut: NFA[str] = NFA()

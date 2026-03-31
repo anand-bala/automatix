@@ -2,9 +2,8 @@
 
 Provides composable predicate classes that evaluate boolean guard expressions
 using semiring operations (AND → multiply, OR → add).  These are plain Python
-dataclasses with no JAX or Equinox dependency; users who want JIT compilation
-or gradient support should wrap their predicates in an
-:class:`equinox.Module` or :class:`torch.nn.Module` weight function.
+dataclasses; users who want JIT compilation or gradient support should wrap
+their predicates via ``jaxify()`` or ``torchify()`` from ``algebraic.utils``.
 """
 
 from __future__ import annotations
@@ -22,7 +21,7 @@ from automatix.spec import Guard
 
 
 @dataclass
-class AbstractPredicate[S: Semiring]:
+class AbstractPredicate:
     """A predicate is an effective Boolean alphabet over some domain.
 
     A predicate evaluates a condition on input data and returns a weight
@@ -40,7 +39,7 @@ class AbstractPredicate[S: Semiring]:
         Disjunction of predicates (semiring addition).
     """
 
-    algebra: S
+    algebra: Semiring
 
     @abstractmethod
     def __call__(self, x: object) -> object:
@@ -60,7 +59,7 @@ class AbstractPredicate[S: Semiring]:
 
 
 @dataclass
-class Predicate[S: Semiring](AbstractPredicate[S]):
+class Predicate(AbstractPredicate):
     """Wrapper for a user-defined predicate function.
 
     Parameters
@@ -78,7 +77,7 @@ class Predicate[S: Semiring](AbstractPredicate[S]):
 
 
 @dataclass
-class And[S: Semiring](AbstractPredicate[S]):
+class And(AbstractPredicate):
     """Conjunction of predicates (semiring multiplication).
 
     For a Boolean semiring this is logical AND; for MaxPlus/MinPlus this is
@@ -96,11 +95,11 @@ class And[S: Semiring](AbstractPredicate[S]):
 
     def __call__(self, x: object) -> object:
         weights = [arg(x) for arg in self.args]
-        return functools.reduce(self.algebra.mul, weights, self.algebra.one)
+        return functools.reduce(self.algebra.mul, weights, self.algebra.one)  # type: ignore[arg-type]
 
 
 @dataclass
-class Or[S: Semiring](AbstractPredicate[S]):
+class Or(AbstractPredicate):
     """Disjunction of predicates (semiring addition).
 
     For a Boolean semiring this is logical OR; for MaxPlus/MinPlus this is
@@ -118,11 +117,11 @@ class Or[S: Semiring](AbstractPredicate[S]):
 
     def __call__(self, x: object) -> object:
         weights = [arg(x) for arg in self.args]
-        return functools.reduce(self.algebra.add, weights, self.algebra.zero)
+        return functools.reduce(self.algebra.add, weights, self.algebra.zero)  # type: ignore[arg-type]
 
 
 @dataclass
-class ExprWeightFn[S: Semiring, AtomicPredicate: Hashable]:
+class ExprWeightFn[AtomicPredicate: Hashable]:
     """A weight function recursively defined from atomic predicates.
 
     Evaluates guard expressions by:
@@ -143,7 +142,7 @@ class ExprWeightFn[S: Semiring, AtomicPredicate: Hashable]:
         Predicates for negated atoms, keyed by atom name.
     """
 
-    algebra: S
+    algebra: Semiring
     atoms: dict[str, Predicate]
     neg_atoms: dict[str, Predicate]
     cache: dict[str, AbstractPredicate] = field(default_factory=dict)

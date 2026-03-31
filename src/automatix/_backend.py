@@ -6,6 +6,33 @@ from algebraic import AlgebraicArray
 from algebraic.types import Backend
 
 
+class _StaticAux:
+    """Wrapper making arbitrary objects usable as JAX pytree aux_data.
+
+    Uses ``hash()`` when available, falls back to ``id()`` for unhashable
+    objects.  This mirrors equinox's behaviour for static fields.
+    """
+
+    __slots__ = ("value",)
+
+    def __init__(self, value: object) -> None:
+        self.value = value
+
+    def __hash__(self) -> int:
+        try:
+            return hash(self.value)
+        except TypeError:
+            return id(self.value)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, _StaticAux):
+            try:
+                return bool(self.value == other.value)
+            except Exception:
+                return self.value is other.value
+        return NotImplemented
+
+
 def resolve_backend(
     explicit: str | Backend | None,
     *arrays: AlgebraicArray | None,

@@ -1,20 +1,37 @@
+"""Polynomial-based operator for Alternating Finite Automata.
+
+Provides :class:`PolynomialOperator` for representing AFA transitions and runs
+as multilinear polynomials over a bounded distributive lattice (typically
+Boolean algebra).
+
+The operator implements :class:`~algebraic.types.AlgebraicPyTree`.  Use
+``algebraic.utils.jax.jaxify()`` or ``algebraic.utils.torch.torchify()``
+for backend-specific integration.
+
+Usage
+-----
+Construct via :py:meth:`PolynomialOperator.from_afa` or
+:py:meth:`PolynomialOperator.from_ltl`.
+"""
+
 from __future__ import annotations
 
 import typing
 from collections.abc import Hashable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from typing import Any
 
 import algebraic
 import logic_asts as logic
 import morphata
 from algebraic import BoundedDistributiveLattice as Lattice
 from algebraic.polynomials.rank_decomp import RankDecomposition
-from algebraic.types import Backend
+from algebraic.types import AnyPyTree, Backend
 from morphata.spec import BoolExpr
+from typing_extensions import Self
 
-from automatix._backend import resolve_backend
+from automatix._backend import _StaticAux, resolve_backend
 
 AP = typing.TypeVar("AP", bound=Hashable)
 K = typing.TypeVar("K", bound=Lattice)
@@ -103,13 +120,12 @@ def boolexpr_to_polynomial(
 
 @dataclass
 class PolynomialOperator:
-    """Backend-agnostic AFA polynomial operator.
+    """AFA polynomial operator implementing :class:`~algebraic.types.AlgebraicPyTree`.
 
     Represents AFA transitions and runs as multilinear polynomials over a
     bounded distributive lattice (typically Boolean algebra).
 
-    Do not instantiate directly — use :py:meth:`from_afa` or
-    :py:meth:`from_ltl`.
+    Construct via :py:meth:`from_afa` or :py:meth:`from_ltl`.
 
     Fields
     ------
@@ -124,13 +140,6 @@ class PolynomialOperator:
     _transition_cache : Mapping
         ``{(state_idx, symbol): RankDecomposition}`` — pre-computed transition
         polynomials.
-
-    Notes
-    -----
-    In the JAX backend, ``_transition_cache`` is a static field. JAX will
-    retrace if the automaton structure changes, which never happens at runtime.
-    For very large automata the static hash comparison at JIT cache lookup may
-    be slow; this is a known limitation.
     """
 
     initial_poly: RankDecomposition
@@ -138,7 +147,35 @@ class PolynomialOperator:
     num_states: int
     algebra: Lattice
     _transition_cache: Mapping[tuple[int, Any], RankDecomposition] = field(default_factory=dict)
-    backend: ClassVar[Backend] = Backend.NUMPY
+
+    # ------------------------------------------------------------------
+    # AlgebraicPyTree
+    # ------------------------------------------------------------------
+
+    def tree_flatten(self) -> tuple[list[RankDecomposition], tuple[Any, ...]]:
+        return [self.initial_poly], (
+            self.accepting_states,
+            self.num_states,
+            self.algebra,
+            _StaticAux(self._transition_cache),
+        )
+
+    @classmethod
+    def tree_unflatten(
+        cls,
+        aux_data: tuple[Any, ...],
+        children: Sequence[AnyPyTree],
+    ) -> Self:
+        accepting_states, num_states, algebra, cache_wrapped = aux_data
+        (initial_poly,) = children
+        assert isinstance(initial_poly, RankDecomposition)
+        return cls(
+            initial_poly=initial_poly,
+            accepting_states=accepting_states,
+            num_states=num_states,
+            algebra=algebra,
+            _transition_cache=cache_wrapped.value,
+        )
 
     # ------------------------------------------------------------------
     # Shared computation
@@ -174,7 +211,7 @@ class PolynomialOperator:
             Polynomial over state variables representing the run tree after
             processing the entire word.
         """
-        current: RankDecomposition = self.initial_poly  # type: ignore[attr-defined]
+        current: RankDecomposition = self.initial_poly
         for symbol in word:
             current = self.step(current, symbol)
         return current
@@ -194,11 +231,11 @@ class PolynomialOperator:
         RankDecomposition
             Polynomial representing the successor configuration.
         """
-        substitutions: dict[int, RankDecomposition] = {}
-        for state_idx in range(self.num_states):  # type: ignore[attr-defined]
+        substitutions: list[RankDecomposition] = []
+        for state_idx in range(self.num_states):
             cache_key = (state_idx, symbol)
             try:
-                substitutions[state_idx] = self._transition_cache[cache_key]  # type: ignore[attr-defined]
+                substitutions.append(self._transition_cache[cache_key])
             except KeyError:
                 raise KeyError(
                     f"Transition polynomial not found in cache for state {state_idx}, "
@@ -220,12 +257,11 @@ class PolynomialOperator:
         object
             Algebra value: one if any accepting state is reachable, zero otherwise.
         """
-        algebra: Lattice = self.algebra  # type: ignore[attr-defined]
-        accepting: frozenset[int] = self.accepting_states  # type: ignore[attr-defined]
-        point = {
-            i: algebra.one if i in accepting else algebra.zero
-            for i in range(self.num_states)  # type: ignore[attr-defined]
-        }
+        import numpy as np
+
+        algebra: Lattice = self.algebra
+        accepting: list[int] = list(self.accepting_states)
+        point = np.array([algebra.one if i in accepting else algebra.zero for i in range(self.num_states)])
         ret = poly.evaluate(point)
         factors = ret.factors
         item = factors[0, 0, 0]
@@ -256,7 +292,8 @@ class PolynomialOperator:
         Returns
         -------
         PolynomialOperator
-            The appropriate backend-specific subclass instance.
+            The constructed operator.  Use ``jaxify()`` or ``torchify()``
+            from ``algebraic.utils`` for backend-specific integration.
 
         Raises
         ------
@@ -307,14 +344,6 @@ class PolynomialOperator:
                 backend=resolved,
             )
 
-        if resolved == Backend.JAX:
-            from ._jax import JaxPolynomialOperator
-
-            return JaxPolynomialOperator._make(initial_poly, accepting_states, num_states, algebra, transition_cache)
-        if resolved == Backend.TORCH:
-            from ._torch import TorchPolynomialOperator
-
-            return TorchPolynomialOperator._make(initial_poly, accepting_states, num_states, algebra, transition_cache)
         return PolynomialOperator(
             initial_poly=initial_poly,
             accepting_states=frozenset(accepting_states),
@@ -381,7 +410,7 @@ def _extract_accepting_states(acceptance: morphata.AcceptanceCondition[int]) -> 
     from morphata.acceptance import Finite
 
     if isinstance(acceptance, Finite):
-        return acceptance.accepting  # ty:ignore[invalid-return-type]
+        return typing.cast(AbstractSet[int], acceptance.accepting)
     raise NotImplementedError(f"Unsupported acceptance condition: {type(acceptance)}")
 
 

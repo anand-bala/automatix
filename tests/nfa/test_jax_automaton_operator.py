@@ -1,14 +1,15 @@
 # mypy: disable-error-code="no-untyped-call, no-any-return"
 
 import algebraic as alg
-import equinox as eqx
 import jax
 import jax.nn
 import jax.numpy as jnp
+import jax.tree_util as jtu
 import logic_asts as logic
 import pytest
 from algebraic import Semiring
 from algebraic.semirings import counting_semiring, max_min_algebra, tropical_semiring
+from algebraic.utils.jax import jaxify  # noqa: F401  # registers algebraic pytrees
 from jaxtyping import Array, Num, Scalar
 from typing_extensions import TypeAlias
 
@@ -16,6 +17,9 @@ from automatix import Guard, WeightFunction
 from automatix.automata.nfa import NFA
 from automatix.operators import MatrixOperator
 from automatix.weights.guard_weights import ExprWeightFn, Predicate
+
+# Register MatrixOperator as a JAX pytree once at module level.
+jtu.register_pytree_node_class(MatrixOperator)
 
 Box: TypeAlias = Num[Array, "4"]
 Circle: TypeAlias = Num[Array, "3"]
@@ -62,7 +66,7 @@ def test_signed_dist_to_box() -> None:
     print(dists)
 
 
-def make_box_predicate[S: Semiring](algebra: S, box: Box) -> tuple[Predicate, Predicate]:
+def make_box_predicate(algebra: Semiring, box: Box) -> tuple[Predicate, Predicate]:
     """Make the predicate for being inside and outside a box."""
 
     @jax.jit
@@ -78,7 +82,7 @@ def make_box_predicate[S: Semiring](algebra: S, box: Box) -> tuple[Predicate, Pr
     return Predicate(algebra, inside), Predicate(algebra, outside)
 
 
-def make_circle_predicate[S: Semiring](algebra: S, circle: Circle) -> tuple[Predicate, Predicate]:
+def make_circle_predicate(algebra: Semiring, circle: Circle) -> tuple[Predicate, Predicate]:
     """Make the predicates for being inside and outside a circle"""
 
     @jax.jit
@@ -111,9 +115,9 @@ def parse_guard(expr: str) -> Guard[str]:
     ],
     ids=["CountingSemiring", "MaxPlusSemiring", "MaxMinSemiring", "MinPlusSemiring"],
 )
-def sequential_aut[S: Semiring](
+def sequential_aut(
     request: pytest.FixtureRequest,
-) -> tuple[NFA[str], dict[str, Predicate], dict[str, Predicate], S]:
+) -> tuple[NFA[str], dict[str, Predicate], dict[str, Predicate], Semiring]:
     aut: NFA[str] = NFA()
     aut.add_location(0, initial=True)
     aut.add_location(1)
@@ -128,7 +132,7 @@ def sequential_aut[S: Semiring](
     aut.add_transition(2, 3, guard=parse_guard("orange"))
     aut.add_transition(3, 3, guard=logic.Literal(True))
 
-    algebra: S = request.param
+    algebra: Semiring = request.param
     assert isinstance(algebra, Semiring)
 
     in_red, out_red = make_box_predicate(algebra, RED_BOX)
@@ -140,11 +144,11 @@ def sequential_aut[S: Semiring](
     return aut, atoms, neg_atoms, algebra
 
 
-def test_expr_weight_fn[S: Semiring](
-    sequential_aut: tuple[NFA[str], dict[str, Predicate], dict[str, Predicate], S],
+def test_expr_weight_fn(
+    sequential_aut: tuple[NFA[str], dict[str, Predicate], dict[str, Predicate], Semiring],
 ) -> None:
     aut, atoms, neg_atoms, algebra = sequential_aut
-    weight_fn = ExprWeightFn[S, str](
+    weight_fn: ExprWeightFn[str] = ExprWeightFn(
         algebra=algebra,
         atoms=atoms,
         neg_atoms=neg_atoms,
@@ -156,17 +160,14 @@ def test_expr_weight_fn[S: Semiring](
         weight_function=weight_fn,
         backend="jax",
     )
-
     assert operator.initial_weights.shape == (4,)
     assert operator.initial_weights.data[0] == jnp.asarray(algebra.one)
     assert operator.final_weights.shape == (4,)
     assert operator.final_weights.data[3] == jnp.asarray(algebra.one)
 
-    # Use eqx.filter_jit (not jax.jit) for eqx.Module methods — jax.jit cannot
-    # hash the bound self because JaxMatrixOperator contains JAX array fields.
-    @eqx.filter_jit
-    def transitions(x):  # type: ignore[misc]
-        return operator.cost_transitions(x)
+    @jax.jit
+    def transitions(op: MatrixOperator, x: jax.Array) -> alg.AlgebraicArray:
+        return op.cost_transitions(x)
 
     n_timesteps = 1500
 
@@ -177,12 +178,14 @@ def test_expr_weight_fn[S: Semiring](
     trajectory = jnp.stack((xs, ys), axis=0).T
     assert trajectory.shape == (n_timesteps, 2)
 
-    assert transitions(trajectory[0]).shape == (4, 4)
+    assert transitions(operator, trajectory[0]).shape == (4, 4)
 
-    deltas = jax.vmap(transitions)(trajectory)
+    deltas = jax.vmap(transitions, in_axes=(None, 0))(operator, trajectory)
     assert deltas.shape == (n_timesteps, 4, 4)
 
     init_weights_reshaped = operator.initial_weights[jnp.newaxis, :]
+
+    weights: alg.AlgebraicArray
     weights, _ = jax.lax.scan(lambda x, y: (x @ y, None), init_weights_reshaped, deltas)
     # weights shape: (1, 4); final_weights shape: (4,)
     # Use elementwise mul then algebraic.sum to avoid 1D @ 1D in dot_general.

@@ -14,14 +14,15 @@ from automatix.operators.polynomial import boolexpr_to_polynomial
 K = typing.TypeVar("K", bound=algebraic.BoundedDistributiveLattice)
 
 
-def extract_scalar(poly_result: RankDecomposition, algebra: algebraic.BoundedDistributiveLattice) -> object:
+def extract_scalar(poly_result: RankDecomposition, algebra: algebraic.BoundedDistributiveLattice) -> np.generic:
     """Extract scalar value from polynomial evaluation result.
 
     RankDecomposition.evaluate() returns a constant RankDecomposition.
     Extract the actual scalar value from factors[0, 0, 0].
     """
     assert poly_result.algebra == algebra
-    return poly_result.factors.data[0, 0, 0]
+    val: np.generic = np.asarray(poly_result.factors.data[0, 0, 0]).flat[0]
+    return val
 
 
 class TestBoolExprConversion:
@@ -37,7 +38,7 @@ class TestBoolExprConversion:
         expr = logic.Literal(True)
         poly = boolexpr_to_polynomial(expr, num_vars=3, algebra=algebra, backend="numpy")
 
-        point = {0: algebra.zero, 1: algebra.zero, 2: algebra.zero}
+        point = np.array([algebra.zero, algebra.zero, algebra.zero])
         result = poly.evaluate(point)
         scalar = extract_scalar(result, algebra)
         assert np.allclose(scalar, np.asarray(algebra.one))
@@ -47,7 +48,7 @@ class TestBoolExprConversion:
         expr = logic.Literal(False)
         poly = boolexpr_to_polynomial(expr, num_vars=3, algebra=algebra, backend="numpy")
 
-        point = {0: algebra.one, 1: algebra.one, 2: algebra.one}
+        point = np.array([algebra.one, algebra.one, algebra.one])
         result = poly.evaluate(point)
         scalar = extract_scalar(result, algebra)
         assert np.allclose(scalar, np.asarray(algebra.zero))
@@ -57,14 +58,13 @@ class TestBoolExprConversion:
         expr = logic.Variable(2)
         poly = boolexpr_to_polynomial(expr, num_vars=5, algebra=algebra, backend="numpy")
 
-        point = {i: algebra.zero for i in range(5)}
-        point[2] = algebra.one
+        point = np.array([algebra.zero, algebra.zero, algebra.one, algebra.zero, algebra.zero])
         result = poly.evaluate(point)
         scalar = extract_scalar(result, algebra)
         assert np.allclose(scalar, np.asarray(algebra.one))
 
-        point[2] = algebra.zero
-        result = poly.evaluate(point)
+        point2 = np.array([algebra.zero, algebra.zero, algebra.zero, algebra.zero, algebra.zero])
+        result = poly.evaluate(point2)
         scalar = extract_scalar(result, algebra)
         assert np.allclose(scalar, np.asarray(algebra.zero))
 
@@ -81,7 +81,7 @@ class TestBoolExprConversion:
         ]
 
         for point_dict, expected in test_cases:
-            point = {i: algebra.one if point_dict.get(i, False) else algebra.zero for i in range(3)}
+            point = np.array([algebra.one if point_dict.get(i, False) else algebra.zero for i in range(3)])
             result = poly.evaluate(point)
             scalar = extract_scalar(result, algebra)
             expected_val = algebra.one if expected else algebra.zero
@@ -100,7 +100,7 @@ class TestBoolExprConversion:
         ]
 
         for point_dict, expected in test_cases:
-            point = {i: algebra.one if point_dict.get(i, False) else algebra.zero for i in range(3)}
+            point = np.array([algebra.one if point_dict.get(i, False) else algebra.zero for i in range(3)])
             result = poly.evaluate(point)
             scalar = extract_scalar(result, algebra)
             expected_val = algebra.one if expected else algebra.zero
@@ -121,17 +121,17 @@ class TestBoolExprConversion:
         expr = typing.cast(logic.BoolExpr[int], (x0 & x1) | x2)
         poly = boolexpr_to_polynomial(expr, num_vars=3, algebra=algebra, backend="numpy")
 
-        point = {0: algebra.zero, 1: algebra.zero, 2: algebra.zero}
+        point = np.array([algebra.zero, algebra.zero, algebra.zero])
         result = poly.evaluate(point)
         scalar = extract_scalar(result, algebra)
         assert np.allclose(scalar, np.asarray(algebra.zero))
 
-        point = {0: algebra.one, 1: algebra.one, 2: algebra.zero}
+        point = np.array([algebra.one, algebra.one, algebra.zero])
         result = poly.evaluate(point)
         scalar = extract_scalar(result, algebra)
         assert np.allclose(scalar, np.asarray(algebra.one))
 
-        point = {0: algebra.zero, 1: algebra.zero, 2: algebra.one}
+        point = np.array([algebra.zero, algebra.zero, algebra.one])
         result = poly.evaluate(point)
         scalar = extract_scalar(result, algebra)
         assert np.allclose(scalar, np.asarray(algebra.one))
