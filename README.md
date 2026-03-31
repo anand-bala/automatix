@@ -1,20 +1,17 @@
 # Automatix: Weighted Automata over Semirings
 
-A Python library for weighted automata over semirings, with support for
-differentiable operations via JAX.
+A Python library for weighted automata over semirings, with support for differentiable
+operations via JAX/PyTorch.
 
-This repository also contains the following packages in the `packages/`
-subdirectory:
+This repository also contains the following packages in the `packages/` subdirectory:
 
-- `algebraic`:
-  Multi-backend semiring algebra (NumPy, JAX, PyTorch) with `AlgebraicArray`,
-  concrete semiring implementations (tropical, max-min, boolean, counting),
-  and multilinear polynomial representations.
+- `algebraic` : Multi-backend semiring algebra (NumPy, JAX, PyTorch) with
+  `AlgebraicArray` , concrete semiring implementations (tropical, max-min, boolean,
+  counting), and multilinear polynomial representations.
 
-- `morphata`:
-  Pure structural automata representations — graph-based NFAs, alternating
-  finite automata, HOA v1 format parser/exporter, and acceptance condition
-  algebra — without any weighted semantics.
+- `morphata` : Pure structural automata representations -- graph-based NFAs, alternating
+  finite automata, HOA v1 format parser/exporter, and acceptance condition algebra --
+  without any weighted semantics.
 
 ## Quick Start
 
@@ -31,8 +28,8 @@ For an example of using the matrix operator, see the file in
 
 ## Citation
 
-If you are using the matrix operator or this package in general, you should cite
-one of the following papers:
+If you are using the matrix operator or this package in general, you should cite one of
+the following papers:
 
 - For differentiable weighted automata in general:
 
