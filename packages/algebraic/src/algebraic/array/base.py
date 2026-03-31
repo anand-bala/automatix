@@ -28,8 +28,16 @@ if typing.TYPE_CHECKING:
 class AlgebraicArray(metaclass=ABCMeta):
     """A multidimensional array with elements from a semiring.
 
-    This array overrides multiplication and addition to be defined with respect to the
-    corresponding semiring.
+    This array overrides multiplication and addition to be defined with respect
+    to the corresponding semiring.
+
+    Attributes
+    ----------
+    data : Array
+        The underlying backend array (``numpy.ndarray``, ``jax.Array``, or
+        ``torch.Tensor``).
+    semiring : Semiring
+        The :class:`~algebraic.spec.Semiring` governing arithmetic operations.
     """
 
     data: AbstractVar[Array]
@@ -125,12 +133,14 @@ class AlgebraicArray(metaclass=ABCMeta):
         return self._wrap(self.data[key])
 
     def __setitem__(self, key: Any, value: Any) -> None:  # noqa: ANN401
-        """Raise NotImplementedError: `AlgebraicArray` is immutable.
+        """Raise :class:`NotImplementedError` — ``AlgebraicArray`` is immutable.
 
-        Use the functional `.at[...].set(...)` pattern instead.
+        Use the functional ``.at[...].set(...)`` pattern instead.
 
-        Raises:
-            NotImplementedError: Always, since in-place updates are not supported.
+        Raises
+        ------
+        NotImplementedError
+            Always, since in-place updates are not supported.
         """
         raise NotImplementedError(
             "AlgebraicArray does not support in-place index updates. "
@@ -155,9 +165,12 @@ class AlgebraicArray(metaclass=ABCMeta):
     def to_device(self, device: object, /, *, stream: int | None = None) -> Self:
         """Return a copy of this array on the specified device.
 
-        Args:
-            device: Target device for the returned array.
-            stream: Optional device stream for async transfers.
+        Parameters
+        ----------
+        device : object
+            Target device for the returned array.
+        stream : int or None, optional
+            Device stream for async transfers.
         """
         # array_api_compat.to_device is the portable entry point across backends.
         result: Array = array_api_compat.to_device(self.data, device, stream=stream)
@@ -208,11 +221,14 @@ class AlgebraicArray(metaclass=ABCMeta):
     ) -> Self:
         """Compute generalized dot product using semiring operations.
 
-        This implements `dot_general` for `AlgebraicArray`, using the semiring's
-        multiplication and addition operations instead of standard arithmetic.
+        This implements ``dot_general`` for :class:`AlgebraicArray`, using the
+        semiring's multiplication and addition instead of standard arithmetic.
 
-        Args:
-            other: Right-hand side array.
-            dimension_numbers: Nested tuple of `((contracting_dims), (batch_dims))`
-                for each operand, following the same layout as `jax.lax.dot_general`.
+        Parameters
+        ----------
+        other : AlgebraicArray
+            Right-hand side array.
+        dimension_numbers : tuple
+            Nested tuple of ``((contracting_dims), (batch_dims))`` for each
+            operand, following the same layout as ``jax.lax.dot_general``.
         """

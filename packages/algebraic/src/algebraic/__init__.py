@@ -1,3 +1,20 @@
+"""Multi-backend semiring algebra library.
+
+The :mod:`algebraic` module is the main entrypoint for the package. It
+re-exports all array operations, semiring specifications, and polynomial
+types.
+
+Supported backends: NumPy, JAX, and PyTorch.
+
+Examples
+--------
+>>> import algebraic
+>>> sr = algebraic.semirings.tropical_semiring(minplus=True)
+>>> a = algebraic.array([1.0, 2.0, 3.0], semiring=sr, backend="numpy")
+>>> b = algebraic.array([4.0, 5.0, 6.0], semiring=sr, backend="numpy")
+>>> c = a + b  # tropical add: [min(1,4), min(2,5), min(3,6)]
+"""
+
 # Re-export the submodules
 from algebraic import polynomials as polynomials
 from algebraic import semirings as semirings

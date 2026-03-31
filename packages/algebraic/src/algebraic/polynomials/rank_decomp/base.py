@@ -47,7 +47,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
 
     @classmethod
     def _get_backend(cls, backend: str | Backend | None) -> str | Backend:
-        """Resolve backend: use explicit arg, class default, or fall back to JAX."""
+        """Resolve backend: use explicit arg, class default, or fall back to NumPy."""
         if backend is not None:
             return backend
         try:
@@ -87,9 +87,38 @@ class RankDecomposition(metaclass=BetterABCMeta):
         *,
         backend: str | Backend | None = None,
     ) -> Self:
-        """Create rank-1 polynomial representing variable ``x_i``.
+        r"""Create rank-1 polynomial representing variable :math:`x_i`.
 
-        Creates a CP decomposition with rank=1, degree=1.
+        Parameters
+        ----------
+        i : int
+            Variable index (0-based).
+        num_vars : int
+            Total number of variables.
+        algebra : BoundedDistributiveLattice
+            Lattice algebra governing operations.
+        max_rank : int or None, optional
+            Maximum rank for the decomposition.
+        max_degree : int or None, optional
+            Maximum degree for the polynomial.
+        max_replacement_degree : int or None, optional
+            Maximum degree for replacement polynomials in :meth:`compose`.
+        backend : str or Backend or None, optional
+            Backend to use.
+
+        Returns
+        -------
+        RankDecomposition
+            A rank-1 polynomial with degree 1.
+
+        Examples
+        --------
+        >>> from algebraic.polynomials import RankDecomposition
+        >>> from algebraic.semirings import boolean_algebra
+        >>> ba = boolean_algebra(mode="logic")
+        >>> x0 = RankDecomposition.variable(0, num_vars=2, algebra=ba, backend="numpy")
+        >>> x0.rank
+        1
         """
         backend = cls._get_backend(backend)
         factors = alge.zeros((1, 1, num_vars + 1), semiring=algebra, backend=backend)
@@ -121,9 +150,38 @@ class RankDecomposition(metaclass=BetterABCMeta):
         *,
         backend: str | Backend | None = None,
     ) -> Self:
-        """Create rank-1 polynomial representing constant.
+        """Create a rank-1 constant polynomial.
 
-        Creates a CP decomposition with rank=1, degree=1.
+        Parameters
+        ----------
+        value : Scalar
+            Constant value.
+        num_vars : int
+            Total number of variables.
+        algebra : BoundedDistributiveLattice
+            Lattice algebra governing operations.
+        max_rank : int or None, optional
+            Maximum rank for the decomposition.
+        max_degree : int or None, optional
+            Maximum degree for the polynomial.
+        max_replacement_degree : int or None, optional
+            Maximum degree for replacement polynomials in :meth:`compose`.
+        backend : str or Backend or None, optional
+            Backend to use.
+
+        Returns
+        -------
+        RankDecomposition
+            A rank-1 constant polynomial.
+
+        Examples
+        --------
+        >>> from algebraic.polynomials import RankDecomposition
+        >>> from algebraic.semirings import boolean_algebra
+        >>> ba = boolean_algebra(mode="logic")
+        >>> c = RankDecomposition.constant(True, num_vars=2, algebra=ba, backend="numpy")
+        >>> c.rank
+        1
         """
         backend = cls._get_backend(backend)
         factors = alge.zeros((1, 1, num_vars + 1), semiring=algebra, backend=backend)
@@ -236,12 +294,17 @@ class RankDecomposition(metaclass=BetterABCMeta):
     def _multiply_arrays(self, p_arr: AlgebraicArray, q_arr: AlgebraicArray) -> AlgebraicArray:
         """Core multiplication logic on raw arrays (no simplification/compression).
 
-        Args:
-            p_arr: Shape [R_p, d_p, n+1]
-            q_arr: Shape [R_q, d_q, n+1]
+        Parameters
+        ----------
+        p_arr : AlgebraicArray
+            Shape ``[R_p, d_p, n+1]``.
+        q_arr : AlgebraicArray
+            Shape ``[R_q, d_q, n+1]``.
 
-        Returns:
-            Shape [R_p * R_q, d_p + d_q, n+1]
+        Returns
+        -------
+        AlgebraicArray
+            Shape ``[R_p * R_q, d_p + d_q, n+1]``.
         """
         rank_p, degree_p, n_plus_1 = p_arr.shape
         rank_q, degree_q, _ = q_arr.shape
@@ -442,12 +505,17 @@ class RankDecomposition(metaclass=BetterABCMeta):
     def evaluate(self, points: "Array | Mapping[int, Scalar]") -> Self:
         """Evaluate polynomial at given point.
 
-        Args:
-            points: Either Array of shape (num_vars,) for full evaluation,
-                   or Mapping[int, Scalar] for partial evaluation
+        Parameters
+        ----------
+        points : Array or Mapping[int, Scalar]
+            Either an array of shape ``(num_vars,)`` for full evaluation,
+            or a mapping from variable indices to scalar values for partial
+            evaluation.
 
-        Returns:
-            Constant polynomial (RankDecomposition) after evaluation
+        Returns
+        -------
+        RankDecomposition
+            Constant polynomial after evaluation.
         """
         if isinstance(points, Mapping):
             if set(points.keys()) >= set(range(self.num_vars)):
@@ -534,13 +602,17 @@ class RankDecomposition(metaclass=BetterABCMeta):
         return q_array
 
     def compose(self, replacements: dict[int, Self]) -> Self:
-        """Compose p with replacement polynomials.
+        """Compose polynomial with replacement polynomials.
 
-        Args:
-            replacements: Dict mapping variable indices to replacement polynomials
+        Parameters
+        ----------
+        replacements : dict[int, RankDecomposition]
+            Dict mapping variable indices to replacement polynomials.
 
-        Returns:
-            Composed polynomial
+        Returns
+        -------
+        RankDecomposition
+            The composed polynomial.
         """
         result_arr: AlgebraicArray
         q_array = self._prepare_replacement_array(replacements)
@@ -652,12 +724,23 @@ class RankDecomposition(metaclass=BetterABCMeta):
     ) -> Self:
         """Convert sparse to CP form (each monomial becomes rank-1 component).
 
-        Args:
-            sparse: Sparse polynomial to convert
-            max_degree: Maximum degree for result (default: num_vars)
+        Parameters
+        ----------
+        sparse : PolyDict
+            Sparse polynomial to convert.
+        max_rank : int or None, optional
+            Maximum rank for the result.
+        max_degree : int or None, optional
+            Maximum degree for the result (default: ``num_vars``).
+        max_replacement_degree : int or None, optional
+            Maximum degree for replacement polynomials in :meth:`compose`.
+        backend : str or Backend or None, optional
+            Backend to use.
 
-        Returns:
-            CP decomposition with one rank-1 component per monomial
+        Returns
+        -------
+        RankDecomposition
+            CP decomposition with one rank-1 component per monomial.
         """
         if max_degree is None:
             max_degree = sparse.num_vars

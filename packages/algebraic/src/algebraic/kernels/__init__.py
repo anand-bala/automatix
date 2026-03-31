@@ -2,11 +2,11 @@
 
 Public facade that routes to backend-specific implementations.
 Generic operations (soft boolean ops) work on any backend via basic
-arithmetic.  Smooth/sigmoid operations dispatch to the appropriate
+arithmetic. Smooth/sigmoid operations dispatch to the appropriate
 backend at call time using lazy imports.
 
-Backend detection uses `array_api_compat.is_*_array` checks.
-Scalar inputs fall back to the JAX implementation by default.
+Backend detection uses ``array_api_compat.is_*_array`` checks.
+Scalar inputs fall back to the NumPy implementation by default.
 """
 
 from __future__ import annotations

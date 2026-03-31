@@ -68,7 +68,7 @@ class PolyDict(metaclass=BetterABCMeta):
 
     @classmethod
     def _get_backend(cls, backend: str | Backend | None) -> str | Backend:
-        """Resolve backend: use explicit arg, class default, or fall back to JAX."""
+        """Resolve backend: use explicit arg, class default, or fall back to NumPy."""
         if backend is not None:
             return backend
         try:
@@ -78,15 +78,33 @@ class PolyDict(metaclass=BetterABCMeta):
 
     @classmethod
     def constant(cls, value: Scalar, num_vars: int, *, algebra: Lattice, backend: str | Backend | None = None) -> "PolyDict":
-        """
+        """Create a constant polynomial with the given *value*.
+
+        Parameters
+        ----------
+        value : Scalar
+            Coefficient for the constant term.
+        num_vars : int
+            Number of variables in the polynomial.
+        algebra : BoundedDistributiveLattice
+            Lattice algebra governing operations.
+        backend : str or Backend or None, optional
+            Backend to use. Falls back to the class default or NumPy.
+
+        Returns
+        -------
+        PolyDict
+            A constant polynomial.
+
         Examples
         --------
+        >>> import numpy as np
         >>> from algebraic.semirings import boolean_algebra
-        >>> import jax.numpy as jnp
+        >>> from algebraic.polynomials import PolyDict
         >>> alg = boolean_algebra('ste')
-        >>> p = PolyDict.constant(jnp.array(True), num_vars=3, algebra=alg)
-        >>> p['000']
-        Array(True, dtype=bool)
+        >>> p = PolyDict.constant(np.array(True), num_vars=3, algebra=alg, backend="numpy")
+        >>> p['000'].data
+        array(True)
         """
         zeros_idx = frozenbitarray(ba_util.zeros(num_vars))
         backend = cls._get_backend(backend)
@@ -103,7 +121,24 @@ class PolyDict(metaclass=BetterABCMeta):
 
     @classmethod
     def variable(cls, index: int, num_vars: int, *, algebra: Lattice, backend: str | Backend | None = None) -> "PolyDict":
-        """Create polynomial representing a single variable x_i."""
+        r"""Create a polynomial representing a single variable :math:`x_i`.
+
+        Parameters
+        ----------
+        index : int
+            Variable index (0-based).
+        num_vars : int
+            Total number of variables.
+        algebra : BoundedDistributiveLattice
+            Lattice algebra governing operations.
+        backend : str or Backend or None, optional
+            Backend to use. Falls back to the class default or NumPy.
+
+        Returns
+        -------
+        PolyDict
+            A polynomial with a single monomial ``x_index``.
+        """
         monomial = ba_util.zeros(num_vars)
         monomial[index] = 1
         backend = cls._get_backend(backend)
@@ -166,22 +201,32 @@ class PolyDict(metaclass=BetterABCMeta):
     def evaluate(self, point: Shaped[Array, " {self.num_vars}"] | Mapping[int, Scalar]) -> Self:
         """Evaluate polynomial at a point.
 
+        Parameters
+        ----------
+        point : Array or Mapping[int, Scalar]
+            Either an array of shape ``(num_vars,)`` or a dict mapping
+            variable indices to scalar values.
+
+        Returns
+        -------
+        PolyDict
+            The evaluated (constant) polynomial.
+
         Examples
         --------
+        >>> import numpy as np
         >>> from algebraic.semirings import boolean_algebra
-        >>> import jax.numpy as jnp
+        >>> from algebraic.polynomials import PolyDict
         >>> num_vars = 2
         >>> algebra = boolean_algebra(mode='logic')
-        >>> x_0 = PolyDict.variable(0, num_vars, algebra)
-        >>> x_1 = PolyDict.variable(1, num_vars, algebra)
+        >>> x_0 = PolyDict.variable(0, num_vars, algebra=algebra, backend="numpy")
+        >>> x_1 = PolyDict.variable(1, num_vars, algebra=algebra, backend="numpy")
         >>> p = x_0 * x_1  # x_0 AND x_1
-        >>> e1 = p.evaluate(dict(enumerate(jnp.array([True, True]))))
+        >>> e1 = p.evaluate(dict(enumerate(np.array([True, True]))))
         >>> e1.isscalar()
         True
-        >>> e1[(0,0)]
-        Array(True, dtype=bool...)
-        >>> p.evaluate(dict(enumerate(jnp.array([True, False]))))['00']
-        Array(False, dtype=bool...)
+        >>> e1['00'].data
+        array(True)
         """
         cls = type(self)
         if isinstance(point, Mapping):
@@ -200,11 +245,22 @@ class PolyDict(metaclass=BetterABCMeta):
     def compose(self, replacements: Mapping[int, Self]) -> Self:
         """Compose polynomial with multiple substitutions.
 
-        Returns p(x_1 <- q_1, ..., x_n <- q_n) where only specified indices are replaced.
+        Returns ``p(x_1 <- q_1, ..., x_n <- q_n)`` where only specified
+        indices are replaced.
+
+        Parameters
+        ----------
+        replacements : Mapping[int, PolyDict]
+            Dict mapping variable indices to replacement polynomials.
+
+        Returns
+        -------
+        PolyDict
+            The composed polynomial.
 
         Note
         ----
-        The composition should be performed simultaneously. If not, this is a bug.
+        The composition is performed simultaneously. If not, this is a bug.
         """
         cls = type(self)
         result = cls.zero(self.num_vars, algebra=self.algebra, backend=self.backend)  # initialize with additive identity

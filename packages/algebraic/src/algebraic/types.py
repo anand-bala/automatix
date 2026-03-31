@@ -1,3 +1,9 @@
+"""Type definitions for the algebraic package.
+
+This module defines the core type aliases and protocols used throughout the
+package, including array types, backend selection, and callable protocols.
+"""
+
 from __future__ import annotations
 
 import enum

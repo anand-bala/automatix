@@ -1,19 +1,20 @@
 # mypy: disable-error-code="misc"
 """Backend-agnostic transformations for algebraic arrays.
 
-This module provides wrapped versions of common array transformations (jit, vmap) that
-work across JAX, PyTorch, and NumPy backends.
+This module provides wrapped versions of common array transformations (``jit``,
+``vmap``) that work across JAX, PyTorch, and NumPy backends.
 
-Example:
-    from algebraic._jax_wrappers import jit, vmap
-
-    @jit(backend="jax")
-    def compute(x):
-        return x + x
-
-    @vmap(backend="torch")
-    def batch_compute(xs):
-        return xs * xs
+Examples
+--------
+>>> from algebraic._jax_wrappers import jit, vmap
+>>>
+>>> @jit(backend="jax")
+... def compute(x):
+...     return x + x
+>>>
+>>> @vmap(backend="torch")
+... def batch_compute(xs):
+...     return xs * xs
 """
 
 from __future__ import annotations
@@ -38,11 +39,16 @@ def jit(
 ):
     """JIT compilation with backend selection.
 
-    Args:
-        fun: Function to compile. If ``None``, returns a decorator.
-        backend: Backend to use (``"jax"``, ``"torch"``, or ``"numpy"``).
+    Parameters
+    ----------
+    fun : callable or None
+        Function to compile. If ``None``, returns a decorator.
+    backend : str or Backend
+        Backend to use (``"jax"``, ``"torch"``, or ``"numpy"``).
 
-    Returns:
+    Returns
+    -------
+    callable
         Compiled function, or a decorator if *fun* is ``None``.
     """
     b = Backend(backend)
@@ -84,19 +90,30 @@ def vmap(
 ):
     """Vectorizing map with backend selection.
 
-    Args:
-        fun: Function to vectorize. If ``None``, returns a decorator.
-        backend: Backend to use (``"jax"``, ``"torch"``, or ``"numpy"``).
-        in_axes: Input axis specifications (JAX/Torch).
-        out_axes: Output axis specifications (JAX/Torch).
-        axis_name: Axis name for collective operations (JAX only).
-        axis_size: Override for axis size (JAX only).
+    Parameters
+    ----------
+    fun : callable or None
+        Function to vectorize. If ``None``, returns a decorator.
+    backend : str or Backend
+        Backend to use (``"jax"``, ``"torch"``, or ``"numpy"``).
+    in_axes : int or None or sequence, default 0
+        Input axis specifications (JAX/Torch).
+    out_axes : int or None or sequence, default 0
+        Output axis specifications (JAX/Torch).
+    axis_name : Hashable or None, optional
+        Axis name for collective operations (JAX only).
+    axis_size : int or None, optional
+        Override for axis size (JAX only).
 
-    Returns:
+    Returns
+    -------
+    callable
         Vectorized function, or a decorator if *fun* is ``None``.
 
-    Raises:
-        NotImplementedError: If *backend* is ``"numpy"``.
+    Raises
+    ------
+    NotImplementedError
+        If *backend* is ``"numpy"``.
     """
     b = Backend(backend)
 

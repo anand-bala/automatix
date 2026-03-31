@@ -1,7 +1,7 @@
-# Algebraic: Semiring Algebra for JAX
+# Algebraic: Multi-Backend Semiring Algebra
 
-A Python package providing **semiring algebra implementations** optimized for
-JAX with differentiable operations.
+A Python package providing **semiring algebra implementations** with support for
+NumPy, JAX, and PyTorch backends.
 
 ## Overview
 
@@ -18,10 +18,10 @@ for:
 ## Features
 
 - **AlgebraicArray**:
-  JAX arrays with semiring semantics - override `+`, `*`, `@` to use custom
+  Arrays with semiring semantics — override `+`, `*`, `@` to use custom
   algebras
-- **JAX-First**:
-  Optimized for JAX with JIT compilation, vmap, and automatic differentiation
+- **Multi-Backend**:
+  Supports NumPy, JAX, and PyTorch backends with a unified API
 - **Differentiable Kernels**:
   Smooth approximations of boolean and tropical operations for neural networks
 - **Rich Semiring Library**:
@@ -32,18 +32,14 @@ for:
 
 ## Quick Start
 
-### Recommended Imports
-
-For the best experience with `algebraic`, use these imports:
+### Recommended Import
 
 ```python
-import algebraic.numpy as alge  # For array operations and creation
-from algebraic import jit, vmap  # For JAX transformations
-from algebraic.semirings import tropical_semiring, boolean_algebra  # For semirings
+import algebraic
 ```
 
-These provide a seamless interface that automatically handles `AlgebraicArray`
-integration with JAX without manual `quax.quaxify` calls.
+The top-level `algebraic` module re-exports all array operations, semiring
+specifications, and polynomial types.
 
 ### Basic Semiring Operations
 
@@ -72,36 +68,31 @@ false = bool_alg.zero
 result = bool_alg.add(true, false)  # True OR False = True
 ```
 
-### AlgebraicArray: JAX Arrays with Semiring Semantics
+### AlgebraicArray: Arrays with Semiring Semantics
 
-The `AlgebraicArray` class wraps JAX arrays and overrides arithmetic operations
-to use semiring semantics.
-It integrates seamlessly with JAX transformations like `jit`, `vmap`, and
-`grad`.
-
-**Recommended**:
-Use `algebraic.numpy` (imported as `alge`) for array creation and operations:
+The `AlgebraicArray` class wraps backend arrays and overrides arithmetic
+operations to use semiring semantics.
 
 ```python
-import algebraic.numpy as alge
+import algebraic
 from algebraic.semirings import tropical_semiring
 
 # Create algebraic arrays with tropical semiring
 tropical = tropical_semiring(minplus=True)
-a = alge.array([1.0, 2.0, 3.0], tropical)
-b = alge.array([4.0, 5.0, 6.0], tropical)
+a = algebraic.array([1.0, 2.0, 3.0], semiring=tropical, backend="numpy")
+b = algebraic.array([4.0, 5.0, 6.0], semiring=tropical, backend="numpy")
 
 # Element-wise operations use semiring semantics
 c = a + b  # Tropical addition: [min(1,4), min(2,5), min(3,6)] = [1, 2, 3]
 d = a * b  # Tropical multiplication: [1+4, 2+5, 3+6] = [5, 7, 9]
 
-# Reductions use semiring operations (via algebraic.numpy)
-total = alge.sum(a)  # min(1, 2, 3) = 1
-product = alge.prod(a)  # 1 + 2 + 3 = 6
+# Reductions use semiring operations
+total = algebraic.sum(a)  # min(1, 2, 3) = 1
+product = algebraic.prod(a)  # 1 + 2 + 3 = 6
 
 # Matrix multiplication with @ operator
-A = alge.array([[1.0, 2.0], [3.0, 4.0]], tropical)
-B = alge.array([[5.0, 6.0], [7.0, 8.0]], tropical)
+A = algebraic.array([[1.0, 2.0], [3.0, 4.0]], semiring=tropical, backend="numpy")
+B = algebraic.array([[5.0, 6.0], [7.0, 8.0]], semiring=tropical, backend="numpy")
 C = A @ B  # Tropical matmul: C[i,j] = min_k(A[i,k] + B[k,j])
 # Result: [[6, 7], [8, 9]]
 ```
@@ -109,18 +100,18 @@ C = A @ B  # Tropical matmul: C[i,j] = min_k(A[i,k] + B[k,j])
 ### Boolean Algebra for Graph and Logic Operations
 
 ```python
-import algebraic.numpy as alge
+import algebraic
 from algebraic.semirings import boolean_algebra
 
 # Boolean algebra for reachability
 bool_alg = boolean_algebra(mode="logic")
 
 # Adjacency matrix: edge from i to j
-adj = alge.array([
+adj = algebraic.array([
     [False, True,  False],
     [False, False, True],
     [True,  False, False]
-], bool_alg)
+], semiring=bool_alg, backend="numpy")
 
 # Matrix multiplication computes 2-step reachability
 reach_2 = adj @ adj
@@ -136,7 +127,7 @@ for _ in range(3):
 ### Smooth Boolean Operations for Learning
 
 ```python
-import algebraic.numpy as alge
+import algebraic
 from algebraic.semirings import boolean_algebra
 
 # Differentiable boolean operations for neural networks
@@ -144,8 +135,8 @@ smooth_bool = boolean_algebra(mode="smooth", temperature=10.0)
 soft_bool = boolean_algebra(mode="soft")
 
 # Example: Soft logical operations on continuous values
-x = alge.array([0.9, 0.8, 0.1], soft_bool)
-y = alge.array([0.7, 0.3, 0.2], soft_bool)
+x = algebraic.array([0.9, 0.8, 0.1], semiring=soft_bool, backend="numpy")
+y = algebraic.array([0.7, 0.3, 0.2], semiring=soft_bool, backend="numpy")
 
 # Soft AND: element-wise multiplication
 z_and = x * y  # [0.63, 0.24, 0.02]
@@ -154,25 +145,14 @@ z_and = x * y  # [0.63, 0.24, 0.02]
 z_or = x + y  # [0.97, 0.86, 0.28]
 ```
 
-### JAX Transformations
+### JAX-Specific Transformations
 
-`AlgebraicArray` works seamlessly with JAX's transformation system.
-
-**Recommended**:
-Use the wrapped transformations from `algebraic` instead of manually using
-`quax.quaxify`:
+For JAX users, backend-specific wrappers for `jit` and `vmap` are available:
 
 ```python
-import jax
-import jax.numpy as jnp  # For jnp.inf
-import algebraic.numpy as alge
-from algebraic import jit, vmap  # Use these instead of jax.jit/jax.vmap with quax.quaxify
-from algebraic.semirings import tropical_semiring, boolean_algebra
+from algebraic._jax_wrappers import jit, vmap
 
-tropical = tropical_semiring(minplus=True)
-
-# JIT compilation - use algebraic.jit
-@jit
+@jit(backend="jax")
 def shortest_paths(dist_matrix):
     """Compute all-pairs shortest paths using tropical matrix multiplication."""
     n = dist_matrix.shape[0]
@@ -180,65 +160,23 @@ def shortest_paths(dist_matrix):
     for _ in range(n - 1):
         result = result @ dist_matrix
     return result
-
-D = alge.array([[0., 1., jnp.inf],
-                [jnp.inf, 0., 1.],
-                [1., jnp.inf, 0.]], tropical)
-shortest = shortest_paths(D)
-
-# Vectorization with vmap - use algebraic.vmap
-bool_alg = boolean_algebra(mode="soft")
-
-@vmap
-def process_graph(adj):
-    """Process a single graph with AlgebraicArray."""
-    result = adj
-    for _ in range(1):  # Compute 2-step reachability
-        result = result @ adj
-    return result
-
-# Create batched AlgebraicArray (shape: [batch, rows, cols])
-batch_adj = alge.array([
-    [[0.0, 1.0], [1.0, 0.0]],
-    [[1.0, 0.0], [0.0, 1.0]]
-], bool_alg)
-
-# vmap over batch dimension
-batch_reach = process_graph(batch_adj)
-
-# Automatic differentiation (with differentiable modes)
-smooth_bool = boolean_algebra(mode="smooth", temperature=10.0)
-
-@jax.grad
-def loss_fn(x):
-    """Example: compute gradient of a soft boolean expression."""
-    result = alge.sum(x * x)  # Soft AND reduction
-    # Extract underlying data for gradient computation
-    from algebraic import AlgebraicArray
-    return result.data if isinstance(result, AlgebraicArray) else result
-
-x = alge.array([0.9, 0.8, 0.7], smooth_bool)
-gradient = loss_fn(x)
 ```
 
-**Note**:
-For operations on `AlgebraicArray` that need to be JIT-compiled or vectorized,
-use `from algebraic import jit, vmap` instead of `jax.jit` and `jax.vmap`.
-These wrappers automatically handle the `quax.quaxify` integration for you.
+See `algebraic._jax_wrappers` for details. These wrappers also support
+PyTorch's `torch.compile` and `torch.vmap` when `backend="torch"`.
 
 ### Advanced Features
 
 #### Functional Index Updates
 
-`AlgebraicArray` supports JAX-style functional index updates with semiring
-operations:
+`AlgebraicArray` supports functional index updates with semiring operations:
 
 ```python
-import algebraic.numpy as alge
+import algebraic
 from algebraic.semirings import tropical_semiring
 
 tropical = tropical_semiring(minplus=True)
-arr = alge.array([1.0, 2.0, 3.0, 4.0], tropical)
+arr = algebraic.array([1.0, 2.0, 3.0, 4.0], semiring=tropical, backend="numpy")
 
 # Functional updates (returns new array)
 new_arr = arr.at[1].set(0.5)  # Set index 1 to 0.5
@@ -255,22 +193,22 @@ scaled = arr.at[2].multiply(2.0)  # arr[2] = 3.0 + 2.0 = 5.0
 Work with sparse and dense polynomial representations over semirings:
 
 ```python
-from algebraic.polynomials import SparsePolynomial, MonomialBasis
+from algebraic.polynomials import PolyDict, MonomialBasis
 from algebraic.semirings import boolean_algebra
 
 bool_alg = boolean_algebra(mode="logic")
 
 # Sparse representation (efficient for few terms)
-x0 = SparsePolynomial.variable(0, num_vars=3, algebra=bool_alg)
-x1 = SparsePolynomial.variable(1, num_vars=3, algebra=bool_alg)
+x0 = PolyDict.variable(0, num_vars=3, algebra=bool_alg, backend="numpy")
+x1 = PolyDict.variable(1, num_vars=3, algebra=bool_alg, backend="numpy")
 p = x0 * x1 + x1  # Polynomial: (x0 AND x1) OR x1
 
 # Evaluate at a point
 result = p.evaluate({0: True, 1: False, 2: True})
 
 # Dense monomial basis (efficient for many terms)
-mb0 = MonomialBasis.variable(0, num_vars=2, algebra=bool_alg)
-mb1 = MonomialBasis.variable(1, num_vars=2, algebra=bool_alg)
+mb0 = MonomialBasis.variable(0, num_vars=2, bool_alg, backend="numpy")
+mb1 = MonomialBasis.variable(1, num_vars=2, bool_alg, backend="numpy")
 q = mb0 * mb1  # Represented as dense tensor
 ```
 
@@ -278,25 +216,25 @@ q = mb0 * mb1  # Represented as dense tensor
 
 ### Semirings
 
-A semiring $(S, \oplus, \otimes, \mathbf{0}, \mathbf{1})$ consists of:
+A semiring :math:`(S, \oplus, \otimes, \mathbf{0}, \mathbf{1})` consists of:
 
-- **Addition** ($\oplus$):
+- **Addition** (:math:`\oplus`):
   Combines alternative paths/outcomes
-- **Multiplication** ($\otimes$):
+- **Multiplication** (:math:`\otimes`):
   Combines sequential compositions
-- **Additive identity** ($\mathbf{0}$):
-  Identity for $\oplus$
-- **Multiplicative identity** ($\mathbf{1}$):
-  Identity for $\otimes$
+- **Additive identity** (:math:`\mathbf{0}`):
+  Identity for :math:`\oplus`
+- **Multiplicative identity** (:math:`\mathbf{1}`):
+  Identity for :math:`\otimes`
 
 ### Lattices
 
 Bounded distributive lattices specialize semirings where:
 
-- **Join** ($\lor$) = Addition ($\oplus$)
-- **Meet** ($\land$) = Multiplication ($\otimes$)
-- **Top** = Multiplicative identity ($\mathbf{1}$)
-- **Bottom** = Additive identity ($\mathbf{0}$)
+- **Join** (:math:`\lor`) = Addition (:math:`\oplus`)
+- **Meet** (:math:`\land`) = Multiplication (:math:`\otimes`)
+- **Top** = Multiplicative identity (:math:`\mathbf{1}`)
+- **Bottom** = Additive identity (:math:`\mathbf{0}`)
 
 ## Available Semirings
 
@@ -306,7 +244,7 @@ Bounded distributive lattices specialize semirings where:
 | **Tropical (MaxPlus)** | max | + | Optimization, path problems |
 | **Tropical (MinPlus)** | min | + | Shortest paths, distances |
 | **Max-Min** | max | min | Robustness degrees, STL |
-| **Counting** | + | $\times$ | Counting paths |
+| **Counting** | + | × | Counting paths |
 
 ## Use Cases
 

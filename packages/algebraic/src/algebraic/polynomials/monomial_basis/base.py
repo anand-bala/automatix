@@ -34,7 +34,7 @@ class MonomialBasis(metaclass=BetterABCMeta):
 
     @classmethod
     def _get_backend(cls, backend: str | Backend | None) -> str | Backend:
-        """Resolve backend: use explicit arg, class default, or fall back to JAX."""
+        """Resolve backend: use explicit arg, class default, or fall back to NumPy."""
         if backend is not None:
             return backend
         try:
@@ -90,7 +90,33 @@ class MonomialBasis(metaclass=BetterABCMeta):
         *,
         backend: str | Backend | None = None,
     ) -> "MonomialBasis":
-        """Create polynomial representing a single variable :math:`x_i`."""
+        r"""Create polynomial representing a single variable :math:`x_i`.
+
+        Parameters
+        ----------
+        index : int
+            Variable index (0-based).
+        num_vars : int
+            Total number of variables.
+        algebra : BoundedDistributiveLattice
+            Lattice algebra governing operations.
+        backend : str or Backend or None, optional
+            Backend to use.
+
+        Returns
+        -------
+        MonomialBasis
+            A polynomial with a single variable term.
+
+        Examples
+        --------
+        >>> from algebraic.polynomials import MonomialBasis
+        >>> from algebraic.semirings import boolean_algebra
+        >>> ba = boolean_algebra(mode="logic")
+        >>> x0 = MonomialBasis.variable(0, num_vars=2, algebra=ba, backend="numpy")
+        >>> x0.shape
+        (2, 2)
+        """
         idx = tuple(1 if i == index else 0 for i in range(num_vars))
         backend = cls._get_backend(backend)
         return _make_monomial_basis(
@@ -108,7 +134,33 @@ class MonomialBasis(metaclass=BetterABCMeta):
         *,
         backend: str | Backend | None = None,
     ) -> "MonomialBasis":
-        """Create a constant polynomial."""
+        """Create a constant polynomial.
+
+        Parameters
+        ----------
+        value : Scalar
+            Coefficient for the constant term.
+        num_vars : int
+            Number of variables.
+        algebra : BoundedDistributiveLattice
+            Lattice algebra governing operations.
+        backend : str or Backend or None, optional
+            Backend to use.
+
+        Returns
+        -------
+        MonomialBasis
+            A constant polynomial.
+
+        Examples
+        --------
+        >>> from algebraic.polynomials import MonomialBasis
+        >>> from algebraic.semirings import boolean_algebra
+        >>> ba = boolean_algebra(mode="logic")
+        >>> c = MonomialBasis.constant(True, num_vars=2, algebra=ba, backend="numpy")
+        >>> c.coeffs[(0, 0)].data
+        array(True)
+        """
         idx = (0,) * num_vars
         backend = cls._get_backend(backend)
         return _make_monomial_basis(
@@ -200,7 +252,29 @@ class MonomialBasis(metaclass=BetterABCMeta):
         self,
         points: Mapping[int, Scalar] | Shaped[AlgebraicArray | Array, " {self.num_vars}"],
     ) -> Self:
-        """Evaluate polynomial at the given points using Horner-like scheme."""
+        """Evaluate polynomial at the given points using Horner-like scheme.
+
+        Parameters
+        ----------
+        points : Mapping[int, Scalar] or Array
+            Either a dict mapping variable indices to scalar values, or an
+            array of shape ``(num_vars,)``.
+
+        Returns
+        -------
+        MonomialBasis
+            The evaluated (constant) polynomial.
+
+        Examples
+        --------
+        >>> from algebraic.polynomials import MonomialBasis
+        >>> from algebraic.semirings import boolean_algebra
+        >>> ba = boolean_algebra(mode="logic")
+        >>> x0 = MonomialBasis.variable(0, num_vars=2, algebra=ba, backend="numpy")
+        >>> result = x0.evaluate({0: True, 1: False})
+        >>> result.coeffs[(0, 0)].data
+        array(True)
+        """
         map_points: dict[int, Scalar] = {}
         if isinstance(points, Mapping):
             map_points = dict(points)
@@ -279,7 +353,30 @@ class MonomialBasis(metaclass=BetterABCMeta):
         *,
         backend: str | Backend | None = None,
     ) -> "MonomialBasis":
-        """Convert from sparse (dictionary-of-keys) representation."""
+        """Convert from sparse (dictionary-of-keys) representation.
+
+        Parameters
+        ----------
+        poly : PolyDict
+            Sparse polynomial to convert.
+        backend : str or Backend or None, optional
+            Backend to use. Defaults to ``poly.backend``.
+
+        Returns
+        -------
+        MonomialBasis
+            Dense monomial-basis representation of *poly*.
+
+        Examples
+        --------
+        >>> from algebraic.polynomials import PolyDict, MonomialBasis
+        >>> from algebraic.semirings import boolean_algebra
+        >>> ba = boolean_algebra(mode="logic")
+        >>> sp = PolyDict.variable(0, num_vars=2, algebra=ba, backend="numpy")
+        >>> mb = MonomialBasis.from_sparse(sp)
+        >>> mb.shape
+        (2, 2)
+        """
         backend = backend or poly.backend
         backend = Backend(backend)
         coeffs = alge.zeros((2,) * poly.num_vars, semiring=poly.algebra, backend=backend)

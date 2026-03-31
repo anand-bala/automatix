@@ -40,7 +40,25 @@ def _try_array_else_scalar(
 
 
 def counting_semiring() -> Semiring:
-    r"""Implementation of the counting semiring (R, +, *, 0, 1)."""
+    r"""Create the counting semiring :math:`(\mathbb{R}, +, \times, 0, 1)`.
+
+    The counting semiring uses standard addition and multiplication, and is
+    useful for counting paths in graphs.
+
+    Returns
+    -------
+    Semiring
+        A :class:`~algebraic.spec.Semiring` with standard ``+`` and ``*``.
+
+    Examples
+    --------
+    >>> from algebraic.semirings import counting_semiring
+    >>> sr = counting_semiring()
+    >>> sr.add(2.0, 3.0)
+    5.0
+    >>> sr.mul(2.0, 3.0)
+    6.0
+    """
 
     def add(x1: Number | Array, x2: Number | Array) -> Number | Array:
         return x1 + x2
@@ -84,18 +102,35 @@ def max_min_algebra(
     only: None | Literal["negative", "positive"] = None,
     temperature: float = 1.0,
 ) -> Lattice | DeMorganAlgebra:
-    """Implementation of the min-max semiring on reals (R cup {-inf, inf}, max, min, -inf, inf).
+    r"""Create a max-min algebra on the extended reals.
+
+    The max-min algebra :math:`(\mathbb{R} \cup \{-\infty, \infty\}, \max, \min, -\infty, \infty)`
+    is useful for robustness semantics and Signal Temporal Logic (STL).
 
     Parameters
     ----------
     smooth : bool
-        If `True`, use the logaddexp approximation of max and min.
-    only : "negative", "positive", None (default)
+        If ``True``, use the logaddexp approximation of max and min.
+    only : {"negative", "positive", None}
         Restrict the semiring to either the negative or positive extended reals. If
-        `None`, returns a full complemented max-min algebra (with negation).
+        ``None`` (default), returns a full complemented max-min algebra (with negation).
     temperature : float, default 1.0
-        Temperature closer to infinity is closer to true max/min
+        Temperature closer to infinity is closer to true max/min.
 
+    Returns
+    -------
+    DeMorganAlgebra or BoundedDistributiveLattice
+        A :class:`~algebraic.spec.DeMorganAlgebra` when *only* is ``None``,
+        otherwise a :class:`~algebraic.spec.BoundedDistributiveLattice`.
+
+    Examples
+    --------
+    >>> from algebraic.semirings import max_min_algebra
+    >>> mm = max_min_algebra()
+    >>> mm.add(-0.5, 0.2)
+    0.2
+    >>> mm.mul(-0.5, 0.2)
+    -0.5
     """
 
     if smooth:
@@ -139,23 +174,37 @@ def max_min_algebra(
 
 
 def tropical_semiring(*, minplus: bool = True, smooth: bool = False, temperature: float = 1.0) -> Semiring:
-    """The min-plus tropical semiring
+    r"""Create a tropical semiring.
 
-    The choice of `minplus` determines if the output is the min-plus semiring (R_>=0 cup
-    {-inf, inf}, min, +, inf, 0) or the max-plus tropical semiring (R_<=0 cup {-inf,
-    inf}, max, +, -inf, 0).
+    When *minplus* is ``True``, returns the min-plus semiring
+    :math:`(\mathbb{R}_{\ge 0} \cup \{\infty\}, \min, +, \infty, 0)`.
+    Otherwise, returns the max-plus semiring
+    :math:`(\mathbb{R}_{\le 0} \cup \{-\infty\}, \max, +, -\infty, 0)`.
 
     Parameters
     ----------
-    minplus: bool
-        If `True`, returns the min-plus tropical semiring. Else, the maxplus semiring.
+    minplus : bool
+        If ``True``, returns the min-plus tropical semiring. Otherwise, the
+        max-plus semiring.
     smooth : bool
-        If `True`, use the logaddexp approximation of max and min.
-    only : "negative", "positive", None (default)
-        Restrict the semiring to either the negative or positive extended reals. If
-        `None`, returns a full complemented max-min algebra (with negation).
+        If ``True``, use the logaddexp approximation of max and min.
     temperature : float, default 1.0
-        Temperature for the smooth approximation; closer to infinity is closer to true max/min
+        Temperature for the smooth approximation; closer to infinity is closer
+        to true max/min.
+
+    Returns
+    -------
+    Semiring
+        A :class:`~algebraic.spec.Semiring` with tropical operations.
+
+    Examples
+    --------
+    >>> from algebraic.semirings import tropical_semiring
+    >>> tp = tropical_semiring(minplus=True)
+    >>> tp.add(2.0, 3.0)
+    2.0
+    >>> tp.mul(2.0, 3.0)
+    5.0
     """
     if smooth:
         if minplus:
@@ -200,23 +249,40 @@ def boolean_algebra(
     mode: Literal["logic", "soft", "smooth", "ste", "std-fuzzy"] = "soft",
     temperature: float = 1.0,
 ) -> BooleanAlgebra:
-    """Create a differentiable Boolean kernel.
+    """Create a Boolean algebra with configurable differentiation mode.
 
     Parameters
     ----------
     mode : {"logic", "soft", "smooth", "ste", "std-fuzzy"}
         Differentiation mode:
-        - "logic": non-differentiable
-        - "soft": Soft Boolean using multiplication and addition (fastest, smoothest)
-        - "smooth": Smooth Boolean using sigmoid with temperature
-        - "ste"|"std-fuzzy": Straight-Through Estimator or, equivalently, the standard fuzzy algebra
-    temperature : float, optional
-        Temperature parameter for "smooth" mode (default: 1.0)
 
+        - ``"logic"``: non-differentiable exact Boolean operations.
+        - ``"soft"``: Soft Boolean using multiplication and addition (fastest,
+          smoothest).
+        - ``"smooth"``: Smooth Boolean using sigmoid with *temperature*.
+        - ``"ste"`` | ``"std-fuzzy"``: Straight-Through Estimator or,
+          equivalently, the standard fuzzy algebra.
+    temperature : float, default 1.0
+        Temperature parameter for ``"smooth"`` mode.
+
+    Returns
+    -------
+    BooleanAlgebra
+        A :class:`~algebraic.spec.BooleanAlgebra` instance.
 
     Notes
     -----
-    The differentiable modes work best with inputs in [0,1] closer to the boundaries.
+    The differentiable modes work best with inputs in [0, 1] closer to the
+    boundaries.
+
+    Examples
+    --------
+    >>> from algebraic.semirings import boolean_algebra
+    >>> ba = boolean_algebra(mode="logic")
+    >>> ba.add(True, False)
+    True
+    >>> ba.mul(True, False)
+    False
     """
 
     zero = 0.0

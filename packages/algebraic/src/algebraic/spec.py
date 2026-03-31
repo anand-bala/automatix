@@ -1,4 +1,4 @@
-"""Pure interface definitions for heirarchy of rings and lattices.
+"""Pure interface definitions for hierarchy of rings and lattices.
 
 This module defines the abstract base classes that all algebraic implementations
 must follow. These are pure interfaces with no implementation.
@@ -25,15 +25,15 @@ class AlgebraicStructure(metaclass=BetterABCMeta):
     """
 
     def is_idempotent_add(self) -> bool:
-        """Check if a oplus a = a (additive idempotence)."""
+        r"""Check if :math:`a \oplus a = a` (additive idempotence)."""
         return "idempotent_add" in self.properties
 
     def is_idempotent_mul(self) -> bool:
-        """Check if a otimes a = a (multiplicative idempotence)."""
+        r"""Check if :math:`a \otimes a = a` (multiplicative idempotence)."""
         return "idempotent_mul" in self.properties
 
     def is_commutative(self) -> bool:
-        """Check if a oplus b = b oplus a and a otimes b = b otimes a."""
+        r"""Check if :math:`a \oplus b = b \oplus a` and :math:`a \otimes b = b \otimes a`."""
         return "commutative" in self.properties
 
     def is_simple(self) -> bool:
@@ -46,16 +46,16 @@ class Semiring(AlgebraicStructure):
     """A simple runtime representation of an algebraic semiring."""
 
     add: BinaryOp
-    """Semiring addition operation (oplus)"""
+    r"""Semiring addition operation (:math:`\oplus`)."""
 
     mul: BinaryOp
-    """Semiring multiplication (otimes)"""
+    r"""Semiring multiplication (:math:`\otimes`)."""
 
     zero: Number
-    """Additive identity of the semiring"""
+    """Additive identity of the semiring."""
 
     one: Number
-    """Multiplicative identity of the semiring"""
+    """Multiplicative identity of the semiring."""
 
     def __post_init__(self) -> None:
         from algebraic.types import is_scalar
@@ -68,7 +68,12 @@ class Semiring(AlgebraicStructure):
 
 @frozen
 class BoundedDistributiveLattice(Semiring):
-    """A bounded distributive lattice is a specialization of a semiring, where the `oplus` operator corresponds to `join` operator, `otimes` is the `meet` operator."""
+    r"""A bounded distributive lattice.
+
+    A specialization of a :class:`Semiring` where the :math:`\oplus` operator
+    corresponds to the *join* (:math:`\lor`) and :math:`\otimes` corresponds to
+    the *meet* (:math:`\land`).
+    """
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -80,12 +85,12 @@ class BoundedDistributiveLattice(Semiring):
 
     @property
     def join(self) -> BinaryOp:
-        r"""Lattice join operation (corresponds to $\oplus$)."""
+        r"""Lattice join operation (corresponds to :math:`\oplus`)."""
         return self.add
 
     @property
     def meet(self) -> BinaryOp:
-        r"""Lattice meet operation (corresponds to $\otimes$)."""
+        r"""Lattice meet operation (corresponds to :math:`\otimes`)."""
         return self.mul
 
     @property
@@ -168,48 +173,102 @@ class BooleanAlgebra(DeMorganAlgebra):
 
 
 def is_ring(algebra: object) -> TypeGuard[Ring]:
-    """Type guard to check if algebra is a Ring (has additive_inverse).
+    """Check if *algebra* is a :class:`Ring` (has ``additive_inverse``).
 
-    Returns True for Ring instances and BooleanAlgebra (which satisfies Ring contract).
+    Parameters
+    ----------
+    algebra : object
+        The algebraic structure to test.
+
+    Returns
+    -------
+    bool
+        ``True`` for :class:`Ring` instances and :class:`BooleanAlgebra`
+        (which satisfies the Ring contract).
     """
     return isinstance(algebra, (Ring, BooleanAlgebra))
 
 
 def is_demorgan_algebra(algebra: object) -> TypeGuard[DeMorganAlgebra]:
-    """Type guard to check if algebra is a DeMorgan algebra (has complement with De Morgan laws).
+    """Check if *algebra* is a :class:`DeMorganAlgebra`.
 
-    Returns True for DeMorganAlgebra instances (including BooleanAlgebra subclasses).
+    Parameters
+    ----------
+    algebra : object
+        The algebraic structure to test.
+
+    Returns
+    -------
+    bool
+        ``True`` for :class:`DeMorganAlgebra` instances (including
+        :class:`BooleanAlgebra` subclasses).
     """
     return isinstance(algebra, DeMorganAlgebra)
 
 
 def is_heyting_algebra(algebra: object) -> TypeGuard[HeytingAlgebra]:
-    """Type guard to check if algebra is a Heyting algebra (has implication).
+    """Check if *algebra* is a :class:`HeytingAlgebra` (has ``implication``).
 
-    Returns True for HeytingAlgebra instances and BooleanAlgebra (which satisfies Heyting contract).
+    Parameters
+    ----------
+    algebra : object
+        The algebraic structure to test.
+
+    Returns
+    -------
+    bool
+        ``True`` for :class:`HeytingAlgebra` instances and
+        :class:`BooleanAlgebra` (which satisfies the Heyting contract).
     """
     return isinstance(algebra, (HeytingAlgebra, BooleanAlgebra))
 
 
 def is_stone_algebra(algebra: object) -> TypeGuard[StoneAlgebra]:
-    """Type guard to check if algebra is a Stone algebra (has pseudo-complement).
+    """Check if *algebra* is a :class:`StoneAlgebra` (has pseudo-complement).
 
-    Returns True for StoneAlgebra, DeMorganAlgebra, and BooleanAlgebra instances.
+    Parameters
+    ----------
+    algebra : object
+        The algebraic structure to test.
+
+    Returns
+    -------
+    bool
+        ``True`` for :class:`StoneAlgebra`, :class:`DeMorganAlgebra`,
+        and :class:`BooleanAlgebra` instances.
     """
     return isinstance(algebra, (StoneAlgebra, DeMorganAlgebra))
 
 
 def is_boolean_algebra(algebra: object) -> TypeGuard[BooleanAlgebra]:
-    """Type guard to check if algebra is a Boolean algebra.
+    """Check if *algebra* is a :class:`BooleanAlgebra`.
 
-    Returns True for BooleanAlgebra instances.
+    Parameters
+    ----------
+    algebra : object
+        The algebraic structure to test.
+
+    Returns
+    -------
+    bool
+        ``True`` for :class:`BooleanAlgebra` instances.
     """
     return isinstance(algebra, BooleanAlgebra)
 
 
 def has_complement(algebra: object) -> TypeGuard[DeMorganAlgebra | HeytingAlgebra | StoneAlgebra]:
-    """Type guard to check if algebra has a complement operation.
+    """Check if *algebra* has a complement operation.
 
-    Returns True for algebras with complement: DeMorganAlgebra, HeytingAlgebra, StoneAlgebra, or BooleanAlgebra.
+    Parameters
+    ----------
+    algebra : object
+        The algebraic structure to test.
+
+    Returns
+    -------
+    bool
+        ``True`` for algebras with complement: :class:`DeMorganAlgebra`,
+        :class:`HeytingAlgebra`, :class:`StoneAlgebra`, or
+        :class:`BooleanAlgebra`.
     """
     return isinstance(algebra, (DeMorganAlgebra, HeytingAlgebra, StoneAlgebra))

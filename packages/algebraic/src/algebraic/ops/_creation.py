@@ -16,15 +16,30 @@ if typing.TYPE_CHECKING:
 
 
 def array(data: Array | Number, *, semiring: Semiring, backend: str | Backend | None = None) -> AlgebraicArray:
-    """Create an `AlgebraicArray` from an existing backend array.
+    """Create an :class:`AlgebraicArray` from an existing backend array.
 
-    Args:
-        data: Backend array (`jax.Array`, `torch.Tensor`, or `numpy.ndarray`) or number (defaults to `numpy` if no backend is given).
-        semiring: Semiring for the algebraic structure.
-        backend: Backend to use. If `None`, auto-detected from `data`.
+    Parameters
+    ----------
+    data : Array or Number
+        Backend array (``numpy.ndarray``, ``jax.Array``, or ``torch.Tensor``)
+        or a Python number. Defaults to the NumPy backend when *backend* is
+        ``None`` and *data* is a plain number.
+    semiring : Semiring
+        Semiring for the algebraic structure.
+    backend : str or Backend or None, optional
+        Backend to use. If ``None``, auto-detected from *data*.
 
-    Returns:
-        A concrete `AlgebraicArray` backed by the appropriate backend.
+    Returns
+    -------
+    AlgebraicArray
+        A concrete :class:`AlgebraicArray` backed by the appropriate backend.
+
+    Examples
+    --------
+    >>> import algebraic
+    >>> sr = algebraic.semirings.tropical_semiring(minplus=True)
+    >>> algebraic.array([1.0, 2.0], semiring=sr, backend="numpy")  # doctest: +SKIP
+    AlgebraicArray([1., 2.], semiring=Semiring(...))
     """
     if backend is None:
         backend = Backend.from_array(data)
@@ -51,15 +66,28 @@ def array(data: Array | Number, *, semiring: Semiring, backend: str | Backend | 
 
 
 def zeros(shape: tuple[int, ...], *, semiring: Semiring, backend: str | Backend) -> AlgebraicArray:
-    """Create an `AlgebraicArray` filled with the semiring's additive identity.
+    """Create an :class:`AlgebraicArray` filled with the semiring's additive identity.
 
-    Args:
-        shape: Shape of the output array.
-        semiring: Semiring for the algebraic structure.
-        backend: Backend to use (`"jax"`, `"torch"`, or `"numpy"`).
+    Parameters
+    ----------
+    shape : tuple of int
+        Shape of the output array.
+    semiring : Semiring
+        Semiring for the algebraic structure.
+    backend : str or Backend
+        Backend to use (``"jax"``, ``"torch"``, or ``"numpy"``).
 
-    Returns:
-        A concrete `AlgebraicArray` filled with `semiring.zero`.
+    Returns
+    -------
+    AlgebraicArray
+        A concrete :class:`AlgebraicArray` filled with ``semiring.zero``.
+
+    Examples
+    --------
+    >>> import algebraic
+    >>> sr = algebraic.semirings.tropical_semiring(minplus=True)
+    >>> algebraic.zeros((2,), semiring=sr, backend="numpy").data
+    array([inf, inf])
     """
     b = Backend(backend)
     data: Array
@@ -83,15 +111,28 @@ def zeros(shape: tuple[int, ...], *, semiring: Semiring, backend: str | Backend)
 
 
 def ones(shape: tuple[int, ...], *, semiring: Semiring, backend: str | Backend) -> AlgebraicArray:
-    """Create an `AlgebraicArray` filled with the semiring's multiplicative identity.
+    """Create an :class:`AlgebraicArray` filled with the semiring's multiplicative identity.
 
-    Args:
-        shape: Shape of the output array.
-        semiring: Semiring for the algebraic structure.
-        backend: Backend to use (`"jax"`, `"torch"`, or `"numpy"`).
+    Parameters
+    ----------
+    shape : tuple of int
+        Shape of the output array.
+    semiring : Semiring
+        Semiring for the algebraic structure.
+    backend : str or Backend
+        Backend to use (``"jax"``, ``"torch"``, or ``"numpy"``).
 
-    Returns:
-        A concrete `AlgebraicArray` filled with `semiring.one`.
+    Returns
+    -------
+    AlgebraicArray
+        A concrete :class:`AlgebraicArray` filled with ``semiring.one``.
+
+    Examples
+    --------
+    >>> import algebraic
+    >>> sr = algebraic.semirings.tropical_semiring(minplus=True)
+    >>> algebraic.ones((2,), semiring=sr, backend="numpy").data
+    array([0., 0.])
     """
     semiring = semiring
     b = Backend(backend)
@@ -116,13 +157,17 @@ def ones(shape: tuple[int, ...], *, semiring: Semiring, backend: str | Backend) 
 
 
 def zeros_like(arr: AlgebraicArray) -> AlgebraicArray:
-    """Create an `AlgebraicArray` of zeros with the same shape and backend as *arr*.
+    """Create an :class:`AlgebraicArray` of zeros with the same shape and backend as *arr*.
 
-    Args:
-        arr: Source `AlgebraicArray` whose shape, semiring, and backend are used.
+    Parameters
+    ----------
+    arr : AlgebraicArray
+        Source array whose shape, semiring, and backend are used.
 
-    Returns:
-        A concrete `AlgebraicArray` filled with `arr.semiring.zero`.
+    Returns
+    -------
+    AlgebraicArray
+        A concrete :class:`AlgebraicArray` filled with ``arr.semiring.zero``.
     """
     from algebraic.array.base import AlgebraicArray as BaseAlgebraicArray
 
@@ -132,13 +177,17 @@ def zeros_like(arr: AlgebraicArray) -> AlgebraicArray:
 
 
 def ones_like(arr: AlgebraicArray) -> AlgebraicArray:
-    """Create an `AlgebraicArray` of ones with the same shape and backend as *arr*.
+    """Create an :class:`AlgebraicArray` of ones with the same shape and backend as *arr*.
 
-    Args:
-        arr: Source `AlgebraicArray` whose shape, semiring, and backend are used.
+    Parameters
+    ----------
+    arr : AlgebraicArray
+        Source array whose shape, semiring, and backend are used.
 
-    Returns:
-        A concrete `AlgebraicArray` filled with `arr.semiring.one`.
+    Returns
+    -------
+    AlgebraicArray
+        A concrete :class:`AlgebraicArray` filled with ``arr.semiring.one``.
     """
     from algebraic.array.base import AlgebraicArray as BaseAlgebraicArray
 
@@ -148,16 +197,23 @@ def ones_like(arr: AlgebraicArray) -> AlgebraicArray:
 
 
 def full(shape: tuple[int, ...], fill_value: Number, *, semiring: Semiring, backend: str | Backend) -> AlgebraicArray:
-    """Create an `AlgebraicArray` filled with *fill_value*.
+    """Create an :class:`AlgebraicArray` filled with *fill_value*.
 
-    Args:
-        shape: Shape of the output array.
-        fill_value: Value to fill the array with.
-        semiring: Semiring for the algebraic structure.
-        backend: Backend to use (`"jax"`, `"torch"`, or `"numpy"`).
+    Parameters
+    ----------
+    shape : tuple of int
+        Shape of the output array.
+    fill_value : Number
+        Value to fill the array with.
+    semiring : Semiring
+        Semiring for the algebraic structure.
+    backend : str or Backend
+        Backend to use (``"jax"``, ``"torch"``, or ``"numpy"``).
 
-    Returns:
-        A concrete `AlgebraicArray` filled with *fill_value*.
+    Returns
+    -------
+    AlgebraicArray
+        A concrete :class:`AlgebraicArray` filled with *fill_value*.
     """
     semiring = semiring
     b = Backend(backend)
