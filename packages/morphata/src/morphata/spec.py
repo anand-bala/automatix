@@ -77,9 +77,13 @@ class AlternatingTransitions(ABC, ty.Generic[State, Symbol]):
                 case logic.Variable(q):
                     cache[expr] = self.__call__(ty.cast(State, q), symbol)
                 case logic.Or(args):
-                    cache[expr] = functools.reduce(lambda a, b: a | b, (cache[ty.cast(BoolExpr[State], arg)] for arg in args))
+                    cache[expr] = functools.reduce(
+                        lambda a, b: ty.cast(BoolExpr[State], a | b), (cache[ty.cast(BoolExpr[State], arg)] for arg in args)
+                    )
                 case logic.And(args):
-                    cache[expr] = functools.reduce(lambda a, b: a & b, (cache[ty.cast(BoolExpr[State], arg)] for arg in args))
+                    cache[expr] = functools.reduce(
+                        lambda a, b: ty.cast(BoolExpr[State], a & b), (cache[ty.cast(BoolExpr[State], arg)] for arg in args)
+                    )
                 case _:
                     raise TypeError(f"run_state expr can only be positive boolean expressions, got {type(expr)}")
 

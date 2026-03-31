@@ -219,9 +219,13 @@ class STRELAutomaton[AP: Hashable](morphata.AlternatingTransitions[Q, Input]):
             case strel.Not(arg):
                 return _as_poly(~_recurse(_as_strel(arg), loc))
             case strel.And(args):
-                return functools.reduce(lambda a, b: a & b, map(lambda a: _recurse(_as_strel(a), loc), args))
+                return functools.reduce(
+                    lambda a, b: typing.cast(State, a & b), map(lambda a: _recurse(_as_strel(a), loc), args)
+                )
             case strel.Or(args):
-                return functools.reduce(lambda a, b: a | b, map(lambda a: _recurse(_as_strel(a), loc), args))
+                return functools.reduce(
+                    lambda a, b: typing.cast(State, a | b), map(lambda a: _recurse(_as_strel(a), loc), args)
+                )
             case strel.Everywhere():
                 return _recurse(self._rewriter(expr), loc)
             case strel.Somewhere():
@@ -285,8 +289,8 @@ class STRELAutomaton[AP: Hashable](morphata.AlternatingTransitions[Q, Input]):
             # Path expr checks if last node satisfies rhs and all others satisfy lhs
             path_expr = self.delta(input, rhs, path[-1])
             for l_p in reversed(path[:-1]):  # pyrefly: ignore
-                path_expr &= self.delta(input, lhs, l_p)  # pyrefly: ignore
-            expr |= path_expr  # type: ignore[assignment]
+                path_expr = typing.cast(State, path_expr & self.delta(input, lhs, l_p))  # pyrefly: ignore
+            expr = typing.cast(State, expr | path_expr)
             # Break early if TOP/True
             if expr == logic.Literal(True):
                 return expr
@@ -540,6 +544,6 @@ def _all_bounded_simple_paths(
         if new_path_len <= d2 and (targets - current_path.keys() - {next_node}):
             # Change next_edge to contain the cumulative distance
             update_edge = next_edge[:-1] + (new_path_len,)
-            current_path[next_node] = update_edge  # pyrefly: ignore
+            current_path[next_node] = update_edge  # ty: ignore[invalid-assignment]
             stack.append(iter(get_edges(next_node)))
             pass

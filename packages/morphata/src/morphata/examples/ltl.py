@@ -62,7 +62,7 @@ def ltl_to_automaton(formula: LTLExpr[AP], *, finite: bool = False) -> morphata.
                 # Make a new variable for Not(var)
                 return logic.Variable(mappings.setdefault(node, len(mappings)))
             case logic.And(args) | logic.Or(args) as nary_node:
-                return dataclasses.replace(
+                return dataclasses.replace(  # type: ignore[type-var]
                     nary_node, args=tuple(_remap_bool_expr(ty.cast(BoolExpr[LTLExpr[AP]], arg)) for arg in args)
                 )
             case _:
@@ -93,9 +93,10 @@ def ltl_to_automaton(formula: LTLExpr[AP], *, finite: bool = False) -> morphata.
         sym: Input[AP]
         for sym in _powerset(atomic_predicates):
             # Compute the possible successor polynomial
-            successor = _aut_expansion_rule(node, sym)  # pyrefly: ignore[bad-argument-type]
+            successor = _aut_expansion_rule(node, sym)  # type: ignore[misc]  # pyrefly: ignore[bad-argument-type]
             # We want to add the NNF leaf nodes to the queue, i.e., Not(var) is a leaf node, iff they are not already visited
-            queue.extend((e for e in successor.atomic_predicates(assume_nnf=True) if e not in mappings))
+            reachable_nodes: Iterable[logic.Variable[LTLExpr[AP]] | logic.Not] = successor.atomic_predicates(assume_nnf=True)
+            queue.extend(e for e in reachable_nodes if e not in mappings)
             # pyrefly: ignore[bad-argument-type]
             reachable[sym] = _remap_bool_expr(successor)
         transitions[node_id] = reachable
@@ -154,9 +155,13 @@ def _aut_expansion_rule(expr: LTLExpr[AP], symbol: Input[AP]) -> BoolExpr[LTLExp
         case ltl.Not(arg):
             return logic.Not(_recurse(_as_ltl(arg)))
         case ltl.And(args):
-            return functools.reduce(lambda a, b: a & b, map(lambda a: _recurse(_as_ltl(a)), args))
+            return functools.reduce(
+                lambda a, b: ty.cast(BoolExpr[LTLExpr[AP]], a & b), map(lambda a: _recurse(_as_ltl(a)), args)
+            )
         case ltl.Or(args):
-            return functools.reduce(lambda a, b: a | b, map(lambda a: _recurse(_as_ltl(a)), args))
+            return functools.reduce(
+                lambda a, b: ty.cast(BoolExpr[LTLExpr[AP]], a | b), map(lambda a: _recurse(_as_ltl(a)), args)
+            )
         case ltl.Next(arg, steps):
             assert steps is None or steps == 1, (
                 "should expand all intervals using `expand` before using automaton expansion rules"
@@ -201,13 +206,13 @@ class LTLDomain(morphata.Domain[int, Input[AP]]):
     @property
     @override
     def states(self) -> Iterable[int] | None:
-        yield from self._states
+        return iter(self._states)
 
     @property
     @override
     def symbols(self) -> Iterable[Input[AP]] | None:
         """Return a powerset of the atomic predicats"""
-        yield from _powerset(self.atomic_predicates)
+        return _powerset(self.atomic_predicates)
 
 
 def _iter_expr_nnf[Var: Hashable](expr: BoolExpr[Var]) -> Iterator[BoolExpr[Var]]:

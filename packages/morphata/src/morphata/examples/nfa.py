@@ -38,7 +38,7 @@ class NFADomain(Domain[int, AbstractSet[AP]]):
     @property
     @override
     def states(self) -> Iterable[int] | None:
-        yield from self._graph.nodes
+        return iter(self._graph.nodes)
 
     @property
     @override
@@ -58,6 +58,7 @@ class NFATransition[AP](NonDeterministicTransitions[int, AbstractSet[AP]]):
         """Evaluate guards and return successor states."""
         symbol_set = set(symbol)
         successors: list[int] = []
+        guard_data: object
         for _, succ, guard_data in self._graph.edges(state, data="guard"):
             guard: Guard[AP] = typing.cast(Guard[AP], guard_data)
             if simple_eval(guard, symbol_set):
@@ -189,7 +190,11 @@ class NFA(typing.Generic[AP]):
             Single guard if dst is specified, else dict of {destination: guard}
         """
         if dst is None:
-            return {succ: guard for _, succ, guard in self._graph.edges(src, "guard")}
+            result: dict[int, Guard[AP]] = {}
+            guard_data2: object
+            for _, succ, guard_data2 in self._graph.edges(src, "guard"):
+                result[succ] = typing.cast(Guard[AP], guard_data2)
+            return result
         return typing.cast(Guard[AP], self._graph.edges[src, dst]["guard"])
 
     @property
