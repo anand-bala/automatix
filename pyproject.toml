@@ -45,6 +45,11 @@ exclude = [".jj"]
 [tool.hatch.build.targets.wheel]
 packages = ["src/automatix"]
 
+[tool.uv]
+exclude-newer = "30 days"
+exclude-newer-package = {algebraic-arrays = false, morphata = false}
+
+
 [tool.uv.workspace]
 members = ["packages/*"]
 
