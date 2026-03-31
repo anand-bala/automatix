@@ -35,6 +35,7 @@ dev = [
   "ty",
   "zuban",
 ]
+docs = ["pydata-sphinx-theme>=0.16.1", "sphinx>=9.1.0"]
 
 [build-system]
 requires = ["hatchling"]

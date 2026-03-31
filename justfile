@@ -55,6 +55,13 @@ _jax_extra := if which("nvidia-smi") == "" { "cpu" } else { f"cuda{{CUDA_VERSION
 cuda-packages:
     uv pip install "jax[{{ _jax_extra }}]" torch --torch-backend=auto
 
+# Build Sphinx HTML docs for a subproject (or all if none specified)
+[arg("format", long="format", short="f")]
+docs project format="html":
+    uv run --dev --group docs --frozen sphinx-build -b "{{ format }}" "docs/{{ project }}" "docs/_build/html/{{ project }}"
+
+all-docs format="html": (docs "algebraic" format) (docs "morphata" format) (docs "automatix" format)
+
 # Upload a generated HDF5 dataset to Hugging Face Hub.
 # Requires authentication: run `uv run --dev --frozen hf auth login` or set HF_TOKEN.
 # Usage: just upload-dataset <dataset_path> <hf_repo_id> [path_in_repo]
