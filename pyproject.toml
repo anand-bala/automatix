@@ -6,20 +6,18 @@ version = "0.5.1"
 requires-python = ">=3.12"
 
 dependencies = [
-  "jax>=0.8",
-  "jaxtyping>=0.3",
-  "equinox>=0.12",
-  "optree>=0.17.0",
   "bitarray>=3.8.0",
-  "attrs>=25.4.0",
-  "networkx",
   "numpy",
   "typing-extensions",
-  "types-networkx",
   "logic-asts>=1.4.1",
-  "algebraic-arrays>=1.0.0",
+  "algebraic-arrays>=1.1.0",
   "morphata>=1.0.0",
+  "jaxtyping>=0.3",
 ]
+
+[project.optional-dependencies]
+jax = ["jax>=0.8", "equinox>=0.12"]
+torch = ["torch>=2.0"]
 
 [dependency-groups]
 dev = [
@@ -35,7 +33,7 @@ dev = [
   "ty",
   "zuban",
 ]
-docs = ["pydata-sphinx-theme>=0.16.1", "sphinx>=9.1.0"]
+docs = ["sphinx>=9.1.0"]
 
 [build-system]
 requires = ["hatchling"]

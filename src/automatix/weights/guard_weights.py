@@ -1,185 +1,169 @@
-"""Conversion of `Guard` expressions to `WeightFunction`s"""
+"""Conversion of :class:`Guard` expressions to :class:`WeightFunction`\\ s.
+
+Provides composable predicate classes that evaluate boolean guard expressions
+using semiring operations (AND → multiply, OR → add).  These are plain Python
+dataclasses with no JAX or Equinox dependency; users who want JIT compilation
+or gradient support should wrap their predicates in an
+:class:`equinox.Module` or :class:`torch.nn.Module` weight function.
+"""
 
 from __future__ import annotations
 
+import functools
 from abc import abstractmethod
 from collections.abc import Callable, Hashable
+from dataclasses import dataclass, field
 from typing import cast
 
-import equinox as eqx
-import jax
-import jax.numpy as jnp
 import logic_asts.base as exprs
 from algebraic import Semiring
-from jaxtyping import Array, Num, Scalar, ScalarLike
 
 from automatix.spec import Guard
 
 
-class AbstractPredicate[S: Semiring](eqx.Module, strict=True):
+@dataclass
+class AbstractPredicate[S: Semiring]:
     """A predicate is an effective Boolean alphabet over some domain.
 
     A predicate evaluates a condition on input data and returns a weight
-    in a semiring. Predicates can be combined using boolean operations
-    (AND, OR) which compose using semiring operations (multiplication for AND,
-    addition for OR).
+    in a semiring.  Predicates can be combined using boolean operations
+    (:class:`And`, :class:`Or`) which compose using semiring operations
+    (multiplication for AND, addition for OR).
 
     Subclasses
     ----------
     Predicate
         Wraps a user-defined callable function.
     And
-        Conjunction of predicates (uses semiring multiplication).
+        Conjunction of predicates (semiring multiplication).
     Or
-        Disjunction of predicates (uses semiring addition).
+        Disjunction of predicates (semiring addition).
     """
 
-    algebra: eqx.AbstractVar[S]
+    algebra: S
 
     @abstractmethod
-    def __call__(self, x: Num[Array, "..."]) -> Scalar:
-        """Evaluate the predicate on input x.
+    def __call__(self, x: object) -> object:
+        """Evaluate the predicate on input *x*.
 
         Parameters
         ----------
-        x : Array
-            Input data (vector in domain).
+        x :
+            Input data.
 
         Returns
         -------
-        Scalar
+        object
             Weight in the target semiring.
         """
         ...
 
 
+@dataclass
 class Predicate[S: Semiring](AbstractPredicate[S]):
     """Wrapper for a user-defined predicate function.
 
-    This class wraps a callable function into a predicate that can be
-    composed with other predicates using boolean operations.
-
-    Attributes
+    Parameters
     ----------
-    fn : Callable
-        The predicate function mapping Array -> Scalar (weight).
+    algebra :
+        The semiring algebra.
+    fn :
+        The predicate function mapping input → semiring weight.
     """
 
-    algebra: S
-    fn: Callable[[Num[Array, "..."]], Scalar]
+    fn: Callable[[object], object]
 
-    @eqx.filter_jit
-    def __call__(self, x: Num[Array, "..."]) -> Scalar:
+    def __call__(self, x: object) -> object:
         return self.fn(x)
 
 
+@dataclass
 class And[S: Semiring](AbstractPredicate[S]):
-    """Conjunction of predicates.
+    """Conjunction of predicates (semiring multiplication).
 
-    Combines multiple predicates using semiring multiplication (otimes).
-    This implements the AND operation: the weight is the semiring product
-    of the weights of all arguments.
+    For a Boolean semiring this is logical AND; for MaxPlus/MinPlus this is
+    addition of weights.
 
-    For a Boolean semiring, this is logical AND.
-    For MaxPlus, this is addition of weights.
-    For MinPlus, this is addition of weights.
-    """
-
-    algebra: S
-    args: list[AbstractPredicate]
-
-    @eqx.filter_jit
-    def __call__(self, x: Num[Array, "..."]) -> Scalar:
-        weights: list[Scalar] = [arg(x) for arg in self.args]
-        weights_array = jnp.asarray(weights)
-        one_typed = jnp.asarray(self.algebra.one, dtype=weights_array.dtype)
-        return cast(Scalar, jax.lax.reduce(weights_array, one_typed, self.algebra.mul, (0,)))
-
-
-class Or[S: Semiring](AbstractPredicate[S]):
-    """Disjunction of predicates.
-
-    Combines multiple predicates using semiring addition (oplus).
-    This implements the OR operation: the weight is the semiring sum
-    of the weights of all arguments.
-
-    For a Boolean semiring, this is logical OR.
-    For MaxPlus, this is the maximum of weights.
-    For MinPlus, this is the minimum of weights.
-
-    """
-
-    algebra: S
-    args: list[AbstractPredicate]
-
-    @eqx.filter_jit
-    def __call__(self, x: Num[Array, "..."]) -> Scalar:
-        weights: list[Scalar] = [arg(x) for arg in self.args]
-        weights_array = jnp.asarray(weights)
-        zero_typed = jnp.asarray(self.algebra.zero, dtype=weights_array.dtype)
-        return cast(Scalar, jax.lax.reduce(weights_array, zero_typed, self.algebra.add, (0,)))
-
-
-class ExprWeightFn[S: Semiring, AtomicPredicate: Hashable](eqx.Module):
-    """A weight function recursively defined from predicates.
-
-    This bridges the atomic predicate-based approach to guard evaluation with the new
-    weight function abstraction. It evaluates guard expressions by:
-    1. Converting the guard to NNF (negation normal form)
-    2. Recursively evaluating atoms and their negations
-    3. Composing results with semiring operations (AND -> multiply, OR -> add)
-
-    Attributes
+    Parameters
     ----------
-    algebra : S
+    algebra :
+        The semiring algebra.
+    args :
+        Sub-predicates whose results are multiplied together.
+    """
+
+    args: list[AbstractPredicate]
+
+    def __call__(self, x: object) -> object:
+        weights = [arg(x) for arg in self.args]
+        return functools.reduce(self.algebra.mul, weights, self.algebra.one)
+
+
+@dataclass
+class Or[S: Semiring](AbstractPredicate[S]):
+    """Disjunction of predicates (semiring addition).
+
+    For a Boolean semiring this is logical OR; for MaxPlus/MinPlus this is
+    the maximum/minimum of weights.
+
+    Parameters
+    ----------
+    algebra :
+        The semiring algebra.
+    args :
+        Sub-predicates whose results are summed together.
+    """
+
+    args: list[AbstractPredicate]
+
+    def __call__(self, x: object) -> object:
+        weights = [arg(x) for arg in self.args]
+        return functools.reduce(self.algebra.add, weights, self.algebra.zero)
+
+
+@dataclass
+class ExprWeightFn[S: Semiring, AtomicPredicate: Hashable]:
+    """A weight function recursively defined from atomic predicates.
+
+    Evaluates guard expressions by:
+
+    1. Converting the guard to NNF (negation normal form).
+    2. Recursively evaluating atoms and their negations.
+    3. Composing results with semiring operations (AND → multiply, OR → add).
+
+    Results are memoised in ``cache`` for efficiency.
+
+    Parameters
+    ----------
+    algebra :
         The semiring algebra for composing predicates.
-    atoms : dict[str, Predicate]
-        Predicates for positive atoms.
-    neg_atoms : dict[str, Predicate]
-        Predicates for negated atoms.
+    atoms :
+        Predicates for positive atoms, keyed by atom name.
+    neg_atoms :
+        Predicates for negated atoms, keyed by atom name.
     """
 
     algebra: S
     atoms: dict[str, Predicate]
     neg_atoms: dict[str, Predicate]
-
-    cache: dict[str, AbstractPredicate] = eqx.field(default_factory=dict)
+    cache: dict[str, AbstractPredicate] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        # Populate the cache with the atoms and the neg atoms, and literal True and literal False
         self.cache.update(self.atoms.items())
-        # self.cache.update((exprs.Variable(atom), pred) for atom, pred in self.atoms.items())
-
         self.cache.update((f"~{atom}", pred) for atom, pred in self.neg_atoms.items())
-        # self.cache.update((~exprs.Variable(atom), pred) for atom, pred in self.neg_atoms.items())
-
         self.cache.update(
-            (expr, Predicate(self.algebra, lambda _: jnp.asarray(self.algebra.zero)))
-            for expr in (
-                "0",
-                "FALSE",
-                "False",
-                "false",
-                # exprs.Literal(False)
-            )
+            (expr, Predicate(self.algebra, lambda _: self.algebra.zero)) for expr in ("0", "FALSE", "False", "false")
         )
         self.cache.update(
-            (expr, Predicate(self.algebra, lambda _: jnp.asarray(self.algebra.one)))
-            for expr in (
-                "1",
-                "TRUE",
-                "True",
-                "true",
-                # exprs.Literal(True)
-            )
+            (expr, Predicate(self.algebra, lambda _: self.algebra.one)) for expr in ("1", "TRUE", "True", "true")
         )
 
     def add_expr(self, guard: Guard[AtomicPredicate]) -> AbstractPredicate:
         """Add a guard expression and return its weight predicate.
 
-        Recursively evaluates the guard using cached atoms and semiring operations.
+        Recursively builds and caches a predicate for *guard* using the atomic
+        predicates and semiring operations.
         """
-        # Parse string guards to Expr if needed
         expr = cast(Guard[AtomicPredicate], guard.to_nnf())
         expr_str = str(expr)
         guard_str = str(guard)
@@ -195,11 +179,9 @@ class ExprWeightFn[S: Semiring, AtomicPredicate: Hashable](eqx.Module):
             match subexpr:
                 case exprs.Literal(value):
                     self.cache[subexpr_str] = (
-                        # Broadcastable ONE for True
-                        Predicate(self.algebra, lambda _: jnp.asarray(self.algebra.one))
+                        Predicate(self.algebra, lambda _: self.algebra.one)
                         if value
-                        # Broadcastable ZERO for False
-                        else Predicate(self.algebra, lambda _: jnp.asarray(self.algebra.zero))
+                        else Predicate(self.algebra, lambda _: self.algebra.zero)
                     )
                 case exprs.Variable(name):
                     assert isinstance(name, str)
@@ -213,6 +195,5 @@ class ExprWeightFn[S: Semiring, AtomicPredicate: Hashable](eqx.Module):
 
         return self.cache[expr_str]
 
-    @eqx.filter_jit
-    def __call__(self, x: Num[Array, "..."], guard: Guard[AtomicPredicate]) -> Array | ScalarLike:
+    def __call__(self, x: object, guard: Guard[AtomicPredicate]) -> object:
         return self.add_expr(guard)(x)

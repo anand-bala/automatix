@@ -1,11 +1,12 @@
 # mypy: disable-error-code="no-untyped-call, no-any-return"
 
+import algebraic as alg
+import equinox as eqx
 import jax
 import jax.nn
 import jax.numpy as jnp
 import logic_asts as logic
 import pytest
-import quax
 from algebraic import Semiring
 from algebraic.semirings import counting_semiring, max_min_algebra, tropical_semiring
 from jaxtyping import Array, Num, Scalar
@@ -38,16 +39,10 @@ def signed_dist_box(point: Point, box: Box) -> Scalar:
 
     If positive, the point is outside the box; otherwise, it is within the box.
     """
-    # See: https://stackoverflow.com/a/30545544
-
-    # Get the signed distance to the borders
     bottom_left = box[jnp.array([0, 2])] - point
     top_right = point - box[jnp.array([1, 3])]
-    # Get the signed distance to the _closest_ border
     closest_border = jnp.maximum(bottom_left, top_right)
     dist = jnp.sqrt(jnp.sum(jax.nn.relu(closest_border) ** 2, axis=-1)) + jax.nn.relu(-jnp.amax(closest_border, axis=-1))
-
-    # dist = jnp.linalg.vector_norm(jax.nn.relu(closest_border), axis=-1) + jax.nn.relu(-jnp.amax(closest_border, axis=-1))
     return dist
 
 
@@ -159,6 +154,7 @@ def test_expr_weight_fn[S: Semiring](
         aut,
         algebra,
         weight_function=weight_fn,
+        backend="jax",
     )
 
     assert operator.initial_weights.shape == (4,)
@@ -166,7 +162,11 @@ def test_expr_weight_fn[S: Semiring](
     assert operator.final_weights.shape == (4,)
     assert operator.final_weights.data[3] == jnp.asarray(algebra.one)
 
-    transitions = jax.jit(operator.cost_transitions)
+    # Use eqx.filter_jit (not jax.jit) for eqx.Module methods — jax.jit cannot
+    # hash the bound self because JaxMatrixOperator contains JAX array fields.
+    @eqx.filter_jit
+    def transitions(x):  # type: ignore[misc]
+        return operator.cost_transitions(x)
 
     n_timesteps = 1500
 
@@ -179,14 +179,12 @@ def test_expr_weight_fn[S: Semiring](
 
     assert transitions(trajectory[0]).shape == (4, 4)
 
-    deltas = quax.quaxify(jax.vmap(transitions))(trajectory)
+    deltas = jax.vmap(transitions)(trajectory)
     assert deltas.shape == (n_timesteps, 4, 4)
 
-    # Use quax.quaxify to wrap scan for AlgebraicArray support
-    # Reshape the initial weights to (1, n) for matrix multiplication
     init_weights_reshaped = operator.initial_weights[jnp.newaxis, :]
-    weights, _ = quax.quaxify(jax.lax.scan)(lambda x, y: (x @ y, None), init_weights_reshaped, deltas)
-    # vdot as matmul: (1, n) @ (n,) with sum
-    # weights has shape (1, n), squeeze it to (n,) by indexing
-    weight = (weights[0] @ operator.final_weights).sum()
+    weights, _ = jax.lax.scan(lambda x, y: (x @ y, None), init_weights_reshaped, deltas)
+    # weights shape: (1, 4); final_weights shape: (4,)
+    # Use elementwise mul then algebraic.sum to avoid 1D @ 1D in dot_general.
+    weight = alg.sum(weights[0] * operator.final_weights)
     assert weight.data.size == 1
