@@ -23,6 +23,8 @@ if xhost_cmd="$(type -p "xhost")" && [[ -n "$xhost_cmd" ]]; then
   }
 fi
 
+export UV_TORCH_BACKEND="auto"
+
 uv run --dev just dev
 source ./.venv/bin/activate
 watch_file pyproject.toml
