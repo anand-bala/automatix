@@ -343,6 +343,14 @@ class RankDecomposition:
 
         return result_poly
 
+    def tree_flatten(self) -> tuple[list[AlgebraicArray], tuple]:
+        return [self.factors], (self.algebra, self.max_rank, self.max_degree, self.max_replacement_degree, self.backend)
+
+    @classmethod
+    def tree_unflatten(cls, aux_data: tuple, children: list[AlgebraicArray]) -> "RankDecomposition":
+        algebra, max_rank, max_degree, max_replacement_degree, backend = aux_data
+        return cls(children[0], algebra, max_rank, max_degree, max_replacement_degree, backend=backend)
+
     def _index_to_bits(self, index: int) -> tuple[int, ...]:
         """Convert flat index to n-bit tuple."""
         from bitarray.util import int2ba

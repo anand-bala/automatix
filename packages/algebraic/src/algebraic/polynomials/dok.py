@@ -274,3 +274,12 @@ class PolyDict:
 
     def isscalar(self) -> bool:
         return len(self) == 0 or (len(self) == 1 and self.get(frozenbitarray(self.num_vars)) is not None)
+
+    def tree_flatten(self) -> tuple[list[AlgebraicArray], tuple]:
+        keys = list(self.data.keys())
+        return list(self.data.values()), (self.algebra, self.num_vars, keys, self.backend)
+
+    @classmethod
+    def tree_unflatten(cls, aux_data: tuple, children: list[AlgebraicArray]) -> "PolyDict":
+        algebra, num_vars, keys, backend = aux_data
+        return cls(algebra, num_vars, dict(zip(keys, children)), backend=backend)

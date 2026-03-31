@@ -302,6 +302,14 @@ class MonomialBasis:
 
         return _compose(self, 0)
 
+    def tree_flatten(self) -> tuple[list[AlgebraicArray], tuple]:
+        return [self.coeffs], (self.algebra, self.backend)
+
+    @classmethod
+    def tree_unflatten(cls, aux_data: tuple, children: list[AlgebraicArray]) -> "MonomialBasis":
+        algebra, backend = aux_data
+        return cls(coeffs=children[0], algebra=algebra, backend=backend)
+
     # -- Conversion ------------------------------------------------------------
 
     def to_sparse(self) -> PolyDict:

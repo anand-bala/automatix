@@ -18,14 +18,14 @@ class TorchWrapper(nn.Module):
         if isinstance(wrapped, AlgebraicArray):
             self.register_parameter(prefix + "algebraic_array", nn.Parameter(wrapped.data))
         elif isinstance(wrapped, AlgebraicPyTree):
-            for i, c in enumerate(wrapped.tree_flatten[0]):
-                self._register(c, f"{prefix}{i}.")
+            for i, c in enumerate(wrapped.tree_flatten()[0]):
+                self._register(c, f"{prefix}{i}_")
         elif isinstance(wrapped, Mapping):
             for k, v in wrapped.items():
-                self._register(v, prefix=f"{prefix}{str(k)}.")
+                self._register(v, prefix=f"{prefix}{str(k)}_")
         elif isinstance(wrapped, Sequence):
             for i, c in enumerate(wrapped):
-                self._register(c, f"{prefix}{i}.")
+                self._register(c, f"{prefix}{i}_")
 
 
 def torchify(obj: AnyPyTree) -> TorchWrapper:
