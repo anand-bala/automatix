@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import enum
 import typing
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Hashable, Sequence
+from types import ModuleType
 from typing import Protocol, runtime_checkable
 
 import array_api_compat
+import array_api_compat.common._helpers as array_helpers
 from jaxtyping import Shaped
-from typing_extensions import TypeIs
+from typing_extensions import Self, TypeAlias, TypeIs
 
 if typing.TYPE_CHECKING:
     import jax
@@ -21,7 +23,9 @@ if typing.TYPE_CHECKING:
     import torch
     from _typeshed import Incomplete
 
-    Array = npt.NDArray[typing.Any] | jax.Array | torch.Tensor
+    from algebraic import AlgebraicArray
+
+    Array: TypeAlias = npt.NDArray[typing.Any] | jax.Array | torch.Tensor
     type DType = Incomplete
 
 else:
@@ -33,26 +37,6 @@ else:
 
         shape: tuple[int, ...]
         dtype: DType
-
-
-class Backend(enum.StrEnum):
-    """Enum of supported backends"""
-
-    NUMPY = "numpy"
-    TORCH = "torch"
-    JAX = "jax"
-
-    @classmethod
-    def from_array(cls, data: object) -> "Backend":
-        """Detect backend from an array instance."""
-        if array_api_compat.is_jax_array(data):
-            return cls.JAX
-        if array_api_compat.is_torch_array(data):
-            return cls.TORCH
-        if array_api_compat.is_numpy_array(data) or isinstance(data, Number):
-            # NOTE: Use numpy as default backend for scalars.
-            return cls.NUMPY
-        raise TypeError(f"Cannot detect backend for type {type(data).__name__!r}")
 
 
 Number = float | int | bool
@@ -69,6 +53,74 @@ type VdotFn = Callable[[Shaped[Array, " n"], Shaped[Array, " n"]], Shaped[Array,
 type MatmulFn = Callable[[Shaped[Array, "n k"], Shaped[Array, "k m"]], Shaped[Array, "n m"]]
 
 
+def is_scalar(x: object) -> TypeIs[Scalar]:
+    """Test if an object is a scalar"""
+    if isinstance(x, Number):
+        return True
+    elif is_array(x):
+        return len(x.shape) == 0  # ty: ignore[unresolved-attribute]
+    else:
+        return False
+
+
+def is_numpy_array(x: object) -> TypeIs[npt.NDArray]:
+    return array_api_compat.is_numpy_array(x)
+
+
+def is_torch_array(x: object) -> TypeIs[torch.Tensor]:
+    return array_api_compat.is_torch_array(x)
+
+
+def is_jax_array(x: object) -> TypeIs[jax.Array]:
+    return (
+        array_api_compat.is_jax_array(x)
+        # Need to perform a custom override for `jaxlib._jax.ArrayImpl`
+        or array_helpers._issubclass_fast(typing.cast(Hashable, type(x)), "jaxlib._jax", "ArrayImpl")
+    )
+
+
+def is_array(x: object) -> TypeIs[Array]:
+    """Test if an object is an array"""
+    return is_numpy_array(x) or is_jax_array(x) or is_torch_array(x)
+
+
+class Backend(enum.StrEnum):
+    """Enum of supported backends"""
+
+    NUMPY = "numpy"
+    TORCH = "torch"
+    JAX = "jax"
+
+    @classmethod
+    def from_array(cls, data: Array | Number) -> "Backend":
+        """Detect backend from an array instance."""
+        if array_api_compat.is_jax_array(data):
+            return cls.JAX
+        if array_api_compat.is_torch_array(data):
+            return cls.TORCH
+        if array_api_compat.is_numpy_array(data) or isinstance(data, Number):
+            # NOTE: Use numpy as default backend for scalars.
+            return cls.NUMPY
+        raise TypeError(f"Cannot detect backend for type {type(data).__name__!r}")
+
+    def get_array_namespace(self) -> ModuleType:
+        match self:
+            case Backend.NUMPY:
+                import array_api_compat.numpy as np
+
+                return np
+            case Backend.JAX:
+                import jax.numpy as jnp
+
+                return jnp
+            case Backend.TORCH:
+                import array_api_compat.torch as torch
+
+                return torch
+            case _:
+                raise ValueError(f"Unsupported backend {self}")
+
+
 @runtime_checkable
 class ReductionOp(Protocol):
     def __call__(self, a: Array, axis: MaybeAxis = None) -> Array: ...
@@ -82,16 +134,16 @@ class ScanFn[Carry, X, Y](Protocol):
     def __call__(self, carry: Carry, acc: X) -> tuple[Carry, Y]: ...
 
 
-def is_scalar(x: object) -> TypeIs[Scalar]:
-    """Test if an object is a scalar"""
-    if isinstance(x, Number):
-        return True
-    elif is_array(x):
-        return len(x.shape) == 0
-    else:
-        return False
+type AnyPyTree = AlgebraicArray | AlgebraicPyTree | tuple[AnyPyTree, ...] | list[AnyPyTree] | dict[typing.Any, AnyPyTree]
 
 
-def is_array(x: object) -> TypeIs[Array]:
-    """Test if an object is an array"""
-    return array_api_compat.is_numpy_array(x) or array_api_compat.is_jax_array(x) or array_api_compat.is_torch_array(x)
+@runtime_checkable
+class AlgebraicPyTree(Protocol):
+    def tree_flatten(self) -> tuple[Sequence[AnyPyTree], typing.Any]: ...
+
+    @classmethod
+    def tree_unflatten(
+        cls,
+        aux_data: typing.Any,  # noqa: ANN401
+        children: Sequence[AnyPyTree],
+    ) -> Self: ...

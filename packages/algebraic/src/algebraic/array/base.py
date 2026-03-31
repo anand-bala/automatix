@@ -3,29 +3,24 @@
 This module defines an abstract `AlgebraicArray` that defines the interface for backend-specific algebraic array implementations.
 """
 
-# NOTE: Do NOT add `from __future__ import annotations` to this module.
-# The `AbstractVar` annotations from `algebraic._better_abc` are processed at class
-# definition time and must not be stringified (PEP 563 lazy evaluation would break them).
-
 import copy
 import math
 import typing
-from abc import abstractmethod
+from dataclasses import dataclass
 from typing import Any
 
 import array_api_compat
 from typing_extensions import Self
 
-from algebraic._better_abc import AbstractVar
-from algebraic._better_abc import BetterABCMeta as ABCMeta
 from algebraic.spec import Semiring, has_complement, is_ring
 from algebraic.types import Array, DType, MatmulFn, Number, Scalar, VdotFn
 
 if typing.TYPE_CHECKING:
-    from algebraic.array._index_update import _IndexUpdateHelper
+    from algebraic.utils.indexing import _IndexUpdateHelper
 
 
-class AlgebraicArray(metaclass=ABCMeta):
+@dataclass
+class AlgebraicArray:
     """A multidimensional array with elements from a semiring.
 
     This array overrides multiplication and addition to be defined with respect
@@ -40,8 +35,8 @@ class AlgebraicArray(metaclass=ABCMeta):
         The :class:`~algebraic.spec.Semiring` governing arithmetic operations.
     """
 
-    data: AbstractVar[Array]
-    semiring: AbstractVar[Semiring]
+    data: Array
+    semiring: Semiring
 
     _vdot: VdotFn | None = None
     _matmul: MatmulFn | None = None
@@ -107,6 +102,8 @@ class AlgebraicArray(metaclass=ABCMeta):
         - ND (batched): contract ``(ndim-1,)`` of lhs with ``(ndim-2,)`` of rhs; all leading
           dimensions are treated as batch dimensions.
         """
+        from algebraic.ops._semiring_ops import dot_general
+
         ndim = self.ndim
         if ndim == 2:
             dimension_numbers: tuple[
@@ -116,19 +113,19 @@ class AlgebraicArray(metaclass=ABCMeta):
         else:
             batch = tuple(range(ndim - 2))
             dimension_numbers = (((ndim - 1,), (ndim - 2,)), (batch, batch))
-        return self.dot_general(other, dimension_numbers)
+        return dot_general(self, other, dimension_numbers)
 
     def __eq__(self, other: object) -> Array:  # type: ignore[override]
         """Element-wise equality; returns a raw bool array (not wrapped)."""
         xp = array_api_compat.array_namespace(self.data)
         other_data: object = other.data if isinstance(other, AlgebraicArray) else other
-        return xp.equal(self.data, other_data)  # type: ignore[no-any-return]
+        return xp.equal(self.data, other_data)
 
     def __ne__(self, other: object) -> Array:  # type: ignore[override]
         """Element-wise inequality; returns a raw bool array (not wrapped)."""
         xp = array_api_compat.array_namespace(self.data)
         other_data: object = other.data if isinstance(other, AlgebraicArray) else other
-        return xp.not_equal(self.data, other_data)  # type: ignore[no-any-return]
+        return xp.not_equal(self.data, other_data)
 
     # Python sets __hash__ = None when __eq__ is defined; declare it explicitly
     # to make the intent clear to type checkers and documentation readers.
@@ -160,7 +157,7 @@ class AlgebraicArray(metaclass=ABCMeta):
         Example:
             result = arr.at[idx].set(value)
         """
-        from algebraic.array._index_update import _IndexUpdateHelper
+        from algebraic.utils.indexing import _IndexUpdateHelper
 
         return _IndexUpdateHelper(self)
 
@@ -218,23 +215,3 @@ class AlgebraicArray(metaclass=ABCMeta):
     def mT(self) -> Self:  # noqa: N802
         """Batch matrix transpose (same as `T`; alias for Array-API compatibility)."""
         return self.T
-
-    @abstractmethod
-    def dot_general(
-        self,
-        other: Self,
-        dimension_numbers: tuple[tuple[tuple[int, ...], tuple[int, ...]], tuple[tuple[int, ...], tuple[int, ...]]],
-    ) -> Self:
-        """Compute generalized dot product using semiring operations.
-
-        This implements ``dot_general`` for :class:`AlgebraicArray`, using the
-        semiring's multiplication and addition instead of standard arithmetic.
-
-        Parameters
-        ----------
-        other : AlgebraicArray
-            Right-hand side array.
-        dimension_numbers : tuple
-            Nested tuple of ``((contracting_dims), (batch_dims))`` for each
-            operand, following the same layout as ``jax.lax.dot_general``.
-        """

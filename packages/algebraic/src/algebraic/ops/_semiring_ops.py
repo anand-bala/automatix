@@ -8,6 +8,7 @@ abstract primitives defined in `algebraic.array.base.AlgebraicArray`:
 
 from __future__ import annotations
 
+import functools
 import typing
 from collections.abc import Sequence
 from typing import Any
@@ -17,8 +18,9 @@ from typing_extensions import overload
 
 from algebraic.array.base import AlgebraicArray
 from algebraic.spec import is_ring
-from algebraic.types import Array
-from algebraic.utils import dispatch, validate_semiring
+from algebraic.types import Array, Scalar
+from algebraic.utils import normalize_axes, validate_semiring
+from algebraic.utils.ops import DotPlan, prefix_scan_axis, reduce_axes
 
 if typing.TYPE_CHECKING:
     from opt_einsum.contract import OptimizeKind, _MemoryLimit
@@ -91,7 +93,6 @@ def square(x: AlgebraicArray) -> AlgebraicArray:
     return x * x
 
 
-@dispatch.abstract
 def sum(  # noqa: A001  (intentional shadowing of built-in)
     x: AlgebraicArray, /, *, axis: int | Sequence[int] | None = None, keepdims: bool = False
 ) -> AlgebraicArray:
@@ -114,10 +115,14 @@ def sum(  # noqa: A001  (intentional shadowing of built-in)
     >>> algebraic.sum(a).data
     array(1.)
     """
-    raise NotImplementedError
+
+    xp = array_api_compat.get_namespace(x.data)
+    zero: Scalar = xp.asarray(x.semiring.zero, dtype=x.dtype)
+    axis = normalize_axes(axis, x.ndim)
+    result = reduce_axes(x.data, zero, x.semiring.add, axis=axis, keepdims=keepdims)
+    return x._wrap(result)
 
 
-@dispatch.abstract
 def prod(
     x: AlgebraicArray,
     /,
@@ -144,10 +149,14 @@ def prod(
     >>> algebraic.prod(a).data
     array(6.)
     """
-    raise NotImplementedError
+
+    xp = array_api_compat.get_namespace(x.data)
+    one: Scalar = xp.asarray(x.semiring.one, dtype=x.dtype)
+    axis = normalize_axes(axis, x.ndim)
+    result = reduce_axes(x.data, one, x.semiring.mul, axis=axis, keepdims=keepdims)
+    return x._wrap(result)
 
 
-@dispatch.abstract
 def cumulative_sum(
     x: AlgebraicArray,
     /,
@@ -167,10 +176,15 @@ def cumulative_sum(
         When ``True``, prepend a zero slice before the scan output so that
         ``result.shape[axis] == x.shape[axis] + 1``.
     """
-    raise NotImplementedError
+
+    xp = array_api_compat.get_namespace(x.data)
+    axis = axis % x.ndim
+    zero = xp.asarray(x.semiring.zero, dtype=x.dtype)
+    result = prefix_scan_axis(x.data, zero, x.semiring.add, axis=axis, include_initial=include_initial)
+    return x._wrap(result)
 
 
-@dispatch.abstract
+@functools.singledispatch
 def cumulative_prod(
     x: AlgebraicArray,
     /,
@@ -190,14 +204,106 @@ def cumulative_prod(
         When ``True``, prepend a one slice before the scan output so that
         ``result.shape[axis] == x.shape[axis] + 1``.
     """
-    raise NotImplementedError
+
+    xp = array_api_compat.get_namespace(x.data)
+    axis = axis % x.ndim
+    one = xp.asarray(x.semiring.one, dtype=x.dtype)
+    result = prefix_scan_axis(x.data, one, x.semiring.mul, axis=axis, include_initial=include_initial)
+    return x._wrap(result)
+
+
+def dot_general(
+    x: AlgebraicArray,
+    y: AlgebraicArray,
+    dimension_numbers: tuple[tuple[tuple[int, ...], tuple[int, ...]], tuple[tuple[int, ...], tuple[int, ...]]],
+) -> AlgebraicArray:
+    """Compute generalized dot product using semiring operations.
+
+    This implements ``dot_general`` for :class:`AlgebraicArray`, using the
+    semiring's multiplication and addition instead of standard arithmetic.
+
+    Parameters
+    ----------
+    x, y : AlgebraicArray
+        Operands to the dot product.
+    dimension_numbers : tuple
+        Nested tuple of ``((contracting_dims), (batch_dims))`` for each
+        operand, following the same layout as ``jax.lax.dot_general``.
+    """
+
+    validate_semiring(x, y)
+    xp = array_api_compat.get_namespace(x.data, y.data)
+
+    (lhs_contract, rhs_contract), (lhs_batch, rhs_batch) = dimension_numbers
+
+    # vdot fast path
+    if (
+        x._vdot is not None
+        and x.data.ndim == 1
+        and y.data.ndim == 1
+        and len(lhs_contract) == 1
+        and len(rhs_contract) == 1
+        and len(lhs_batch) == 0
+        and len(rhs_batch) == 0
+        and lhs_contract[0] == 0
+        and rhs_contract[0] == 0
+    ):
+        return x._wrap(x._vdot(x.data, y.data))
+
+    # matmul fast path
+    if (
+        x._matmul is not None
+        and x.data.ndim == 2
+        and y.data.ndim == 2
+        and len(lhs_contract) == 1
+        and len(rhs_contract) == 1
+        and len(lhs_batch) == 0
+        and len(rhs_batch) == 0
+        and lhs_contract[0] == 1
+        and rhs_contract[0] == 0
+    ):
+        return x._wrap(x._matmul(x.data, y.data))
+
+    # General case
+    plan = DotPlan.plan(x.data.shape, y.data.shape, dimension_numbers)
+    semiring = x.semiring
+
+    lhs_transposed: Array = xp.permute_dims(x.data, plan.lhs_perm)
+    rhs_transposed: Array = xp.permute_dims(y.data, plan.rhs_perm)
+
+    if plan.n_batch > 0:
+        lhs_reshaped = lhs_transposed.reshape(plan.batch_size, plan.lhs_free_size, plan.contract_size)
+        rhs_reshaped = rhs_transposed.reshape(plan.batch_size, plan.rhs_free_size, plan.contract_size)
+
+        products: Array = xp.asarray(semiring.mul(lhs_reshaped[:, :, None, :], rhs_reshaped[:, None, :, :]))
+    else:
+        lhs_reshaped = lhs_transposed.reshape(plan.lhs_free_size, plan.contract_size)
+        rhs_reshaped = rhs_transposed.reshape(plan.rhs_free_size, plan.contract_size)
+
+        products: Array = xp.asarray(semiring.mul(lhs_reshaped[:, None, :], rhs_reshaped[None, :, :]))
+
+    # Reduce along contract dimension (last dim) using semiring.add
+    last_dim = normalize_axes(-1, products.ndim)
+    result = reduce_axes(products, semiring.zero, semiring.add, axis=last_dim)
+
+    if plan.output_shape:
+        result = result.reshape(plan.output_shape)
+    else:
+        result = result.squeeze()
+
+    return x._wrap(result)
 
 
 def matmul(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
     """Matrix multiplication using semiring operations.
 
-    Equivalent to the ``@`` operator; delegates to
-    :meth:`AlgebraicArray.__matmul__`.
+    Equivalent to the ``@`` operator; delegates to :func:`dot_general`, with dimension
+    numbers determined by ``x.ndim``.
+
+    - 2D x 2D: standard matrix multiply (contract last of lhs, first of rhs).
+
+    - ND (batched): contract ``(ndim-1,)`` of lhs with ``(ndim-2,)`` of rhs; all
+      leading dimensions are treated as batch dimensions.
 
     Parameters
     ----------
@@ -218,7 +324,16 @@ def matmul(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
            [ 6.,  7.]])
     """
     validate_semiring(x, y)
-    return x @ y
+    ndim = x.ndim
+    if ndim == 2:
+        dimension_numbers: tuple[
+            tuple[tuple[int, ...], tuple[int, ...]],
+            tuple[tuple[int, ...], tuple[int, ...]],
+        ] = (((1,), (0,)), ((), ()))
+    else:
+        batch = tuple(range(ndim - 2))
+        dimension_numbers = (((ndim - 1,), (ndim - 2,)), (batch, batch))
+    return dot_general(x, y, dimension_numbers)
 
 
 def vecdot(x: AlgebraicArray, y: AlgebraicArray, /, *, axis: int = -1) -> AlgebraicArray:
@@ -238,7 +353,7 @@ def vecdot(x: AlgebraicArray, y: AlgebraicArray, /, *, axis: int = -1) -> Algebr
     ndim = x.ndim
     ax = axis % ndim
     batch = tuple(i for i in range(ndim) if i != ax)
-    return x.dot_general(y, (((ax,), (ax,)), (batch, batch)))
+    return dot_general(x, y, (((ax,), (ax,)), (batch, batch)))
 
 
 @overload
@@ -289,7 +404,7 @@ def tensordot(
     else:
         lhs_contract = tuple(axes[0])
         rhs_contract = tuple(axes[1])
-    return x.dot_general(y, ((lhs_contract, rhs_contract), ((), ())))
+    return dot_general(x, y, ((lhs_contract, rhs_contract), ((), ())))
 
 
 def trace(x: AlgebraicArray, /, *, offset: int = 0) -> AlgebraicArray:
@@ -319,7 +434,7 @@ def outer(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
     """
     validate_semiring(x, y)
     # No contracting dims, no batch dims, result[i, j] = x[i] * y[j].
-    return x.dot_general(y, (((), ()), ((), ())))
+    return dot_general(x, y, (((), ()), ((), ())))
 
 
 def matrix_power(x: AlgebraicArray, n: int) -> AlgebraicArray:
@@ -441,7 +556,8 @@ def _execute_binary_einsum_step(
     lhs_contract = tuple(lhs_sub.index(c) for c in contract_labels)
     rhs_contract = tuple(rhs_sub.index(c) for c in contract_labels)
 
-    result = lhs.dot_general(
+    result = dot_general(
+        lhs,
         rhs,
         ((lhs_contract, rhs_contract), (lhs_batch, rhs_batch)),
     )

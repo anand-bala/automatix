@@ -28,7 +28,7 @@ def _try_array_else_scalar(
     except TypeError:
         # All are scalar
         assert all(isinstance(x, Number) for x in xs)
-        return scalar_fn(*xs)
+        return scalar_fn(*xs)  # type: ignore[arg-type]
     else:
         # We have an array namespace
         fn = getattr(array_ns, array_fn)
@@ -144,10 +144,10 @@ def max_min_algebra(
     else:
 
         def add(a: Array | Number, b: Array | Number) -> Array | Number:
-            return _try_array_else_scalar(a, b, array_fn="maximum", scalar_fn=max)
+            return _try_array_else_scalar(a, b, array_fn="maximum", scalar_fn=max)  # type: ignore[arg-type]
 
         def mul(a: Array | Number, b: Array | Number) -> Array | Number:
-            return _try_array_else_scalar(a, b, array_fn="minimum", scalar_fn=min)
+            return _try_array_else_scalar(a, b, array_fn="minimum", scalar_fn=min)  # type: ignore[arg-type]
 
     zero = 0.0 if only == "positive" else -math.inf
     one = -0.0 if only == "negative" else math.inf
@@ -220,11 +220,11 @@ def tropical_semiring(*, minplus: bool = True, smooth: bool = False, temperature
         if minplus:
 
             def add(a: Array | Number, b: Array | Number) -> Array | Number:
-                return _try_array_else_scalar(a, b, array_fn="minimum", scalar_fn=min)
+                return _try_array_else_scalar(a, b, array_fn="minimum", scalar_fn=min)  # type: ignore[arg-type]
         else:
 
             def add(a: Array | Number, b: Array | Number) -> Array | Number:
-                return _try_array_else_scalar(a, b, array_fn="maximum", scalar_fn=max)
+                return _try_array_else_scalar(a, b, array_fn="maximum", scalar_fn=max)  # type: ignore[arg-type]
 
     if minplus:
         zero = math.inf
@@ -292,13 +292,13 @@ def boolean_algebra(
         case "logic":
 
             def add(a: Array | Number, b: Array | Number) -> Array | Number:
-                return _try_array_else_scalar(a, b, array_fn="logical_or", scalar_fn=operator.__or__)
+                return _try_array_else_scalar(a, b, array_fn="logical_or", scalar_fn=operator.__or__)  # type: ignore[arg-type]
 
             def mul(a: Array | Number, b: Array | Number) -> Array | Number:
-                return _try_array_else_scalar(a, b, array_fn="logical_and", scalar_fn=operator.__and__)
+                return _try_array_else_scalar(a, b, array_fn="logical_and", scalar_fn=operator.__and__)  # type: ignore[arg-type]
 
             def neg(a: Array | Number) -> Array | Number:
-                return _try_array_else_scalar(a, array_fn="logical_not", scalar_fn=operator.__not__)
+                return _try_array_else_scalar(a, array_fn="logical_not", scalar_fn=operator.__not__)  # type: ignore[arg-type]
         case "soft":
 
             def add(a: Array | Number, b: Array | Number) -> Array | Number:
@@ -324,10 +324,10 @@ def boolean_algebra(
         case "ste" | "std-fuzzy":
 
             def add(a: Array | Number, b: Array | Number) -> Array | Number:
-                return _try_array_else_scalar(a, b, array_fn="maximum", scalar_fn=max)
+                return _try_array_else_scalar(a, b, array_fn="maximum", scalar_fn=max)  # type: ignore[arg-type]
 
             def mul(a: Array | Number, b: Array | Number) -> Array | Number:
-                return _try_array_else_scalar(a, b, array_fn="minimum", scalar_fn=min)
+                return _try_array_else_scalar(a, b, array_fn="minimum", scalar_fn=min)  # type: ignore[arg-type]
 
             def neg(a: Array | Number) -> Array | Number:
                 return 1 - a

@@ -334,6 +334,22 @@ def unique_all(x: AlgebraicArray) -> UniqueAllResult:
         ``inverse_indices``, and ``counts`` (all raw arrays).
     """
     xp = array_api_compat.array_namespace(x.data)
+    if array_api_compat.is_torch_array(x.data):
+        import torch
+
+        flat_data = x.data.reshape(-1)
+        unique, inverse_indices, counts = torch.unique(flat_data, sorted=True, return_inverse=True, return_counts=True)
+        _, ind_sorted = torch.sort(inverse_indices, stable=True)
+        cum_sum = counts.cumsum(0)
+        cum_sum = torch.cat((torch.tensor([0]), cum_sum[:-1]))
+        indices = ind_sorted[cum_sum]
+        return UniqueAllResult(
+            values=x._wrap(unique),
+            indices=indices,
+            inverse_indices=inverse_indices,
+            counts=counts,
+        )
+
     out = xp.unique_all(x.data)
     return UniqueAllResult(
         values=x._wrap(out.values),
@@ -475,14 +491,14 @@ def allclose(a: AlgebraicArray | Array, b: AlgebraicArray | Array | Number, *, r
         a_data = jnp.asarray(a_data)
         b_data = jnp.asarray(b_data)
 
-        return jnp.allclose(a_data, b_data, rtol=rtol, atol=atol).item()
+        return bool(jnp.allclose(a_data, b_data, rtol=rtol, atol=atol).item())
     elif array_api_compat.is_torch_namespace(xp):
         import torch
 
         a_data = torch.asarray(a_data)
         b_data = torch.asarray(b_data)
 
-        return torch.allclose(a_data, b_data, rtol=rtol, atol=atol)
+        return bool(torch.allclose(a_data, b_data, rtol=rtol, atol=atol))
     elif array_api_compat.is_numpy_namespace(xp):
         import numpy as np
 

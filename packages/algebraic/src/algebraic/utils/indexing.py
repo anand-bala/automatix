@@ -1,4 +1,3 @@
-# mypy: disable-error-code="no-any-return,no-untyped-call"
 """Index update functionality for AlgebraicArray using semiring operations."""
 
 from __future__ import annotations
@@ -10,7 +9,37 @@ import array_api_compat
 from algebraic.spec import is_ring
 
 if TYPE_CHECKING:
+    import torch
+
     from algebraic.array.base import AlgebraicArray
+    from algebraic.types import Array, Number
+
+
+def _torchy_index(idx: Any, shape: tuple[int, ...]) -> tuple[torch.Tensor, ...]:  # noqa: ANN401
+    """Convert an index to a tuple of long tensors for use with ``index_put``."""
+    import torch
+
+    if isinstance(idx, int):
+        return (torch.tensor(idx).long(),)
+
+    if isinstance(idx, slice):
+        return (torch.arange(*idx.indices(shape[0])).long(),)
+
+    if isinstance(idx, torch.Tensor):
+        return (idx.long(),)
+
+    if isinstance(idx, tuple):
+        result = []
+        for dim, i in enumerate(idx):
+            if isinstance(i, slice):
+                result.append(torch.arange(*i.indices(shape[dim])).long())
+            elif isinstance(i, int):
+                result.append(torch.tensor(i).long())
+            else:
+                result.append(torch.as_tensor(i).long())
+        return tuple(result)
+
+    raise TypeError(f"Unsupported index type for torch: {type(idx)}")
 
 
 def _set_at_index(
@@ -22,9 +51,12 @@ def _set_at_index(
     if array_api_compat.is_jax_array(data):
         return data.at[idx].set(value)
     if array_api_compat.is_torch_array(data):
-        new_data = data.clone()
-    else:
-        new_data = data.copy()
+        import torch
+
+        torchy = _torchy_index(idx, tuple(data.shape))
+        value = torch.as_tensor(value, dtype=data.dtype, device=data.device)
+        return data.index_put(torchy, value)
+    new_data = data.copy()
     new_data[idx] = value
     return new_data
 
@@ -43,7 +75,7 @@ class _IndexUpdateRef:
         self.array: AlgebraicArray = array
         self.indices: Any = indices
 
-    def set(self, values: Any) -> AlgebraicArray:  # noqa: ANN401
+    def set(self, values: AlgebraicArray | Array | Number) -> AlgebraicArray:  # noqa: ANN401
         """Set the indexed elements to the given values.
 
         Args:
@@ -58,7 +90,7 @@ class _IndexUpdateRef:
         new_data = _set_at_index(self.array.data, self.indices, values_data)
         return self.array._wrap(new_data)
 
-    def add(self, values: Any) -> AlgebraicArray:  # noqa: ANN401
+    def add(self, values: AlgebraicArray | Array | Number) -> AlgebraicArray:  # noqa: ANN401
         """Add values to the indexed elements using semiring addition.
 
         Args:
@@ -77,7 +109,7 @@ class _IndexUpdateRef:
         new_data = _set_at_index(self.array.data, self.indices, updated)
         return self.array._wrap(new_data)
 
-    def multiply(self, values: Any) -> AlgebraicArray:  # noqa: ANN401
+    def multiply(self, values: AlgebraicArray | Array | Number) -> AlgebraicArray:  # noqa: ANN401
         """Multiply indexed elements by values using semiring multiplication.
 
         Args:
@@ -96,7 +128,7 @@ class _IndexUpdateRef:
         new_data = _set_at_index(self.array.data, self.indices, updated)
         return self.array._wrap(new_data)
 
-    def subtract(self, values: Any) -> AlgebraicArray:  # noqa: ANN401
+    def subtract(self, values: AlgebraicArray | Array | Number) -> AlgebraicArray:  # noqa: ANN401
         """Subtract values from indexed elements (only for Rings).
 
         Args:

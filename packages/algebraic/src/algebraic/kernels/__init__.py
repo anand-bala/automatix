@@ -52,7 +52,7 @@ def logsumexp(a: Array | Number, axis: MaybeAxis = None) -> Array | Number:
         import torch
 
         a = torch.as_tensor(a)
-        axis = normalize_axes(axis, a.ndim)
+        axis = normalize_axes(axis, a.ndim)  # type: ignore[union-attr]
 
         result = torch.logsumexp(a, dim=axis)
         return result

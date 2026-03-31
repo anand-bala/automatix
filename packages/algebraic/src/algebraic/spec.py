@@ -94,10 +94,10 @@ class Semiring(AlgebraicStructure):
         Multiplicative identity (:math:`1`).  Must be a scalar.
     """
 
-    add: BinaryOp
-    mul: BinaryOp
-    zero: Number
-    one: Number
+    add: BinaryOp  # type: ignore[misc]
+    mul: BinaryOp  # type: ignore[misc]
+    zero: Number  # type: ignore[misc]
+    one: Number  # type: ignore[misc]
 
     def __post_init__(self) -> None:
         from algebraic.types import is_scalar
@@ -109,7 +109,7 @@ class Semiring(AlgebraicStructure):
 
 
 @frozen
-class BoundedDistributiveLattice(Semiring):
+class BoundedDistributiveLattice(Semiring):  # type: ignore[misc]
     r"""A bounded distributive lattice.
 
     A specialization of :class:`Semiring` where :math:`\oplus` is the lattice
@@ -151,7 +151,7 @@ class BoundedDistributiveLattice(Semiring):
 
 
 @frozen()
-class Ring(Semiring):
+class Ring(Semiring):  # type: ignore[misc]
     r"""A semiring extended with an additive inverse.
 
     Every element :math:`a` must have an inverse :math:`-a` such that
@@ -163,11 +163,11 @@ class Ring(Semiring):
         Unary operation returning the additive inverse of its argument.
     """
 
-    additive_inverse: UnaryOp
+    additive_inverse: UnaryOp  # type: ignore[misc]
 
 
 @frozen()
-class DeMorganAlgebra(BoundedDistributiveLattice):
+class DeMorganAlgebra(BoundedDistributiveLattice):  # type: ignore[misc]
     r"""A bounded distributive lattice with a De Morgan complement.
 
     Extends :class:`BoundedDistributiveLattice` with a unary ``complement``
@@ -186,11 +186,11 @@ class DeMorganAlgebra(BoundedDistributiveLattice):
         Unary complementation operation.
     """
 
-    complement: UnaryOp
+    complement: UnaryOp  # type: ignore[misc]
 
 
 @frozen()
-class HeytingAlgebra(BoundedDistributiveLattice):
+class HeytingAlgebra(BoundedDistributiveLattice):  # type: ignore[misc]
     r"""A bounded lattice with an implication operation.
 
     Extends :class:`BoundedDistributiveLattice` with a binary *implication*
@@ -208,7 +208,7 @@ class HeytingAlgebra(BoundedDistributiveLattice):
         Binary implication operation :math:`a \to b`.
     """
 
-    implication: BinaryOp
+    implication: BinaryOp  # type: ignore[misc]
 
     def complement(self, value: Scalar | Array) -> Scalar | Array:
         r"""Pseudo-complement, defined as :math:`\neg a = a \to 0`.
@@ -227,7 +227,7 @@ class HeytingAlgebra(BoundedDistributiveLattice):
 
 
 @frozen()
-class StoneAlgebra(BoundedDistributiveLattice):
+class StoneAlgebra(BoundedDistributiveLattice):  # type: ignore[misc]
     r"""A bounded distributive lattice with a pseudo-complement satisfying Stone's law.
 
     Extends :class:`BoundedDistributiveLattice` with a unary ``complement``
@@ -243,11 +243,11 @@ class StoneAlgebra(BoundedDistributiveLattice):
         Pseudo-complement operation.
     """
 
-    complement: UnaryOp
+    complement: UnaryOp  # type: ignore[misc]
 
 
 @frozen()
-class BooleanAlgebra(DeMorganAlgebra):
+class BooleanAlgebra(DeMorganAlgebra):  # type: ignore[misc]
     r"""A full Boolean algebra.
 
     Extends :class:`DeMorganAlgebra` so that complementation satisfies:

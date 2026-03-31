@@ -6,13 +6,9 @@ importing this module never triggers `jax`, `torch`, or `numpy` imports.
 
 from __future__ import annotations
 
-import typing
-
+from algebraic.array.base import AlgebraicArray
 from algebraic.spec import Semiring
 from algebraic.types import Array, Backend, Number
-
-if typing.TYPE_CHECKING:
-    from algebraic.array.base import AlgebraicArray
 
 
 def array(data: Array | Number, *, semiring: Semiring, backend: str | Backend | None = None) -> AlgebraicArray:
@@ -47,21 +43,15 @@ def array(data: Array | Number, *, semiring: Semiring, backend: str | Backend | 
     if backend == Backend.JAX:
         import jax.numpy as jnp
 
-        from algebraic.array._jax import JaxAlgebraicArray
-
-        return JaxAlgebraicArray(jnp.asarray(data), semiring)  # ty: ignore[too-many-positional-arguments]
+        return AlgebraicArray(jnp.asarray(data), semiring)
     elif backend == Backend.TORCH:
         import torch
 
-        from algebraic.array._torch import TorchAlgebraicArray
-
-        return TorchAlgebraicArray(torch.asarray(data), semiring)
+        return AlgebraicArray(torch.asarray(data), semiring)
     elif backend == Backend.NUMPY:
         import numpy as np
 
-        from algebraic.array._numpy import NumpyAlgebraicArray
-
-        return NumpyAlgebraicArray(np.asarray(data), semiring)
+        return AlgebraicArray(np.asarray(data), semiring)
     raise ValueError(f"Unsupported backend: {backend!r}")
 
 
@@ -234,3 +224,33 @@ def full(shape: tuple[int, ...], fill_value: Number, *, semiring: Semiring, back
     else:
         raise ValueError(f"Unsupported backend: {b!r}")
     return array(data, semiring=semiring, backend=b)
+
+
+def eye(
+    n_rows: int, n_cols: int | None = None, /, *, semiring: Semiring, backend: str | Backend, k: int = 0
+) -> AlgebraicArray:
+    """Returns a two-dimensional array with ones on the ``k``th diagonal and zeros elsewhere.
+
+    Parameters
+    ----------
+
+    n_rows : int
+        number of rows in the output array.
+    n_cols : int or None, optional
+        number of columns in the output array. If ``None``, the default number of
+        columns in the output array is equal to ``n_rows``. Default: ``None``.
+    k : int
+        index of the diagonal. A positive value refers to an upper diagonal, a negative value to a lower diagonal. (default = ``0``)
+    semiring : Semiring
+        Semiring for the algebraic structure.
+    backend : str or Backend
+        Backend to use (``"jax"``, ``"torch"``, or ``"numpy"``).
+
+    """
+    backend = Backend(backend)
+    xp = backend.get_array_namespace()
+
+    mask: Array = xp.eye(n_rows, n_cols, k=k)
+
+    result: Array = xp.where(mask > 0, xp.asarray(semiring.one), xp.asarray(semiring.zero))
+    return array(result, semiring=semiring, backend=backend)

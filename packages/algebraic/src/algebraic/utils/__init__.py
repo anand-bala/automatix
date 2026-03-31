@@ -3,13 +3,11 @@ from __future__ import annotations
 import typing
 from collections.abc import Sequence
 
-from plum import Dispatcher
+import optree
 
 if typing.TYPE_CHECKING:
     from algebraic import AlgebraicArray
 from algebraic.types import Array, Number, is_array
-
-dispatch = Dispatcher()
 
 
 def normalize_axes(axis: int | Sequence[int] | None, ndim: int) -> tuple[int, ...]:
@@ -56,7 +54,7 @@ def validate_semiring(*arrays: "AlgebraicArray") -> None:
             raise ValueError(f"All AlgebraicArray inputs must share the same semiring; got {first!r} and {arr.semiring!r}.")
 
 
-def asanyarray(x: "AlgebraicArray" | Array | Number) -> Array:
+def asanyarray(x: "AlgebraicArray | Array | Number") -> Array:
     """Convert an object to an array.
 
     If scalar or unsupported type, will convert to NumPy array.
@@ -83,7 +81,7 @@ def asanyarray(x: "AlgebraicArray" | Array | Number) -> Array:
     return np.asanyarray(x)
 
 
-def maybe_unwrap(x: "AlgebraicArray" | Array | Number) -> Array | Number:
+def maybe_unwrap(x: "AlgebraicArray | Array | Number") -> Array | Number:
     from algebraic import AlgebraicArray
 
     if isinstance(x, AlgebraicArray):

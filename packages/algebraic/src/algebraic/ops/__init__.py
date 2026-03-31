@@ -19,6 +19,7 @@ from algebraic.ops._creation import ones as ones
 from algebraic.ops._creation import ones_like as ones_like
 from algebraic.ops._creation import zeros as zeros
 from algebraic.ops._creation import zeros_like as zeros_like
+from algebraic.ops._creation import eye as eye
 from algebraic.ops._passthrough import UniqueAllResult as UniqueAllResult
 from algebraic.ops._passthrough import UniqueCountsResult as UniqueCountsResult
 from algebraic.ops._passthrough import UniqueInverseResult as UniqueInverseResult

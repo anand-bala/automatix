@@ -1,14 +1,11 @@
 """Sparse polynomial representation using dictionary-based storage."""
 
-# NOTE: Do NOT add `from __future__ import annotations` to this module.
-# The `AbstractVar` annotations from `algebraic._better_abc` are processed at class
-# definition time and must not be stringified (PEP 563 lazy evaluation would break them).
-
 import copy
 import functools
 import typing
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Mapping
+from dataclasses import dataclass, field
 
 import bitarray.util as ba_util
 from bitarray import bitarray, frozenbitarray
@@ -16,20 +13,19 @@ from jaxtyping import Shaped
 from typing_extensions import Self
 
 import algebraic.ops as alge
-from algebraic._backend_registry import BackendClassRegistry
-from algebraic._better_abc import AbstractClassVar, AbstractVar, BetterABCMeta
 from algebraic.array import AlgebraicArray
 from algebraic.spec import BoundedDistributiveLattice as Lattice
 from algebraic.types import Array, Backend, Scalar, is_array
 
 
-class PolyDict(metaclass=BetterABCMeta):
+@dataclass
+class PolyDict:
     """Sparse polynomial represented as monomial -> coefficient mapping."""
 
-    algebra: AbstractVar[Lattice]
-    num_vars: AbstractVar[int]
-    data: AbstractVar[Mapping[frozenbitarray, AlgebraicArray]]
-    backend: AbstractClassVar[str | Backend]
+    algebra: Lattice
+    num_vars: int
+    data: dict[frozenbitarray, AlgebraicArray] = field(default_factory=dict)
+    backend: str | Backend = field(default=Backend.NUMPY, kw_only=True)
     """The specific backend from the derived class"""
 
     def __getitem__(self, monomial: bitarray | str | Iterable[int]) -> AlgebraicArray:
@@ -68,17 +64,7 @@ class PolyDict(metaclass=BetterABCMeta):
         return self.data.items()
 
     @classmethod
-    def _get_backend(cls, backend: str | Backend | None) -> str | Backend:
-        """Resolve backend: use explicit arg, class default, or fall back to NumPy."""
-        if backend is not None:
-            return backend
-        try:
-            return cls.backend
-        except AttributeError:
-            return Backend.NUMPY
-
-    @classmethod
-    def constant(cls, value: Scalar, num_vars: int, *, algebra: Lattice, backend: str | Backend | None = None) -> "PolyDict":
+    def constant(cls, value: Scalar, num_vars: int, *, algebra: Lattice, backend: str | Backend = Backend.NUMPY) -> "PolyDict":
         """Create a constant polynomial with the given *value*.
 
         Parameters
@@ -89,8 +75,8 @@ class PolyDict(metaclass=BetterABCMeta):
             Number of variables in the polynomial.
         algebra : BoundedDistributiveLattice
             Lattice algebra governing operations.
-        backend : str or Backend or None, optional
-            Backend to use. Falls back to the class default or NumPy.
+        backend : str or Backend, optional
+            Backend to use. Falls back to NumPy.
 
         Returns
         -------
@@ -108,9 +94,8 @@ class PolyDict(metaclass=BetterABCMeta):
         array(True)
         """
         zeros_idx = frozenbitarray(ba_util.zeros(num_vars))
-        backend = cls._get_backend(backend)
         coeff = alge.array(value, semiring=algebra, backend=backend)
-        return _make_poly_dict(algebra, num_vars, {zeros_idx: coeff}, backend=backend)
+        return cls(algebra, num_vars, {zeros_idx: coeff}, backend=backend)
 
     @classmethod
     def zero(cls, num_vars: int, *, algebra: Lattice, backend: str | Backend) -> "PolyDict":
@@ -121,7 +106,7 @@ class PolyDict(metaclass=BetterABCMeta):
         return cls.constant(algebra.one, num_vars, algebra=algebra, backend=backend)
 
     @classmethod
-    def variable(cls, index: int, num_vars: int, *, algebra: Lattice, backend: str | Backend | None = None) -> "PolyDict":
+    def variable(cls, index: int, num_vars: int, *, algebra: Lattice, backend: str | Backend = Backend.NUMPY) -> "PolyDict":
         r"""Create a polynomial representing a single variable :math:`x_i`.
 
         Parameters
@@ -133,7 +118,7 @@ class PolyDict(metaclass=BetterABCMeta):
         algebra : BoundedDistributiveLattice
             Lattice algebra governing operations.
         backend : str or Backend or None, optional
-            Backend to use. Falls back to the class default or NumPy.
+            Backend to use. Falls back to NumPy.
 
         Returns
         -------
@@ -142,9 +127,8 @@ class PolyDict(metaclass=BetterABCMeta):
         """
         monomial = ba_util.zeros(num_vars)
         monomial[index] = 1
-        backend = cls._get_backend(backend)
         coefficient = alge.ones((), semiring=algebra, backend=backend)
-        return _make_poly_dict(algebra, num_vars, {frozenbitarray(monomial): coefficient}, backend)
+        return cls(algebra, num_vars, {frozenbitarray(monomial): coefficient}, backend=backend)
 
     def _replace_attr(self, name: str, value: object) -> Self:
         """Create a new instance with one attribute changed (backend-specific)."""
@@ -245,7 +229,7 @@ class PolyDict(metaclass=BetterABCMeta):
                 i: cls.constant(point[i], self.num_vars, algebra=self.algebra, backend=self.backend)
                 for i in range(self.num_vars)
             }
-        return self.compose(replacements)  # ty: ignore[invalid-argument-type]
+        return self.compose(replacements)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
 
     def compose(self, replacements: Mapping[int, Self]) -> Self:
         """Compose polynomial with multiple substitutions.
@@ -270,12 +254,12 @@ class PolyDict(metaclass=BetterABCMeta):
         cls = type(self)
         result = cls.zero(self.num_vars, algebra=self.algebra, backend=self.backend)  # initialize with additive identity
 
-        def var_at(idx: int) -> Self:
-            return cls.variable(idx, self.num_vars, algebra=self.algebra, backend=self.backend)
+        def var_at(idx: int) -> Self:  # type: ignore[type-var]
+            return cls.variable(idx, self.num_vars, algebra=self.algebra, backend=self.backend)  # type: ignore[return-value]
 
-        def as_const(val: AlgebraicArray | Scalar) -> Self:
+        def as_const(val: AlgebraicArray | Scalar) -> Self:  # type: ignore[type-var]
             raw = val.data if isinstance(val, AlgebraicArray) else val
-            return cls.constant(raw, self.num_vars, algebra=self.algebra, backend=self.backend)
+            return cls.constant(raw, self.num_vars, algebra=self.algebra, backend=self.backend)  # type: ignore[return-value]
 
         for monomial, coeff in self.items():
             # make a new term by replacing the monomial terms with either the replacement if it exists, or a plain variable.
@@ -286,29 +270,7 @@ class PolyDict(metaclass=BetterABCMeta):
             )
             result = result + term
 
-        return result
+        return result  # type: ignore[return-value]
 
     def isscalar(self) -> bool:
         return len(self) == 0 or (len(self) == 1 and self.get(frozenbitarray(self.num_vars)) is not None)
-
-
-_poly_dict_registry = BackendClassRegistry("PolyDict")
-_poly_dict_registry.register(
-    Backend.JAX,
-    lambda: __import__("algebraic.polynomials.dok._jax", fromlist=["JaxPolyDict"]).JaxPolyDict,
-)
-_poly_dict_registry.register(
-    Backend.TORCH,
-    lambda: __import__("algebraic.polynomials.dok._torch", fromlist=["TorchPolyDict"]).TorchPolyDict,
-)
-_poly_dict_registry.register(
-    Backend.NUMPY,
-    lambda: __import__("algebraic.polynomials.dok._numpy", fromlist=["NumpyPolyDict"]).NumpyPolyDict,
-)
-
-
-def _make_poly_dict(
-    algebra: Lattice, num_vars: int, data: Mapping[frozenbitarray, AlgebraicArray], backend: str | Backend
-) -> PolyDict:
-    cls = _poly_dict_registry[backend]
-    return cls(algebra, num_vars, data)

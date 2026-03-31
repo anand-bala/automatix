@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import algebraic
+import algebraic.utils.jax
 import numpy as np
 import pytest
 from algebraic import AlgebraicArray
-from algebraic._jax_wrappers import jit, vmap
+from algebraic._jax_wrappers import jit
 from algebraic.semirings import counting_semiring
+from algebraic.transforms import vmap
 
 
 class TestJit:

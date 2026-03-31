@@ -27,7 +27,7 @@ from typing import (
     get_origin,
 )
 
-from typing_extensions import dataclass_transform
+from typing_extensions import dataclass_transform, overload
 
 _T = TypeVar("_T")
 _C = TypeVar("_C")
@@ -230,6 +230,10 @@ class BetterABCMeta(abc.ABCMeta):
         return self
 
 
+@overload
+def better_dataclass(cls: type[_C], /, **kwargs: Any) -> type[_C]: ...  # noqa: ANN401
+@overload
+def better_dataclass(cls: None = None, /, **kwargs: Any) -> Callable[[type[_C]], type[_C]]: ...  # noqa: ANN401
 @dataclass_transform()
 def better_dataclass(cls: type[_C] | None = None, /, **kwargs: Any) -> type[_C] | Callable[[type[_C]], type[_C]]:  # noqa: ANN401
     def make_dataclass(kls: type[_C]) -> type[_C]:
@@ -253,6 +257,10 @@ def better_dataclass(cls: type[_C] | None = None, /, **kwargs: Any) -> type[_C] 
     return make_dataclass(cls)
 
 
+@overload
+def frozen(cls: type[_C], /, **kwargs: Any) -> type[_C]: ...  # noqa: ANN401
+@overload
+def frozen(cls: None = None, /, **kwargs: Any) -> Callable[[type[_C]], type[_C]]: ...  # noqa: ANN401
 @dataclass_transform()
 def frozen(cls: type[_C] | None = None, /, **kwargs: Any) -> type[_C] | Callable[[type[_C]], type[_C]]:  # noqa: ANN401
     """Shorthand for ``better_dataclass(frozen=True, ...)``."""

@@ -89,3 +89,6 @@ from algebraic.spec import is_demorgan_algebra as is_demorgan_algebra
 from algebraic.spec import is_heyting_algebra as is_heyting_algebra
 from algebraic.spec import is_ring as is_ring
 from algebraic.spec import is_stone_algebra as is_stone_algebra
+
+# Reexport functional transforms
+from algebraic.transforms import vmap as vmap

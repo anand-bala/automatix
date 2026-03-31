@@ -1,47 +1,34 @@
 """Backend-agnostic dense tensor polynomial representations."""
 
-# NOTE: Do NOT add `from __future__ import annotations` to this module.
-# The `AbstractVar` annotations from `algebraic._better_abc` are processed at class
-# definition time and must not be stringified (PEP 563 lazy evaluation would break them).
-
 import copy
 import typing
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 from itertools import product
 
+from array_api_compat import array_namespace
 from bitarray import frozenbitarray
 from jaxtyping import Shaped
 from typing_extensions import Self
 
 import algebraic.ops as alge
-from algebraic._backend_registry import BackendClassRegistry
-from algebraic._better_abc import AbstractClassVar, AbstractVar, BetterABCMeta
 from algebraic.array import AlgebraicArray
-from algebraic.polynomials.dok.base import PolyDict, _make_poly_dict
+from algebraic.polynomials.dok import PolyDict
 from algebraic.spec import BoundedDistributiveLattice as Lattice
 from algebraic.types import Array, Backend, Scalar, is_array, is_scalar
 
 
-class MonomialBasis(metaclass=BetterABCMeta):
+@dataclass
+class MonomialBasis:
     """Dense, monomial basis decomposition of a multilinear polynomial.
 
     This class represents the coefficients of a multilinear polynomial as a tensor of
     shape ``(2,) * n``, where ``n`` is the maximum degree of the polynomial.
     """
 
-    coeffs: AbstractVar[AlgebraicArray]
-    algebra: AbstractVar[Lattice]
-    backend: AbstractClassVar[str | Backend]
-
-    @classmethod
-    def _get_backend(cls, backend: str | Backend | None) -> str | Backend:
-        """Resolve backend: use explicit arg, class default, or fall back to NumPy."""
-        if backend is not None:
-            return backend
-        try:
-            return cls.backend
-        except AttributeError:
-            return Backend.NUMPY
+    coeffs: AlgebraicArray
+    algebra: Lattice
+    backend: str | Backend = field(default=Backend.NUMPY, kw_only=True)
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -82,9 +69,8 @@ class MonomialBasis(metaclass=BetterABCMeta):
     ) -> AlgebraicArray:
         """Build a zero tensor with a single element set to ``value``."""
         coeffs = alge.zeros(shape, semiring=algebra, backend=backend)
-        xp = _get_xp(coeffs)
-        new_data = _set_at_index(coeffs.data, idx, value, xp)
-        return coeffs._wrap(new_data)
+        new_data = coeffs.at[idx].set(value)
+        return new_data
 
     @classmethod
     def variable(
@@ -93,7 +79,7 @@ class MonomialBasis(metaclass=BetterABCMeta):
         num_vars: int,
         algebra: Lattice,
         *,
-        backend: str | Backend | None = None,
+        backend: str | Backend = Backend.NUMPY,
     ) -> "MonomialBasis":
         r"""Create polynomial representing a single variable :math:`x_i`.
 
@@ -123,11 +109,10 @@ class MonomialBasis(metaclass=BetterABCMeta):
         (2, 2)
         """
         idx = tuple(1 if i == index else 0 for i in range(num_vars))
-        backend = cls._get_backend(backend)
-        return _make_monomial_basis(
+        return cls(
             cls._build_coeffs_with_one_set((2,) * num_vars, idx, algebra.one, algebra, backend),
             algebra,
-            backend,
+            backend=backend,
         )
 
     @classmethod
@@ -137,7 +122,7 @@ class MonomialBasis(metaclass=BetterABCMeta):
         num_vars: int,
         algebra: Lattice,
         *,
-        backend: str | Backend | None = None,
+        backend: str | Backend = Backend.NUMPY,
     ) -> "MonomialBasis":
         """Create a constant polynomial.
 
@@ -167,11 +152,10 @@ class MonomialBasis(metaclass=BetterABCMeta):
         array(True)
         """
         idx = (0,) * num_vars
-        backend = cls._get_backend(backend)
-        return _make_monomial_basis(
+        return cls(
             cls._build_coeffs_with_one_set((2,) * num_vars, idx, value, algebra, backend),
             algebra,
-            backend,
+            backend=backend,
         )
 
     @classmethod
@@ -180,7 +164,7 @@ class MonomialBasis(metaclass=BetterABCMeta):
         num_vars: int,
         algebra: Lattice,
         *,
-        backend: str | Backend | None = None,
+        backend: str | Backend,
     ) -> "MonomialBasis":
         """Create the zero polynomial."""
         return cls.constant(algebra.zero, num_vars, algebra, backend=backend)
@@ -191,7 +175,7 @@ class MonomialBasis(metaclass=BetterABCMeta):
         num_vars: int,
         algebra: Lattice,
         *,
-        backend: str | Backend | None = None,
+        backend: str | Backend,
     ) -> "MonomialBasis":
         """Create the one polynomial."""
         return cls.constant(algebra.one, num_vars, algebra, backend=backend)
@@ -202,14 +186,7 @@ class MonomialBasis(metaclass=BetterABCMeta):
         """Add two polynomials by adding the monomial coefficients for identical terms."""
         if is_scalar(other):
             other_coeffs = alge.zeros(self.shape, semiring=self.algebra, backend=self.backend)
-            other_coeffs = other_coeffs._wrap(
-                _set_at_index(
-                    other_coeffs.data,
-                    (0,) * self.num_vars,
-                    other,
-                    _get_xp(other_coeffs),
-                )
-            )
+            other_coeffs = other_coeffs.at[(0,) * self.num_vars].set(other)
             coeffs = self.coeffs + other_coeffs
         else:
             assert isinstance(other, MonomialBasis)
@@ -223,18 +200,11 @@ class MonomialBasis(metaclass=BetterABCMeta):
         """
         if is_scalar(other):
             other_coeffs = alge.zeros(self.shape, semiring=self.algebra, backend=self.backend)
-            other_coeffs = other_coeffs._wrap(
-                _set_at_index(
-                    other_coeffs.data,
-                    (0,) * self.num_vars,
-                    other,
-                    _get_xp(other_coeffs),
-                )
-            )
+            other_coeffs = other_coeffs.at[(0,) * self.num_vars].set(other)
             other_mb = self._replace_coeffs(other_coeffs)
         else:
             assert isinstance(other, MonomialBasis)
-            other_mb = other
+            other_mb = other  # type: ignore[assignment]
 
         # Scalar (0-var) case
         if self.num_vars == 0 or other_mb.num_vars == 0:
@@ -282,7 +252,7 @@ class MonomialBasis(metaclass=BetterABCMeta):
         """
         map_points: dict[int, Scalar] = {}
         if isinstance(points, Mapping):
-            map_points = dict(points)
+            map_points = dict(points)  # ty: ignore[no-matching-overload]
         else:
             assert is_array(points) or isinstance(points, AlgebraicArray)
             assert points.shape == (self.num_vars,)
@@ -339,7 +309,7 @@ class MonomialBasis(metaclass=BetterABCMeta):
         algebra = self.algebra
         backend = Backend(self.backend)
         zero = alge.zeros((), semiring=algebra, backend=backend)
-        xp = _get_xp(zero)
+        xp = array_namespace(zero.data)
 
         result: dict[frozenbitarray, AlgebraicArray] = {}
         for idx in product([0, 1], repeat=self.num_vars):
@@ -349,7 +319,7 @@ class MonomialBasis(metaclass=BetterABCMeta):
                 monomial = frozenbitarray(idx)
                 result[monomial] = coeff
 
-        return _make_poly_dict(algebra, self.num_vars, result, backend)
+        return PolyDict(algebra, self.num_vars, result, backend=backend)
 
     @classmethod
     def from_sparse(
@@ -387,34 +357,8 @@ class MonomialBasis(metaclass=BetterABCMeta):
         coeffs = alge.zeros((2,) * poly.num_vars, semiring=poly.algebra, backend=backend)
         for monomial, coeff in poly.items():
             idx = tuple(int(bit) for bit in monomial)
-            raw = coeff.data if isinstance(coeff, AlgebraicArray) else coeff
-            xp = _get_xp(coeffs)
-            coeffs = coeffs._wrap(_set_at_index(coeffs.data, idx, raw, xp))
-        return _make_monomial_basis(coeffs, poly.algebra, backend)
-
-
-# -- Module-level helpers ------------------------------------------------------
-
-
-def _get_xp(arr: AlgebraicArray) -> typing.Any:  # noqa: ANN401
-    """Get the array namespace for an AlgebraicArray."""
-    import array_api_compat
-
-    return array_api_compat.array_namespace(arr.data)
-
-
-def _set_at_index(
-    data: typing.Any,  # noqa: ANN401
-    idx: tuple[int, ...],
-    value: typing.Any,  # noqa: ANN401
-    xp: typing.Any,  # noqa: ANN401
-) -> typing.Any:  # noqa: ANN401
-    """Set a value at an index, handling JAX immutability and mutable backends."""
-    from algebraic.array._index_update import _set_at_index as _set_at_index_impl
-
-    if isinstance(value, AlgebraicArray):
-        value = value.data
-    return _set_at_index_impl(data, idx, value)
+            coeffs = coeffs.at[idx].set(coeff)
+        return cls(coeffs, poly.algebra, backend=backend)
 
 
 def _multiply_recursive(lhs: AlgebraicArray, rhs: AlgebraicArray) -> AlgebraicArray:
@@ -447,28 +391,3 @@ def _multiply_recursive(lhs: AlgebraicArray, rhs: AlgebraicArray) -> AlgebraicAr
     ret = alge.stack([ret_0, ret_1], axis=0)
     assert ret.shape == return_shape
     return ret
-
-
-_monomial_basis_registry = BackendClassRegistry("MonomialBasis")
-_monomial_basis_registry.register(
-    Backend.JAX,
-    lambda: __import__("algebraic.polynomials.monomial_basis._jax", fromlist=["JaxMonomialBasis"]).JaxMonomialBasis,
-)
-_monomial_basis_registry.register(
-    Backend.TORCH,
-    lambda: __import__("algebraic.polynomials.monomial_basis._torch", fromlist=["TorchMonomialBasis"]).TorchMonomialBasis,
-)
-_monomial_basis_registry.register(
-    Backend.NUMPY,
-    lambda: __import__("algebraic.polynomials.monomial_basis._numpy", fromlist=["NumpyMonomialBasis"]).NumpyMonomialBasis,
-)
-
-
-def _make_monomial_basis(
-    coeffs: AlgebraicArray,
-    algebra: Lattice,
-    backend: str | Backend,
-) -> MonomialBasis:
-    """Dispatch to the correct backend subclass."""
-    cls = _monomial_basis_registry[backend]
-    return cls(coeffs, algebra)

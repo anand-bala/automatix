@@ -12,7 +12,7 @@ from algebraic import AlgebraicArray, BooleanAlgebra, DeMorganAlgebra
 from algebraic.polynomials import PolyDict as SparsePolynomial
 from algebraic.polynomials import RankDecomposition
 from algebraic.polynomials.dok import PolyDict
-from algebraic.types import Array
+from algebraic.types import Array, Backend
 from algebraic.utils.testing import assert_close, assert_equal, make_array
 from bitarray import frozenbitarray
 from hypothesis import given, settings
@@ -37,27 +37,31 @@ class TestRankDecompositionConversion:
         """Test creating a single variable."""
         num_vars = 3
 
+        xp = Backend(backend).get_array_namespace()
+
         x_0 = RankDecomposition.variable(0, num_vars, bool_algebra, backend=backend)
 
         # Evaluate at a point where x_0 = bool_algebra.one
-        result = x_0.evaluate((dict(enumerate([bool_algebra.one, bool_algebra.zero, bool_algebra.zero]))))
+        result = x_0.evaluate((xp.asarray([bool_algebra.one, bool_algebra.zero, bool_algebra.zero])))
         assert_equal(result.factors[0, 0, 0].data, (bool_algebra.one))
 
         # Evaluate at a point where x_0 = bool_algebra.zero
-        result = x_0.evaluate(dict(enumerate([bool_algebra.zero, bool_algebra.one, bool_algebra.one])))
+        result = x_0.evaluate(xp.asarray([bool_algebra.zero, bool_algebra.one, bool_algebra.one]))
         assert_equal(result.factors[0, 0, 0].data, (bool_algebra.zero))
 
     def test_constant_creation(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
         """Test creating a constant."""
         num_vars = 3
 
+        xp = Backend(backend).get_array_namespace()
+
         c = RankDecomposition.constant((bool_algebra.one), num_vars, bool_algebra, backend=backend)
 
         # Should evaluate to bool_algebra.one at any point
-        result = c.evaluate(dict(enumerate(([bool_algebra.one, bool_algebra.one, bool_algebra.one]))))
+        result = c.evaluate(xp.asarray([bool_algebra.one, bool_algebra.one, bool_algebra.one]))
         assert_equal(result.factors[0, 0, 0].data, (bool_algebra.one))
 
-        result = c.evaluate(dict(enumerate([bool_algebra.zero, bool_algebra.zero, bool_algebra.zero])))
+        result = c.evaluate(xp.asarray([bool_algebra.zero, bool_algebra.zero, bool_algebra.zero]))
         assert_equal(result.factors[0, 0, 0].data, (bool_algebra.one))
 
 
@@ -67,6 +71,7 @@ class TestRankDecompositionAddition:
     def test_add_variables(self, maxmin_algebra: DeMorganAlgebra, backend: str) -> None:
         """Test adding two variables."""
         num_vars = 3
+        xp = Backend(backend).get_array_namespace()
 
         # Create in both representations
         x_0_sparse = PolyDict.variable(0, num_vars, algebra=maxmin_algebra, backend=backend)
@@ -79,7 +84,7 @@ class TestRankDecompositionAddition:
         sum_rank = x_0_rank + x_1_rank
 
         # Test by evaluation at a point
-        point = dict(enumerate([2.0, 3.0, 4.0]))
+        point = xp.asarray([2.0, 3.0, 4.0])
 
         result_sparse = list(sum_sparse.evaluate(point).values())[0]
         result_rank = sum_rank.evaluate(point)
@@ -140,6 +145,7 @@ class TestRankDecompositionMultiplication:
     def test_multiply_variables_bool(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
         """Test multiplying two variables in Boolean algebra."""
         num_vars = 2
+        xp = Backend(backend).get_array_namespace()
 
         # Create in both representations
         x_0_sparse = PolyDict.variable(0, num_vars, algebra=bool_algebra, backend=backend)
@@ -153,10 +159,10 @@ class TestRankDecompositionMultiplication:
 
         # Test truth table
         test_points = [
-            dict(enumerate([bool_algebra.one, bool_algebra.one])),
-            dict(enumerate([bool_algebra.one, bool_algebra.zero])),
-            dict(enumerate([bool_algebra.zero, bool_algebra.one])),
-            dict(enumerate([bool_algebra.zero, bool_algebra.zero])),
+            xp.asarray([bool_algebra.one, bool_algebra.one]),
+            xp.asarray([bool_algebra.one, bool_algebra.zero]),
+            xp.asarray([bool_algebra.zero, bool_algebra.one]),
+            xp.asarray([bool_algebra.zero, bool_algebra.zero]),
         ]
 
         for point in test_points:
@@ -169,6 +175,7 @@ class TestRankDecompositionMultiplication:
     def test_multiply_with_constant(self, maxmin_algebra: DeMorganAlgebra, backend: str) -> None:
         """Test multiplication with constant."""
         num_vars = 2
+        xp = Backend(backend).get_array_namespace()
 
         # Create variable and constant
         x_0_sparse = PolyDict.variable(0, num_vars, algebra=maxmin_algebra, backend=backend)
@@ -182,7 +189,7 @@ class TestRankDecompositionMultiplication:
         prod_rank = x_0_rank * c_rank
 
         # Test by evaluation
-        test_point = dict(enumerate([3.0, 2.0]))
+        test_point = xp.asarray([3.0, 2.0])
 
         result_sparse = list(prod_sparse.evaluate(test_point).values())[0]
         result_rank = prod_rank.evaluate(test_point)
@@ -198,6 +205,7 @@ class TestRankDecompositionMultiplication:
         rank-1 components with all-zero factors were not being removed.
         """
         num_vars = 3
+        xp = Backend(backend).get_array_namespace()
 
         # Create const(1) and const(0)
         const_one = RankDecomposition.constant((bool_algebra.one), num_vars, bool_algebra, backend=backend)
@@ -208,7 +216,7 @@ class TestRankDecompositionMultiplication:
 
         # Result should be zero polynomial
         # Check by evaluating at any point
-        result = product.evaluate(dict(enumerate([bool_algebra.one, bool_algebra.one, bool_algebra.zero])))
+        result = product.evaluate(xp.asarray([bool_algebra.one, bool_algebra.one, bool_algebra.zero]))
         assert_equal(result.factors[0, 0, 0].data, (bool_algebra.zero))
 
         # Also test that factors are properly zero
@@ -217,6 +225,7 @@ class TestRankDecompositionMultiplication:
     def test_multiply_zero_with_variable(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
         """Test multiplying zero with a variable (regression test)."""
         num_vars = 3
+        xp = Backend(backend).get_array_namespace()
 
         zero = RankDecomposition.zero(num_vars, bool_algebra, backend=backend)
         x_0 = RankDecomposition.variable(0, num_vars, bool_algebra, backend=backend)
@@ -225,7 +234,7 @@ class TestRankDecompositionMultiplication:
         result = zero * x_0
 
         # Should evaluate to bool_algebra.zero at any point
-        test_point = dict(enumerate([bool_algebra.one, bool_algebra.one, bool_algebra.zero]))
+        test_point = xp.asarray([bool_algebra.one, bool_algebra.one, bool_algebra.zero])
         eval_result = result.evaluate(test_point)
 
         assert_equal(eval_result.factors[0, 0, 0].data, (bool_algebra.zero))
@@ -335,7 +344,7 @@ class TestRankDecompositionCompose:
 
         # Compose x_0 with x_1 (replace x_0 with x_1)
         result_sparse = x_0_sparse.compose({0: x_1_sparse})
-        result_rank = x_0_rank.compose({0: x_1_rank})
+        result_rank = x_0_rank.compose([x_1_rank, x_1_rank])
 
         # Test by evaluation
         test_points = [
@@ -365,11 +374,11 @@ class TestRankDecompositionCompose:
 
         # Create constant replacements
         const_one = RankDecomposition.constant((bool_algebra.one), num_vars, bool_algebra, backend=backend)
-        replacements = {
-            0: const_one,
-            1: const_one,
-            2: const_one,
-        }
+        replacements = [
+            const_one,
+            const_one,
+            const_one,
+        ]
 
         # Compose zero polynomial with constants
         result = zero.compose(replacements)
@@ -385,11 +394,12 @@ class TestRankDecompositionCompose:
         # Create x_0 * x_1
         x_0 = RankDecomposition.variable(0, num_vars, bool_algebra, backend=backend)
         x_1 = RankDecomposition.variable(1, num_vars, bool_algebra, backend=backend)
+        x_2 = RankDecomposition.variable(2, num_vars, bool_algebra, backend=backend)
         product = x_0 * x_1
 
-        # Compose: replace x_1 with zero
+        # Compose: replace x_1 with zero, keep x_0 and x_2 as-is
         zero = RankDecomposition.zero(num_vars, bool_algebra, backend=backend)
-        result = product.compose({1: zero})
+        result = product.compose([x_0, zero, x_2])
 
         # Result should be zero (since x_0 * 0 = 0)
         eval_result = result.evaluate(make_array([bool_algebra.one, bool_algebra.one, bool_algebra.zero], backend))
@@ -442,12 +452,12 @@ class TestRankDecompositionJAXTransformations:
 
         # Create JIT-compiled evaluation function
         @jax.jit
-        def eval_fn(point: Shaped[Array, "2"]) -> RankDecomposition:
-            return RankDecomposition.evaluate(p, point)
+        def eval_fn(point: Shaped[Array, "2"]) -> Array:
+            return RankDecomposition.evaluate(p, point).factors[0, 0, 0].data
 
         result = eval_fn(make_array([2.0, 3.0], jax_backend))
         # In max-min: mul is min, so min(2.0, 3.0) = 2.0
-        assert_close(result.factors[0, 0, 0].data, (2.0))
+        assert_close(result, (2.0))
 
     def test_vmap_evaluation(self, maxmin_algebra: DeMorganAlgebra, jax_backend: str) -> None:
         """Test batched evaluation using vmap."""
@@ -460,7 +470,7 @@ class TestRankDecompositionJAXTransformations:
         points = make_array([[1.0, 0.0], [2.0, 0.0], [3.0, 0.0]], jax_backend)
 
         # Use vmap to evaluate at all points
-        results = jax.vmap(lambda pt: x_0.evaluate(pt).factors[0, 0, 0])(points)
+        results = jax.vmap(lambda pt: x_0.evaluate(pt).factors[0, 0, 0].data)(points)
 
         expected = make_array([1.0, 2.0, 3.0], jax_backend)
         assert_close(results, expected)
