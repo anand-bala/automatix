@@ -12,8 +12,8 @@ JAX-specific
    :members:
    :show-inheritance:
 
-algebraic.utils.testing
------------------------
+Testing Utilities
+-----------------
 
 .. automodule:: algebraic.utils.testing
    :members:

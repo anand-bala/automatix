@@ -5,8 +5,12 @@ algebraic.polynomials.monomial\_basis package
    :members:
    :show-inheritance:
 
-Submodules
-----------
+algebraic.polynomials.monomial\_basis.base module
+-------------------------------------------------
+
+.. automodule:: algebraic.polynomials.monomial_basis.base
+   :members:
+   :show-inheritance:
 
 algebraic.polynomials.monomial\_basis.\_jax module
 --------------------------------------------------
@@ -29,9 +33,3 @@ algebraic.polynomials.monomial\_basis.\_torch module
    :members:
    :show-inheritance:
 
-algebraic.polynomials.monomial\_basis.base module
--------------------------------------------------
-
-.. automodule:: algebraic.polynomials.monomial_basis.base
-   :members:
-   :show-inheritance:

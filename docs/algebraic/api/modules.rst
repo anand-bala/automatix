@@ -1,7 +1,15 @@
-algebraic
-=========
+``algebraic`` API Reference
+===========================
+
+.. automodule:: algebraic
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 3
 
-   algebraic
+   algebraic.spec
+   algebraic.array
+   algebraic.ops
+   algebraic.types
+   algebraic.kernels
+   algebraic.polynomials
+   algebraic.utils

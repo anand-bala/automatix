@@ -1,5 +1,10 @@
-Specific Array Implementations
+Algebraic Array Implementation
 ==============================
+
+.. autoclass:: algebraic.AlgebraicArray
+   :members:
+   :show-inheritance:
+
 
 algebraic.array.\_jax module
 ----------------------------

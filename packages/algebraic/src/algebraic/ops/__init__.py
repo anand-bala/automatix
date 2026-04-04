@@ -1,14 +1,16 @@
-"""Backend-agnostic array operations for `AlgebraicArray`.
+"""Backend-agnostic array operations for :class:`AlgebraicArray`.
 
-This package provides two categories of operations:
+This package provides three categories of operations:
 
-* **Semiring ops** (`algebraic.ops._semiring_ops`): operations that use
-  the semiring's `add` / `mul` in place of standard arithmetic
-  (`sum`, `prod`, `matmul`, `cumulative_sum`, etc.).
+- **Creation ops**: operations to create :class:`AlgebraicArray`
 
-* **Pass-through ops** (`algebraic.ops._passthrough`): operations that
-  delegate to the underlying data array via `array_api_compat` and
-  re-wrap the result (`reshape`, `stack`, `where`, etc.).
+- **Semiring ops**: operations that use
+  the semiring's ``add`` / ``mul`` in place of standard arithmetic
+  (``sum``, ``prod``, ``matmul``, ``cumulative_sum``, etc.).
+
+- **Pass-through ops**: operations that
+  delegate to the underlying data array via ``array_api_compat`` and
+  re-wrap the result (``reshape``, ``stack``, ``where``, etc.).
 """
 
 from algebraic.ops._creation import array as array

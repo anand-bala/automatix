@@ -5,8 +5,12 @@ algebraic.polynomials.dok package
    :members:
    :show-inheritance:
 
-Submodules
-----------
+algebraic.polynomials.dok.base module
+-------------------------------------
+
+.. automodule:: algebraic.polynomials.dok.base
+   :members:
+   :show-inheritance:
 
 algebraic.polynomials.dok.\_jax module
 --------------------------------------
@@ -29,9 +33,3 @@ algebraic.polynomials.dok.\_torch module
    :members:
    :show-inheritance:
 
-algebraic.polynomials.dok.base module
--------------------------------------
-
-.. automodule:: algebraic.polynomials.dok.base
-   :members:
-   :show-inheritance:

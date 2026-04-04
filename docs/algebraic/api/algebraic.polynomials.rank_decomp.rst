@@ -5,8 +5,13 @@ algebraic.polynomials.rank\_decomp package
    :members:
    :show-inheritance:
 
-Submodules
-----------
+algebraic.polynomials.rank\_decomp.base module
+----------------------------------------------
+
+.. automodule:: algebraic.polynomials.rank_decomp.base
+   :members:
+   :show-inheritance:
+
 
 algebraic.polynomials.rank\_decomp.\_jax module
 -----------------------------------------------
@@ -29,9 +34,3 @@ algebraic.polynomials.rank\_decomp.\_torch module
    :members:
    :show-inheritance:
 
-algebraic.polynomials.rank\_decomp.base module
-----------------------------------------------
-
-.. automodule:: algebraic.polynomials.rank_decomp.base
-   :members:
-   :show-inheritance:

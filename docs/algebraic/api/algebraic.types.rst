@@ -1,10 +1,17 @@
-Helper Types
-============
+Helper Types and Kernels
+========================
 
-algebraic.types module
-----------------------
+``algebraic.types`` module
+--------------------------
 
 .. automodule:: algebraic.types
+   :members:
+   :show-inheritance:
+
+``algebraic.kernels`` module
+----------------------------
+
+.. automodule:: algebraic.kernels
    :members:
    :show-inheritance:
 
