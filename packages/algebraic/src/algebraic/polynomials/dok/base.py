@@ -16,6 +16,7 @@ from jaxtyping import Shaped
 from typing_extensions import Self
 
 import algebraic.ops as alge
+from algebraic._backend_registry import BackendClassRegistry
 from algebraic._better_abc import AbstractClassVar, AbstractVar, BetterABCMeta
 from algebraic.array import AlgebraicArray
 from algebraic.spec import BoundedDistributiveLattice as Lattice
@@ -145,10 +146,14 @@ class PolyDict(metaclass=BetterABCMeta):
         coefficient = alge.ones((), semiring=algebra, backend=backend)
         return _make_poly_dict(algebra, num_vars, {frozenbitarray(monomial): coefficient}, backend)
 
-    def _wrap(self, data: Mapping[frozenbitarray, AlgebraicArray]) -> Self:
+    def _replace_attr(self, name: str, value: object) -> Self:
+        """Create a new instance with one attribute changed (backend-specific)."""
         clone = copy.copy(self)
-        object.__setattr__(clone, "data", data)
+        object.__setattr__(clone, name, value)
         return clone
+
+    def _wrap(self, data: Mapping[frozenbitarray, AlgebraicArray]) -> Self:
+        return self._replace_attr("data", data)
 
     def __add__(self, other: Self | Scalar) -> Self:
         # This will essentially merge the two polynomials by adding the monomial coefficients where they are common, or using the additive identity where one isn't available.
@@ -287,20 +292,23 @@ class PolyDict(metaclass=BetterABCMeta):
         return len(self) == 0 or (len(self) == 1 and self.get(frozenbitarray(self.num_vars)) is not None)
 
 
+_poly_dict_registry = BackendClassRegistry("PolyDict")
+_poly_dict_registry.register(
+    Backend.JAX,
+    lambda: __import__("algebraic.polynomials.dok._jax", fromlist=["JaxPolyDict"]).JaxPolyDict,
+)
+_poly_dict_registry.register(
+    Backend.TORCH,
+    lambda: __import__("algebraic.polynomials.dok._torch", fromlist=["TorchPolyDict"]).TorchPolyDict,
+)
+_poly_dict_registry.register(
+    Backend.NUMPY,
+    lambda: __import__("algebraic.polynomials.dok._numpy", fromlist=["NumpyPolyDict"]).NumpyPolyDict,
+)
+
+
 def _make_poly_dict(
     algebra: Lattice, num_vars: int, data: Mapping[frozenbitarray, AlgebraicArray], backend: str | Backend
 ) -> PolyDict:
-    if backend == Backend.JAX:
-        from ._jax import JaxAlgebraicArray, JaxPolyDict
-
-        return JaxPolyDict(algebra, num_vars, typing.cast(Mapping[frozenbitarray, JaxAlgebraicArray], data))
-    if backend == Backend.TORCH:
-        from ._torch import TorchAlgebraicArray, TorchPolyDict
-
-        return TorchPolyDict(algebra, num_vars, typing.cast(Mapping[frozenbitarray, TorchAlgebraicArray], data))
-    if backend == Backend.NUMPY:
-        from ._numpy import NumpyAlgebraicArray, NumpyPolyDict
-
-        return NumpyPolyDict(algebra, num_vars, typing.cast(Mapping[frozenbitarray, NumpyAlgebraicArray], data))
-
-    raise ValueError("Unsupported backend")
+    cls = _poly_dict_registry[backend]
+    return cls(algebra, num_vars, data)

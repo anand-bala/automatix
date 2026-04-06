@@ -33,10 +33,7 @@ def jit(
     fun: Callable[_FnParams, _ReturnType] | None = None,
     *,
     backend: str | Backend,
-) -> (
-    Callable[_FnParams, _ReturnType]
-    | Callable[[Callable[_FnParams, _ReturnType]], Callable[_FnParams, _ReturnType]]
-):
+) -> Callable[_FnParams, _ReturnType] | Callable[[Callable[_FnParams, _ReturnType]], Callable[_FnParams, _ReturnType]]:
     """JIT compilation with backend selection.
 
     Parameters
@@ -84,10 +81,7 @@ def vmap(
     out_axes: int | None | Sequence[int | None] = 0,
     axis_name: Hashable | None = None,
     axis_size: int | None = None,
-) -> (
-    Callable[_FnParams, _ReturnType]
-    | Callable[[Callable[_FnParams, _ReturnType]], Callable[_FnParams, _ReturnType]]
-):
+) -> Callable[_FnParams, _ReturnType] | Callable[[Callable[_FnParams, _ReturnType]], Callable[_FnParams, _ReturnType]]:
     """Vectorizing map with backend selection.
 
     Parameters

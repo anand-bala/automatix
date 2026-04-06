@@ -46,13 +46,17 @@ class AlgebraicArray(metaclass=ABCMeta):
     _vdot: VdotFn | None = None
     _matmul: MatmulFn | None = None
 
+    def _replace_attr(self, name: str, value: object) -> Self:
+        """Create a new instance with one attribute changed (backend-specific)."""
+        clone = copy.copy(self)
+        object.__setattr__(clone, name, value)
+        return clone
+
     def _wrap(self, data: Array | Number) -> Self:
         """Create a new instance with the given data, preserving all other attributes."""
-        clone = copy.copy(self)
         array_ns = array_api_compat.array_namespace(self.data)
         data = typing.cast(Array, array_ns.asarray(data))
-        object.__setattr__(clone, "data", data)
-        return clone
+        return self._replace_attr("data", data)
 
     def __add__(self, other: Self | Scalar) -> Self:
         other_data = other.data if isinstance(other, AlgebraicArray) else other

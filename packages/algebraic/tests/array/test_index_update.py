@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 
+import algebraic
 import numpy as np
 import pytest
-
-import algebraic
 from algebraic import AlgebraicArray, Ring
 from algebraic.semirings import counting_semiring, tropical_semiring
 

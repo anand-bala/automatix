@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-import functools
 import inspect
 from collections.abc import Callable
 from typing import (

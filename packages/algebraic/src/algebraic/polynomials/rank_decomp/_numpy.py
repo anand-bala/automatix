@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typing
 
+from algebraic._backend_mixins import DataclassReplaceMixin
 from algebraic._better_abc import better_dataclass as dataclass
 from algebraic.array._numpy import NumpyAlgebraicArray
 from algebraic.polynomials.rank_decomp.base import RankDecomposition
@@ -12,7 +13,7 @@ from algebraic.types import Backend
 
 
 @dataclass
-class NumpyRankDecomposition(RankDecomposition):
+class NumpyRankDecomposition(DataclassReplaceMixin, RankDecomposition):
     """NumPy backend for ``RankDecomposition``."""
 
     factors: NumpyAlgebraicArray

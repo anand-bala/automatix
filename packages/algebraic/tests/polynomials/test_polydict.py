@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from algebraic.polynomials.dok import PolyDict
 from algebraic.spec import BooleanAlgebra, DeMorganAlgebra
-from algebraic.utils.testing import assert_close, assert_equal, make_array
+from algebraic.utils.testing import assert_close, assert_equal
 from bitarray import frozenbitarray
 
 

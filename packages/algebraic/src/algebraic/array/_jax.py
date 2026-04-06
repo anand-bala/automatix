@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import math
-import typing
 from collections.abc import Sequence
 
 import equinox as eqx
@@ -11,6 +9,8 @@ import jax
 import jax.numpy as jnp
 from typing_extensions import Self, override
 
+from algebraic._backend_mixins import EqxReplaceMixin
+from algebraic.array._dot_plan import DotPlan
 from algebraic.array.base import AlgebraicArray
 from algebraic.spec import Semiring
 from algebraic.types import Array, MatmulFn, Number, VdotFn
@@ -18,7 +18,7 @@ from algebraic.utils import dispatch, normalize_axes
 from algebraic.utils.jax import EqxMeta
 
 
-class JaxAlgebraicArray(eqx.Module, AlgebraicArray, metaclass=EqxMeta):
+class JaxAlgebraicArray(eqx.Module, EqxReplaceMixin, AlgebraicArray, metaclass=EqxMeta):
     """JAX backend implementation of `AlgebraicArray`.
 
     Uses `equinox.Module` for JAX pytree compatibility and
@@ -33,7 +33,7 @@ class JaxAlgebraicArray(eqx.Module, AlgebraicArray, metaclass=EqxMeta):
     @override
     def _wrap(self, data: Array | Number) -> Self:
         data = jnp.asarray(data)
-        return typing.cast(Self, eqx.tree_at(lambda t: t.data, self, data))
+        return self._replace_attr("data", data)
 
     @override
     def dot_general(
@@ -72,69 +72,31 @@ class JaxAlgebraicArray(eqx.Module, AlgebraicArray, metaclass=EqxMeta):
             return self._wrap(self._matmul(self.data, other.data))
 
         # General case
-        lhs_data = self.data
-        rhs_data = other.data
+        plan = DotPlan.plan(self.data.shape, other.data.shape, dimension_numbers)
         semiring = self.semiring
 
-        lhs_ndim = lhs_data.ndim
-        rhs_ndim = rhs_data.ndim
+        lhs_transposed = jnp.transpose(self.data, plan.lhs_perm)
+        rhs_transposed = jnp.transpose(other.data, plan.rhs_perm)
 
-        lhs_free = tuple(i for i in range(lhs_ndim) if i not in lhs_contract and i not in lhs_batch)
-        rhs_free = tuple(i for i in range(rhs_ndim) if i not in rhs_contract and i not in rhs_batch)
+        zero_typed = jnp.asarray(semiring.zero, dtype=self.data.dtype)
 
-        lhs_perm = lhs_batch + lhs_free + lhs_contract
-        rhs_perm = rhs_batch + rhs_free + rhs_contract
+        if plan.n_batch > 0:
+            lhs_reshaped = lhs_transposed.reshape(plan.batch_size, plan.lhs_free_size, plan.contract_size)
+            rhs_reshaped = rhs_transposed.reshape(plan.batch_size, plan.rhs_free_size, plan.contract_size)
 
-        lhs_transposed = jnp.transpose(lhs_data, lhs_perm)
-        rhs_transposed = jnp.transpose(rhs_data, rhs_perm)
-
-        n_batch = len(lhs_batch)
-        n_lhs_free = len(lhs_free)
-        n_rhs_free = len(rhs_free)
-
-        batch_shape = tuple(lhs_transposed.shape[i] for i in range(n_batch))
-        lhs_free_shape = tuple(lhs_transposed.shape[i] for i in range(n_batch, n_batch + n_lhs_free))
-        rhs_free_shape = tuple(rhs_transposed.shape[i] for i in range(n_batch, n_batch + n_rhs_free))
-
-        batch_size = math.prod(batch_shape)
-        lhs_free_size = math.prod(lhs_free_shape)
-        rhs_free_size = math.prod(rhs_free_shape)
-        contract_size = math.prod(tuple(lhs_transposed.shape[i] for i in range(n_batch + n_lhs_free, lhs_transposed.ndim)))
-
-        zero_typed = jnp.asarray(semiring.zero, dtype=lhs_data.dtype)
-
-        if n_batch > 0:
-            lhs_reshaped = lhs_transposed.reshape(batch_size, lhs_free_size, contract_size)
-            rhs_reshaped = rhs_transposed.reshape(batch_size, rhs_free_size, contract_size)
-
-            lhs_expanded = lhs_reshaped[:, :, None, :]
-            rhs_expanded = rhs_reshaped[:, None, :, :]
-
-            products = semiring.mul(lhs_expanded, rhs_expanded)
-
+            products = semiring.mul(lhs_reshaped[:, :, None, :], rhs_reshaped[:, None, :, :])
             result = jax.lax.reduce(products, zero_typed, semiring.add, (3,))
-
-            output_shape = batch_shape + lhs_free_shape + rhs_free_shape
-            if output_shape:
-                result = result.reshape(output_shape)
-            else:
-                result = result.squeeze()
         else:
-            lhs_reshaped = lhs_transposed.reshape(lhs_free_size, contract_size)
-            rhs_reshaped = rhs_transposed.reshape(rhs_free_size, contract_size)
+            lhs_reshaped = lhs_transposed.reshape(plan.lhs_free_size, plan.contract_size)
+            rhs_reshaped = rhs_transposed.reshape(plan.rhs_free_size, plan.contract_size)
 
-            lhs_expanded = lhs_reshaped[:, None, :]
-            rhs_expanded = rhs_reshaped[None, :, :]
-
-            products = semiring.mul(lhs_expanded, rhs_expanded)
-
+            products = semiring.mul(lhs_reshaped[:, None, :], rhs_reshaped[None, :, :])
             result = jax.lax.reduce(products, zero_typed, semiring.add, (2,))
 
-            output_shape = lhs_free_shape + rhs_free_shape
-            if output_shape:
-                result = result.reshape(output_shape)
-            else:
-                result = result.squeeze()
+        if plan.output_shape:
+            result = result.reshape(plan.output_shape)
+        else:
+            result = result.squeeze()
 
         return self._wrap(result)
 

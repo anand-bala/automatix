@@ -5,10 +5,9 @@
 
 from __future__ import annotations
 
-import numpy as np
-
 import algebraic
 import hypothesis
+import numpy as np
 import pytest
 from algebraic import AlgebraicArray, BooleanAlgebra, DeMorganAlgebra
 from algebraic.polynomials.dok import PolyDict
@@ -17,7 +16,6 @@ from algebraic.utils.testing import assert_allclose, assert_close, assert_equal,
 from bitarray import frozenbitarray
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from jaxtyping import Array
 
 
 class TestMonomialBasisConversion:
@@ -120,7 +118,9 @@ class TestMonomialBasisAddition:
         # Create two random simple polynomials
         x_0 = PolyDict.variable(0, num_vars, algebra=algebra, backend=backend)
         x_1 = (
-            PolyDict.variable(1, num_vars, algebra=algebra, backend=backend) if degree > 1 else PolyDict.variable(0, num_vars, algebra=algebra, backend=backend)
+            PolyDict.variable(1, num_vars, algebra=algebra, backend=backend)
+            if degree > 1
+            else PolyDict.variable(0, num_vars, algebra=algebra, backend=backend)
         )
 
         p1_sparse = x_0 + PolyDict.constant(2.0, num_vars, algebra=algebra, backend=backend)
@@ -222,7 +222,9 @@ class TestMonomialBasisMultiplication:
         # Create two simple polynomials
         x_0 = PolyDict.variable(0, num_vars, algebra=algebra, backend=backend)
         x_1 = (
-            PolyDict.variable(1, num_vars, algebra=algebra, backend=backend) if degree > 1 else PolyDict.variable(0, num_vars, algebra=algebra, backend=backend)
+            PolyDict.variable(1, num_vars, algebra=algebra, backend=backend)
+            if degree > 1
+            else PolyDict.variable(0, num_vars, algebra=algebra, backend=backend)
         )
 
         # Convert to monomial

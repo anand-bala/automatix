@@ -422,7 +422,7 @@ def _execute_binary_einsum_step(
     rhs, rhs_sub = _collapse_repeated_labels(rhs, rhs_sub)
 
     out_set = set(out_sub)
-    lhs_labels = set(lhs_sub)
+    # lhs_labels = set(lhs_sub)
     rhs_labels = set(rhs_sub)
 
     # Pre-reduce labels that appear in only one operand and are absent from output.

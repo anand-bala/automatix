@@ -7,6 +7,7 @@ from collections.abc import Mapping
 
 from bitarray import frozenbitarray
 
+from algebraic._backend_mixins import DataclassReplaceMixin
 from algebraic._better_abc import better_dataclass as dataclass
 from algebraic.array._numpy import NumpyAlgebraicArray
 from algebraic.polynomials.dok.base import PolyDict
@@ -15,7 +16,7 @@ from algebraic.types import Backend
 
 
 @dataclass
-class NumpyPolyDict(PolyDict):
+class NumpyPolyDict(DataclassReplaceMixin, PolyDict):
     algebra: Lattice
     num_vars: int
     data: Mapping[frozenbitarray, NumpyAlgebraicArray]

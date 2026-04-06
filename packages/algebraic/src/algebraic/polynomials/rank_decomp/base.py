@@ -16,11 +16,34 @@ from bitarray import frozenbitarray
 from typing_extensions import Self
 
 import algebraic.ops as alge
+from algebraic._backend_registry import BackendClassRegistry
 from algebraic._better_abc import AbstractClassVar, AbstractVar, BetterABCMeta
 from algebraic.array import AlgebraicArray
 from algebraic.polynomials.dok.base import PolyDict, _make_poly_dict
 from algebraic.spec import BoundedDistributiveLattice as Lattice
 from algebraic.types import Array, Backend, Number, Scalar, is_scalar
+
+
+def _make_registry(name: str) -> BackendClassRegistry:
+    """Create a registry with lazy imports for the three backends."""
+    registry = BackendClassRegistry(name)
+    registry.register(
+        Backend.JAX,
+        lambda: __import__("algebraic.polynomials.rank_decomp._jax", fromlist=["JaxRankDecomposition"]).JaxRankDecomposition,
+    )
+    registry.register(
+        Backend.TORCH,
+        lambda: (
+            __import__("algebraic.polynomials.rank_decomp._torch", fromlist=["TorchRankDecomposition"]).TorchRankDecomposition
+        ),
+    )
+    registry.register(
+        Backend.NUMPY,
+        lambda: (
+            __import__("algebraic.polynomials.rank_decomp._numpy", fromlist=["NumpyRankDecomposition"]).NumpyRankDecomposition
+        ),
+    )
+    return registry
 
 
 class RankDecomposition(metaclass=BetterABCMeta):
@@ -44,6 +67,12 @@ class RankDecomposition(metaclass=BetterABCMeta):
     """Maximum degree for replacement polynomials in compose (None = max_degree)"""
     backend: AbstractClassVar[str | Backend]
     """The specific backend from the derived class"""
+
+    def _replace_attr(self, name: str, value: object) -> Self:
+        """Create a new instance with one attribute changed (backend-specific)."""
+        clone = copy.copy(self)
+        object.__setattr__(clone, name, value)
+        return clone
 
     @classmethod
     def _get_backend(cls, backend: str | Backend | None) -> str | Backend:
@@ -69,9 +98,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
 
     def _replace_factors(self, factors: AlgebraicArray) -> Self:
         """Return a new instance with the given factors, preserving other attrs."""
-        clone = copy.copy(self)
-        object.__setattr__(clone, "factors", factors)
-        return clone
+        return self._replace_attr("factors", factors)
 
     # -- Factory methods -------------------------------------------------------
 
@@ -122,8 +149,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
         """
         backend = cls._get_backend(backend)
         factors = alge.zeros((1, 1, num_vars + 1), semiring=algebra, backend=backend)
-        xp = _get_xp(factors)
-        factors = factors._wrap(_set_at_index(factors.data, (0, 0, i + 1), algebra.one, xp))
+        factors = factors._wrap(_set_at_index(factors.data, (0, 0, i + 1), algebra.one))
 
         return typing.cast(
             Self,
@@ -185,8 +211,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
         """
         backend = cls._get_backend(backend)
         factors = alge.zeros((1, 1, num_vars + 1), semiring=algebra, backend=backend)
-        xp = _get_xp(factors)
-        factors = factors._wrap(_set_at_index(factors.data, (0, 0, 0), value, xp))
+        factors = factors._wrap(_set_at_index(factors.data, (0, 0, 0), value))
 
         return _make_rank_decomposition(
             factors,
@@ -196,7 +221,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
             max_replacement_degree,
             num_vars,
             backend,
-        )
+        )  # ty:ignore[invalid-return-type]
 
     @classmethod
     def zero(
@@ -263,11 +288,10 @@ class RankDecomposition(metaclass=BetterABCMeta):
         extra_dims = target_degree - d
 
         padding = alge.zeros((rank, extra_dims, n_plus_1), semiring=self.algebra, backend=self.backend)
-        xp = _get_xp(padding)
         # Set constant term = 1 for all padded degree dims
         for r in range(rank):
             for k in range(extra_dims):
-                padding = padding._wrap(_set_at_index(padding.data, (r, k, 0), self.algebra.one, xp))
+                padding = padding._wrap(_set_at_index(padding.data, (r, k, 0), self.algebra.one))
 
         new_factors = alge.concat([self.factors, padding], axis=1)
         return self._replace_factors(new_factors)
@@ -346,12 +370,12 @@ class RankDecomposition(metaclass=BetterABCMeta):
         sparse = self.to_sparse()
 
         if len(sparse) == 0:
-            return self._make_const(self.algebra.zero)  # ty:ignore[invalid-return-type]
+            return self._make_const(self.algebra.zero)
 
         max_deg = max(sum(monomial) for monomial in sparse.keys())
         max_deg = max(1, min(max_deg, self.num_vars))
 
-        return self.from_sparse(sparse, max_degree=max_deg)  # ty:ignore[invalid-return-type]
+        return self.from_sparse(sparse, max_degree=max_deg)
 
     def _simplify_multilinear_fast(self) -> Self:
         """Fast heuristic simplification using deduplication.
@@ -389,7 +413,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
         xp = _get_xp(self.factors)
 
         identity_data = xp.zeros(self.num_vars + 1, dtype=self.factors.data.dtype)
-        identity_data = _set_at_index(identity_data, (0,), self.algebra.one, xp)
+        identity_data = _set_at_index(identity_data, (0,), self.algebra.one)
 
         new_data = xp.asarray(self.factors.data)
         if hasattr(new_data, "copy"):
@@ -402,7 +426,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
                 for k2 in range(k1 + 1, self.degree):
                     is_duplicate = bool(xp.all(xp.equal(new_data[r, k1, :], new_data[r, k2, :])))
                     if is_duplicate:
-                        new_data = _set_at_index(new_data, (r, k2), identity_data, xp)
+                        new_data = _set_at_index(new_data, (r, k2), identity_data)
 
         new_factors = self.factors._wrap(new_data)
         return self._replace_factors(new_factors)
@@ -446,7 +470,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
         )
         for r in range(self.rank):
             if not keep_mask[r]:
-                new_data = _set_at_index(new_data, (r,), zero_component_data, xp)
+                new_data = _set_at_index(new_data, (r,), zero_component_data)
 
         new_factors = self.factors._wrap(new_data)
         return self._replace_factors(new_factors)
@@ -488,9 +512,9 @@ class RankDecomposition(metaclass=BetterABCMeta):
         for r in range(self.rank):
             mag = 1.0
             for k in range(self.degree):
-                factor_data = self.factors.data[r, k, :]
-                norm_val = float(_norm(factor_data, xp))
-                mag *= norm_val
+                factor_data: Array = xp.asarray(self.factors.data[r, k, :])
+                norm_val: Array = xp.linalg.norm(factor_data)
+                mag *= float(norm_val)
             magnitudes.append(mag)
 
         sorted_indices = sorted(range(self.rank), key=lambda i: magnitudes[i])
@@ -542,7 +566,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
                 component_value = component_value * dim_value
             result = result + component_value
 
-        return self._make_const(result.data)  # ty:ignore[invalid-return-type]
+        return self._make_const(result.data)
 
     def _prepare_replacement_array(self, replacements: dict[int, Self]) -> AlgebraicArray:
         """Prepare padded array of replacement polynomials.
@@ -582,7 +606,6 @@ class RankDecomposition(metaclass=BetterABCMeta):
                             padded_data,
                             (r, k, v),
                             q.factors.data[r, k, v],
-                            xp,
                         )
 
             # Pad extra degree dimensions with constant=1
@@ -593,7 +616,6 @@ class RankDecomposition(metaclass=BetterABCMeta):
                             padded_data,
                             (r, k, 0),
                             self.algebra.one,
-                            xp,
                         )
 
             padded_list.append(padded._wrap(padded_data))
@@ -630,9 +652,9 @@ class RankDecomposition(metaclass=BetterABCMeta):
             var_indices: list[int] = []
             is_zero_factor_list: list[bool] = []
             for k in range(self.degree):
-                row = is_nonzero[k]
+                row: Array = xp.asarray(is_nonzero[k])
                 if bool(xp.any(row)):
-                    idx = int(_argmax(row, xp))
+                    idx = int(typing.cast(Array, xp.argmax(row)))
                     var_indices.append(idx)
                     is_zero_factor_list.append(False)
                 else:
@@ -683,7 +705,6 @@ class RankDecomposition(metaclass=BetterABCMeta):
 
         WARNING: This is expensive ``O((n+1)^d)`` where d is degree.
         """
-        xp = _get_xp(self.factors)
         backend = Backend(self.backend)
 
         result: dict[frozenbitarray, AlgebraicArray] = {}
@@ -699,9 +720,9 @@ class RankDecomposition(metaclass=BetterABCMeta):
                 for k in range(self.degree):
                     factor_value: AlgebraicArray = self.factors[r, k, assignment[k]]
                     component = factor_value * component
-                coeff = component + coeff
+                coeff = component + coeff  # ty:ignore[unsupported-operator]
 
-            if not bool(alge.allclose(coeff, self.algebra.zero)):
+            if not bool(alge.allclose(coeff, self.algebra.zero)):  # ty:ignore[invalid-argument-type]
                 coeff_arr = (
                     coeff if isinstance(coeff, AlgebraicArray) else alge.array(coeff, semiring=self.algebra, backend=backend)
                 )
@@ -766,23 +787,22 @@ class RankDecomposition(metaclass=BetterABCMeta):
 
         rank = len(sparse)
         factors = alge.zeros((rank, max_degree, num_vars + 1), semiring=algebra, backend=backend)
-        xp = _get_xp(factors)
 
         for r, (monomial, coeff) in enumerate(sparse.items()):
             coeff_raw = coeff.data if isinstance(coeff, AlgebraicArray) else coeff
             vars_in_monomial = [i for i, bit in enumerate(monomial) if bit]
 
             if len(vars_in_monomial) == 0:
-                factors = factors._wrap(_set_at_index(factors.data, (r, 0, 0), coeff_raw, xp))
+                factors = factors._wrap(_set_at_index(factors.data, (r, 0, 0), coeff_raw))
                 for k in range(1, max_degree):
-                    factors = factors._wrap(_set_at_index(factors.data, (r, k, 0), algebra.one, xp))
+                    factors = factors._wrap(_set_at_index(factors.data, (r, k, 0), algebra.one))
             else:
                 for k, var_idx in enumerate(vars_in_monomial):
                     if k < max_degree:
                         val = coeff_raw if k == 0 else algebra.one
-                        factors = factors._wrap(_set_at_index(factors.data, (r, k, var_idx + 1), val, xp))
+                        factors = factors._wrap(_set_at_index(factors.data, (r, k, var_idx + 1), val))
                 for k in range(len(vars_in_monomial), max_degree):
-                    factors = factors._wrap(_set_at_index(factors.data, (r, k, 0), algebra.one, xp))
+                    factors = factors._wrap(_set_at_index(factors.data, (r, k, 0), algebra.one))
 
         return _make_rank_decomposition(
             factors,
@@ -792,10 +812,7 @@ class RankDecomposition(metaclass=BetterABCMeta):
             max_replacement_degree,
             num_vars,
             backend,
-        )
-
-
-# -- Module-level helpers ------------------------------------------------------
+        )  # ty:ignore[invalid-return-type]
 
 
 def _get_xp(arr: AlgebraicArray) -> typing.Any:  # noqa: ANN401
@@ -807,7 +824,6 @@ def _set_at_index(
     data: typing.Any,  # noqa: ANN401
     idx: tuple[int, ...],
     value: typing.Any,  # noqa: ANN401
-    xp: typing.Any,  # noqa: ANN401
 ) -> typing.Any:  # noqa: ANN401
     """Set a value at an index, handling JAX immutability and mutable backends."""
     from algebraic.array._index_update import _set_at_index as _set_at_index_impl
@@ -817,34 +833,7 @@ def _set_at_index(
     return _set_at_index_impl(data, idx, value)
 
 
-def _argmax(a: typing.Any, xp: typing.Any) -> typing.Any:  # noqa: ANN401
-    """Backend-agnostic argmax (returns scalar index)."""
-    import numpy as np
-
-    if array_api_compat.is_jax_array(a):
-        import jax.numpy as jnp
-
-        return jnp.argmax(a)
-    if array_api_compat.is_torch_array(a):
-        import torch
-
-        return torch.argmax(torch.as_tensor(a))
-    return np.argmax(np.asarray(a))
-
-
-def _norm(a: typing.Any, xp: typing.Any) -> float:  # noqa: ANN401
-    """Backend-agnostic L2 norm."""
-    import numpy as np
-
-    if array_api_compat.is_jax_array(a):
-        import jax.numpy as jnp
-
-        return float(jnp.linalg.norm(a))
-    if array_api_compat.is_torch_array(a):
-        import torch
-
-        return float(torch.linalg.norm(torch.as_tensor(a).float()))
-    return float(np.linalg.norm(np.asarray(a)))
+_rank_decomp_registry = _make_registry("RankDecomposition")
 
 
 def _make_rank_decomposition(
@@ -862,16 +851,5 @@ def _make_rank_decomposition(
     _max_degree = max_degree if max_degree is not None else num_vars
     _max_replacement_degree = max_replacement_degree if max_replacement_degree is not None else _max_degree
 
-    if backend == Backend.JAX:
-        from algebraic.polynomials.rank_decomp._jax import JaxRankDecomposition
-
-        return JaxRankDecomposition(factors, algebra, _max_rank, _max_degree, _max_replacement_degree)
-    if backend == Backend.TORCH:
-        from algebraic.polynomials.rank_decomp._torch import TorchRankDecomposition
-
-        return TorchRankDecomposition(factors, algebra, _max_rank, _max_degree, _max_replacement_degree)
-    if backend == Backend.NUMPY:
-        from algebraic.polynomials.rank_decomp._numpy import NumpyRankDecomposition
-
-        return NumpyRankDecomposition(factors, algebra, _max_rank, _max_degree, _max_replacement_degree)
-    raise ValueError(f"Unsupported backend: {backend!r}")
+    cls = _rank_decomp_registry[backend]
+    return cls(factors, algebra, _max_rank, _max_degree, _max_replacement_degree)

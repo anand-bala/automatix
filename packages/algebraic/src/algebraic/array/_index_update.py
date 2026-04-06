@@ -11,7 +11,6 @@ from algebraic.spec import is_ring
 
 if TYPE_CHECKING:
     from algebraic.array.base import AlgebraicArray
-    from algebraic.spec import Semiring
 
 
 def _set_at_index(

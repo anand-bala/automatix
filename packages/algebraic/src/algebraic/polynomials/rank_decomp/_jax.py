@@ -5,8 +5,8 @@ from __future__ import annotations
 import typing
 
 import equinox as eqx
-from typing_extensions import Self, override
 
+from algebraic._backend_mixins import EqxReplaceMixin
 from algebraic.array import AlgebraicArray
 from algebraic.array._jax import JaxAlgebraicArray
 from algebraic.polynomials.rank_decomp.base import RankDecomposition
@@ -15,7 +15,7 @@ from algebraic.types import Backend
 from algebraic.utils.jax import EqxMeta
 
 
-class JaxRankDecomposition(eqx.Module, RankDecomposition, metaclass=EqxMeta):
+class JaxRankDecomposition(eqx.Module, EqxReplaceMixin, RankDecomposition, metaclass=EqxMeta):
     """JAX backend for ``RankDecomposition``."""
 
     factors: JaxAlgebraicArray
@@ -40,7 +40,3 @@ class JaxRankDecomposition(eqx.Module, RankDecomposition, metaclass=EqxMeta):
         self.max_rank = max_rank
         self.max_degree = max_degree
         self.max_replacement_degree = max_replacement_degree
-
-    @override
-    def _replace_factors(self, factors: AlgebraicArray) -> Self:
-        return typing.cast(Self, eqx.tree_at(lambda t: t.factors, self, factors))

@@ -14,6 +14,7 @@ from jaxtyping import Shaped
 from typing_extensions import Self
 
 import algebraic.ops as alge
+from algebraic._backend_registry import BackendClassRegistry
 from algebraic._better_abc import AbstractClassVar, AbstractVar, BetterABCMeta
 from algebraic.array import AlgebraicArray
 from algebraic.polynomials.dok.base import PolyDict, _make_poly_dict
@@ -51,11 +52,15 @@ class MonomialBasis(metaclass=BetterABCMeta):
         """Number of variables/indeterminants in this multilinear polynomial."""
         return len(self.shape)
 
+    def _replace_attr(self, name: str, value: object) -> Self:
+        """Create a new instance with one attribute changed (backend-specific)."""
+        clone = copy.copy(self)
+        object.__setattr__(clone, name, value)
+        return clone
+
     def _replace_coeffs(self, coeffs: AlgebraicArray) -> Self:
         """Return a new instance with the given coefficients, preserving other attrs."""
-        clone = copy.copy(self)
-        object.__setattr__(clone, "coeffs", coeffs)
-        return clone
+        return self._replace_attr("coeffs", coeffs)
 
     def _lift_tensor(self, tensor: AlgebraicArray, insert_axis: int) -> AlgebraicArray:
         """Lift (n-1)-dim tensor to n-dim by inserting axis and zero-padding."""
@@ -444,23 +449,26 @@ def _multiply_recursive(lhs: AlgebraicArray, rhs: AlgebraicArray) -> AlgebraicAr
     return ret
 
 
+_monomial_basis_registry = BackendClassRegistry("MonomialBasis")
+_monomial_basis_registry.register(
+    Backend.JAX,
+    lambda: __import__("algebraic.polynomials.monomial_basis._jax", fromlist=["JaxMonomialBasis"]).JaxMonomialBasis,
+)
+_monomial_basis_registry.register(
+    Backend.TORCH,
+    lambda: __import__("algebraic.polynomials.monomial_basis._torch", fromlist=["TorchMonomialBasis"]).TorchMonomialBasis,
+)
+_monomial_basis_registry.register(
+    Backend.NUMPY,
+    lambda: __import__("algebraic.polynomials.monomial_basis._numpy", fromlist=["NumpyMonomialBasis"]).NumpyMonomialBasis,
+)
+
+
 def _make_monomial_basis(
     coeffs: AlgebraicArray,
     algebra: Lattice,
     backend: str | Backend,
 ) -> MonomialBasis:
     """Dispatch to the correct backend subclass."""
-    backend = Backend(backend)
-    if backend == Backend.JAX:
-        from algebraic.polynomials.monomial_basis._jax import JaxMonomialBasis
-
-        return JaxMonomialBasis(coeffs, algebra)
-    if backend == Backend.TORCH:
-        from algebraic.polynomials.monomial_basis._torch import TorchMonomialBasis
-
-        return TorchMonomialBasis(coeffs, algebra)
-    if backend == Backend.NUMPY:
-        from algebraic.polynomials.monomial_basis._numpy import NumpyMonomialBasis
-
-        return NumpyMonomialBasis(coeffs, algebra)
-    raise ValueError(f"Unsupported backend: {backend!r}")
+    cls = _monomial_basis_registry[backend]
+    return cls(coeffs, algebra)
