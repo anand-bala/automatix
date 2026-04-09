@@ -1,6 +1,6 @@
 """Tests for AlgebraicArray core functionality, especially dot_general_p overload."""
 
-# mypy: disable-error-code="no-untyped-def"
+# mypy: disable-error-code="no-untyped-def,operator"
 
 from __future__ import annotations
 

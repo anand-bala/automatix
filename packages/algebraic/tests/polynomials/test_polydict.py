@@ -358,7 +358,7 @@ class TestPolyDictEvaluation:
             point_jnp = {k: (v) for k, v in point.items()}
             result = p.evaluate(point_jnp)
             result_val = list(result.values())[0]
-            assert_equal(result_val, (expected)), f"Failed for point {point}"
+            assert_equal(result_val, expected)
 
 
 class TestPolyDictComposition:

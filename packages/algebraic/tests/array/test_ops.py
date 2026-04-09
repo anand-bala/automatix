@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import typing
+
 import algebraic
 import pytest
 from algebraic import AlgebraicArray, Semiring
@@ -19,7 +21,7 @@ from algebraic import AlgebraicArray, Semiring
 )
 def semiring(request: pytest.FixtureRequest) -> Semiring:
     name, kwargs = request.param
-    make_semiring = getattr(algebraic.semirings, name)
+    make_semiring: typing.Callable[..., Semiring] = getattr(algebraic.semirings, name)
     return make_semiring(**kwargs)
 
 

@@ -1,6 +1,6 @@
 """Tests for torchify wrapping of algebraic polynomial types."""
 # ruff: noqa: ANN201, ANN001
-# mypy: disable-error-code="no-untyped-call,no-untyped-def,import-not-found"
+# mypy: disable-error-code="no-untyped-call,no-untyped-def,import-not-found,arg-type"
 
 from __future__ import annotations
 

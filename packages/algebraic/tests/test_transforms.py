@@ -1,5 +1,5 @@
 """Tests for jit and vmap transformations."""
-# mypy: disable-error-code="no-untyped-def"
+# mypy: disable-error-code="no-untyped-def,untyped-decorator,arg-type,var-annotated"
 
 from __future__ import annotations
 

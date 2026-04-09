@@ -26,9 +26,7 @@ class TestRankDecompositionJAX:
         alg = max_min_algebra()
         x0 = RankDecomposition.variable(0, 2, alg, backend=jax_backend)
 
-        result = jax.jit(lambda pt: x0.evaluate(pt).factors[0, 0, 0].data)(
-            jnp.array([2.0, 3.0])
-        )
+        result = jax.jit(lambda pt: x0.evaluate(pt).factors[0, 0, 0].data)(jnp.array([2.0, 3.0]))
         assert_close(result, 2.0)
 
     def test_vmap_evaluation(self, jax_backend: str) -> None:

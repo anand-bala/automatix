@@ -20,7 +20,7 @@ _Axis: TypeAlias = None | int | Sequence[int]
 _Array: TypeAlias = Num[Array, "..."]
 
 
-@jax.custom_vjp  # type: ignore[untyped-decorator]
+@jax.custom_vjp
 def logaddexp(x: _Array, y: _Array) -> _Array:
     r"""Numerically stable ``log(exp(x) + exp(y))`` with correct gradients
     when both arguments are :math:`-\infty`.

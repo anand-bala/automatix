@@ -411,7 +411,7 @@ def unique_values(x: AlgebraicArray) -> AlgebraicArray:
 
 def take(
     x: AlgebraicArray,
-    indices: Array,
+    indices: Array | int,
     *,
     axis: int | None = None,
 ) -> AlgebraicArray:
@@ -421,8 +421,8 @@ def take(
     ----------
     x : AlgebraicArray
         Input array.
-    indices : Array
-        Integer array of indices.
+    indices : Array or int
+        Integer array of indices (or a scalar integer).
     axis : int or None, optional
         Axis along which to take. ``None`` treats *x* as flattened.
     """

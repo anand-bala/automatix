@@ -63,16 +63,14 @@ def vmap(
         if b == Backend.JAX:
             import jax
 
-            return typing.cast(
-                Callable[_FnParams, _ReturnType],
-                jax.vmap(
-                    f,
-                    in_axes=in_axes,
-                    out_axes=out_axes,
-                    axis_name=axis_name,
-                    axis_size=axis_size,
-                ),
+            return jax.vmap(
+                f,
+                in_axes=in_axes,
+                out_axes=out_axes,
+                axis_name=axis_name,
+                axis_size=axis_size,
             )
+
         elif b == Backend.TORCH:
             import functools
 
@@ -81,40 +79,34 @@ def vmap(
             from algebraic.array import AlgebraicArray
 
             @functools.wraps(f)
-            def wrapper(
-                *args: _FnParams.args, **kwargs: _FnParams.kwargs
-            ) -> _ReturnType:
+            def wrapper(*args: _FnParams.args, **kwargs: _FnParams.kwargs) -> _ReturnType:
                 semiring = None
                 for a in args:
                     if isinstance(a, AlgebraicArray):
                         semiring = a.semiring
                         break
 
-                raw_args = tuple(
-                    a.data if isinstance(a, AlgebraicArray) else a for a in args
-                )
+                raw_args = tuple(a.data if isinstance(a, AlgebraicArray) else a for a in args)
 
                 def raw_fn(
                     *raw: torch.Tensor,
-                ) -> torch.Tensor:
+                ) -> typing.Any:  # noqa: ANN401
                     rebuilt = tuple(
-                        AlgebraicArray(data=r, semiring=semiring)
+                        AlgebraicArray(data=r, semiring=semiring)  # type: ignore[arg-type]
                         if isinstance(orig, AlgebraicArray)
                         else r
                         for r, orig in zip(raw, args)
                     )
-                    out = f(*rebuilt, **kwargs)
+                    out = f(*rebuilt, **kwargs)  # type: ignore[arg-type]
                     if isinstance(out, AlgebraicArray):
                         return out.data
                     return out
 
-                result = torch.vmap(raw_fn, in_dims=in_axes, out_dims=out_axes)(
+                result = torch.vmap(raw_fn, in_dims=in_axes, out_dims=out_axes)(  # type: ignore[arg-type]
                     *raw_args
                 )
                 if semiring is not None:
-                    return typing.cast(
-                        _ReturnType, AlgebraicArray(data=result, semiring=semiring)
-                    )
+                    return typing.cast(_ReturnType, AlgebraicArray(data=result, semiring=semiring))
                 return typing.cast(_ReturnType, result)
 
             return typing.cast(Callable[_FnParams, _ReturnType], wrapper)
@@ -125,4 +117,3 @@ def vmap(
     if fun is None:
         return decorator
     return decorator(fun)
-

@@ -6,6 +6,7 @@ This module defines an abstract `AlgebraicArray` that defines the interface for 
 import copy
 import math
 import typing
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -13,7 +14,7 @@ import array_api_compat
 from typing_extensions import Self
 
 from algebraic.spec import Semiring, has_complement, is_ring
-from algebraic.types import Array, DType, MatmulFn, Number, Scalar, VdotFn
+from algebraic.types import AnyPyTree, Array, DType, MatmulFn, Number, Scalar, VdotFn, is_array
 
 if typing.TYPE_CHECKING:
     from algebraic.utils.indexing import _IndexUpdateHelper
@@ -113,19 +114,21 @@ class AlgebraicArray:
         else:
             batch = tuple(range(ndim - 2))
             dimension_numbers = (((ndim - 1,), (ndim - 2,)), (batch, batch))
-        return dot_general(self, other, dimension_numbers)
+        return typing.cast(Self, dot_general(self, other, dimension_numbers))
 
     def __eq__(self, other: object) -> Array:  # type: ignore[override]
         """Element-wise equality; returns a raw bool array (not wrapped)."""
         xp = array_api_compat.array_namespace(self.data)
         other_data: object = other.data if isinstance(other, AlgebraicArray) else other
-        return xp.equal(self.data, other_data)
+        result: Array = xp.equal(self.data, other_data)
+        return result
 
     def __ne__(self, other: object) -> Array:  # type: ignore[override]
         """Element-wise inequality; returns a raw bool array (not wrapped)."""
         xp = array_api_compat.array_namespace(self.data)
         other_data: object = other.data if isinstance(other, AlgebraicArray) else other
-        return xp.not_equal(self.data, other_data)
+        result: Array = xp.not_equal(self.data, other_data)
+        return result
 
     # Python sets __hash__ = None when __eq__ is defined; declare it explicitly
     # to make the intent clear to type checkers and documentation readers.
@@ -215,3 +218,13 @@ class AlgebraicArray:
     def mT(self) -> Self:  # noqa: N802
         """Batch matrix transpose (same as `T`; alias for Array-API compatibility)."""
         return self.T
+
+    def tree_flatten(self) -> tuple[list[Array], tuple[typing.Any, ...]]:
+        return [self.data], (self.semiring, self._vdot, self._matmul)
+
+    @classmethod
+    def tree_unflatten(cls, aux_data: tuple[typing.Any, ...], children: Sequence[AnyPyTree]) -> "AlgebraicArray":
+        semiring, _vdot, _matmul = aux_data
+        data = children[0]
+        assert is_array(data)
+        return cls(data, semiring, _vdot, _matmul)

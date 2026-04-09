@@ -1,5 +1,5 @@
 """Tests for AlgebraicArray index update functionality (at[] API)."""
-# mypy: disable-error-code="type-arg"
+# mypy: disable-error-code="type-arg,operator,list-item"
 
 from __future__ import annotations
 

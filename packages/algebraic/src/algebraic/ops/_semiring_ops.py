@@ -23,7 +23,7 @@ from algebraic.utils import normalize_axes, validate_semiring
 from algebraic.utils.ops import DotPlan, prefix_scan_axis, reduce_axes
 
 if typing.TYPE_CHECKING:
-    from opt_einsum.contract import OptimizeKind, _MemoryLimit
+    from opt_einsum.contract import OptimizeKind, _MemoryLimit  # type: ignore[import-untyped]
 
 
 def add(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
@@ -113,7 +113,7 @@ def sum(  # noqa: A001  (intentional shadowing of built-in)
     >>> sr = algebraic.semirings.tropical_semiring(minplus=True)
     >>> a = algebraic.array([1.0, 2.0, 3.0], semiring=sr, backend="numpy")
     >>> algebraic.sum(a).data
-    array(1.)
+    array(1., dtype=float32)
     """
 
     xp = array_api_compat.get_namespace(x.data)
@@ -147,7 +147,7 @@ def prod(
     >>> sr = algebraic.semirings.tropical_semiring(minplus=True)
     >>> a = algebraic.array([1.0, 2.0, 3.0], semiring=sr, backend="numpy")
     >>> algebraic.prod(a).data
-    array(6.)
+    array(6., dtype=float32)
     """
 
     xp = array_api_compat.get_namespace(x.data)
@@ -272,15 +272,15 @@ def dot_general(
     rhs_transposed: Array = xp.permute_dims(y.data, plan.rhs_perm)
 
     if plan.n_batch > 0:
-        lhs_reshaped = lhs_transposed.reshape(plan.batch_size, plan.lhs_free_size, plan.contract_size)
-        rhs_reshaped = rhs_transposed.reshape(plan.batch_size, plan.rhs_free_size, plan.contract_size)
+        lhs_r = lhs_transposed.reshape(plan.batch_size, plan.lhs_free_size, plan.contract_size)
+        rhs_r = rhs_transposed.reshape(plan.batch_size, plan.rhs_free_size, plan.contract_size)
 
-        products: Array = xp.asarray(semiring.mul(lhs_reshaped[:, :, None, :], rhs_reshaped[:, None, :, :]))
+        products: Array = xp.asarray(semiring.mul(lhs_r[:, :, None, :], rhs_r[:, None, :, :]))
     else:
-        lhs_reshaped = lhs_transposed.reshape(plan.lhs_free_size, plan.contract_size)
-        rhs_reshaped = rhs_transposed.reshape(plan.rhs_free_size, plan.contract_size)
+        lhs_2d = lhs_transposed.reshape(plan.lhs_free_size, plan.contract_size)
+        rhs_2d = rhs_transposed.reshape(plan.rhs_free_size, plan.contract_size)
 
-        products: Array = xp.asarray(semiring.mul(lhs_reshaped[:, None, :], rhs_reshaped[None, :, :]))
+        products = xp.asarray(semiring.mul(lhs_2d[:, None, :], rhs_2d[None, :, :]))
 
     # Reduce along contract dimension (last dim) using semiring.add
     last_dim = normalize_axes(-1, products.ndim)
@@ -419,7 +419,7 @@ def trace(x: AlgebraicArray, /, *, offset: int = 0) -> AlgebraicArray:
     """
     xp = array_api_compat.array_namespace(x.data)
     diag_data: Array = xp.linalg.diagonal(x.data, offset=offset)
-    return typing.cast(AlgebraicArray, sum(x._wrap(diag_data), axis=-1))
+    return sum(x._wrap(diag_data), axis=-1)
 
 
 def outer(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
@@ -506,7 +506,7 @@ def _reduce_unneeded_axes(x: AlgebraicArray, subs: str, keep: set[str]) -> tuple
     """Sum-reduce axes whose labels are not in *keep*."""
     axes = tuple(i for i, c in enumerate(subs) if c not in keep)
     if axes:
-        x = typing.cast(AlgebraicArray, sum(x, axis=list(axes)))
+        x = sum(x, axis=list(axes))
         subs = "".join(c for i, c in enumerate(subs) if i not in axes)
     return x, subs
 
@@ -621,7 +621,7 @@ def einsum(
     array([[ 6.,  7.],
            [ 6.,  7.]])
     """
-    import opt_einsum
+    import opt_einsum  # type: ignore[import-untyped]
 
     if not operands:
         raise ValueError("einsum requires at least one operand.")

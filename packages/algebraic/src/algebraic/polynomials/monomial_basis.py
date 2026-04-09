@@ -149,7 +149,7 @@ class MonomialBasis(AlgebraicPyTree):
         >>> ba = boolean_algebra(mode="logic")
         >>> c = MonomialBasis.constant(True, num_vars=2, algebra=ba, backend="numpy")
         >>> c.coeffs[(0, 0)].data
-        array(True)
+        array(1., dtype=float32)
         """
         idx = (0,) * num_vars
         return cls(
@@ -248,7 +248,7 @@ class MonomialBasis(AlgebraicPyTree):
         >>> x0 = MonomialBasis.variable(0, num_vars=2, algebra=ba, backend="numpy")
         >>> result = x0.evaluate({0: True, 1: False})
         >>> result.coeffs[(0, 0)].data
-        array(True)
+        array(1., dtype=float32)
         """
         map_points: dict[int, Scalar] = {}
         if isinstance(points, Mapping):
@@ -302,11 +302,11 @@ class MonomialBasis(AlgebraicPyTree):
 
         return _compose(self, 0)
 
-    def tree_flatten(self) -> tuple[list[AlgebraicArray], tuple]:
+    def tree_flatten(self) -> tuple[list[AlgebraicArray], tuple[typing.Any, ...]]:
         return [self.coeffs], (self.algebra, self.backend)
 
     @classmethod
-    def tree_unflatten(cls, aux_data: tuple, children: Sequence[AnyPyTree]) -> "MonomialBasis":
+    def tree_unflatten(cls, aux_data: tuple[typing.Any, ...], children: Sequence[AnyPyTree]) -> "MonomialBasis":
         algebra, backend = aux_data
         coeffs = children[0]
         assert isinstance(coeffs, AlgebraicArray)

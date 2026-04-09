@@ -38,11 +38,12 @@ def array(
     --------
     >>> import algebraic
     >>> sr = algebraic.semirings.tropical_semiring(minplus=True)
-    >>> algebraic.array([1.0, 2.0], semiring=sr, backend="numpy")  # doctest: +SKIP
-    AlgebraicArray([1., 2.], semiring=Semiring(...))
+    >>> algebraic.array([1.0, 2.0], semiring=sr, backend="numpy")
+    AlgebraicArray(data=array([1., 2.], dtype=float32), semiring=Semiring(...
     """
     if backend is None:
         if not is_array(data) and not is_scalar(data):
+            assert isinstance(data, Iterable)
             # Must be an iterable...
             data = list(data)
             backend = Backend.from_array(data[0])
@@ -86,7 +87,7 @@ def zeros(shape: tuple[int, ...], *, semiring: Semiring, backend: str | Backend)
     >>> import algebraic
     >>> sr = algebraic.semirings.tropical_semiring(minplus=True)
     >>> algebraic.zeros((2,), semiring=sr, backend="numpy").data
-    array([inf, inf])
+    array([inf, inf], dtype=float32)
     """
     b = Backend(backend)
     data: Array
@@ -131,7 +132,7 @@ def ones(shape: tuple[int, ...], *, semiring: Semiring, backend: str | Backend) 
     >>> import algebraic
     >>> sr = algebraic.semirings.tropical_semiring(minplus=True)
     >>> algebraic.ones((2,), semiring=sr, backend="numpy").data
-    array([0., 0.])
+    array([0., 0.], dtype=float32)
     """
     semiring = semiring
     b = Backend(backend)

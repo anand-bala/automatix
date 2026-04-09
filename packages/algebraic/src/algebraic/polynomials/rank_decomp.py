@@ -13,7 +13,7 @@ import algebraic.ops as algebraic
 from algebraic.array import AlgebraicArray
 from algebraic.polynomials.dok import PolyDict
 from algebraic.spec import BoundedDistributiveLattice as Lattice
-from algebraic.types import AlgebraicPyTree, AnyPyTree, Array, Backend, Scalar, is_scalar
+from algebraic.types import AlgebraicPyTree, AnyPyTree, Array, Backend, Scalar, is_array, is_scalar
 from algebraic.utils import validate_semiring
 
 
@@ -38,7 +38,7 @@ class RankDecomposition(AlgebraicPyTree):
     max_replacement_degree: int
     """Maximum degree for replacement polynomials in compose (None = max_degree)"""
 
-    backend: str | Backend = field(default=Backend.NUMPY, kw_only=True)
+    backend: Backend = field(default=Backend.NUMPY, kw_only=True)
     """The specific backend from the derived class"""
 
     def _replace_attr(self, name: str, value: object) -> Self:
@@ -122,16 +122,13 @@ class RankDecomposition(AlgebraicPyTree):
         factors = algebraic.zeros((1, 1, num_vars + 1), semiring=algebra, backend=backend)
         factors = factors.at[(0, 0, i + 1)].set(algebra.one)
 
-        return typing.cast(
-            Self,
-            cls._make(
-                factors,
-                algebra,
-                max_rank,
-                max_degree,
-                max_replacement_degree,
-                backend=backend,
-            ),
+        return cls._make(
+            factors,
+            algebra,
+            max_rank,
+            max_degree,
+            max_replacement_degree,
+            backend=backend,
         )
 
     @classmethod
@@ -273,12 +270,12 @@ class RankDecomposition(AlgebraicPyTree):
 
     # -- Evaluation / composition ----------------------------------------------
 
-    def evaluate(self, points: Array) -> Self:
+    def evaluate(self, points: Array | AlgebraicArray) -> Self:
         """Evaluate polynomial at given point.
 
         Parameters
         ----------
-        points : Array
+        points : Array or AlgebraicArray
             An array of shape ``(num_vars,)`` to replace each variable with.
 
         Returns
@@ -289,7 +286,10 @@ class RankDecomposition(AlgebraicPyTree):
         rank, d, _ = self.factors.shape
 
         one_array = algebraic.ones((1,), semiring=self.algebra, backend=self.backend)
-        points_array = algebraic.array(points, semiring=self.algebra, backend=self.backend)
+        if is_array(points):
+            points_array = algebraic.array(points, semiring=self.algebra, backend=self.backend)
+        else:
+            points_array = points
         selector = algebraic.concat([one_array, points_array])
 
         result = algebraic.zeros((), semiring=self.algebra, backend=self.backend)
@@ -343,11 +343,11 @@ class RankDecomposition(AlgebraicPyTree):
 
         return result_poly
 
-    def tree_flatten(self) -> tuple[list[AlgebraicArray], tuple]:
+    def tree_flatten(self) -> tuple[list[AlgebraicArray], tuple[typing.Any, ...]]:
         return [self.factors], (self.algebra, self.max_rank, self.max_degree, self.max_replacement_degree, self.backend)
 
     @classmethod
-    def tree_unflatten(cls, aux_data: tuple, children: Sequence[AnyPyTree]) -> "RankDecomposition":
+    def tree_unflatten(cls, aux_data: tuple[typing.Any, ...], children: Sequence[AnyPyTree]) -> "RankDecomposition":
         algebra, max_rank, max_degree, max_replacement_degree, backend = aux_data
         factors = children[0]
         assert isinstance(factors, AlgebraicArray)

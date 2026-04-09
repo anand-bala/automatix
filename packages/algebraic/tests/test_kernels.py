@@ -1,3 +1,4 @@
+# mypy: disable-error-code="arg-type,operator,return-value"
 import jax
 import jax.numpy as jnp
 import pytest

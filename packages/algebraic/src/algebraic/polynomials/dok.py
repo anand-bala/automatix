@@ -91,7 +91,7 @@ class PolyDict(AlgebraicPyTree):
         >>> alg = boolean_algebra('ste')
         >>> p = PolyDict.constant(np.array(True), num_vars=3, algebra=alg, backend="numpy")
         >>> p['000'].data
-        array(True)
+        array(1., dtype=float32)
         """
         zeros_idx = frozenbitarray(ba_util.zeros(num_vars))
         coeff = alge.array(value, semiring=algebra, backend=backend)
@@ -215,7 +215,7 @@ class PolyDict(AlgebraicPyTree):
         >>> e1.isscalar()
         True
         >>> e1['00'].data
-        array(True)
+        array(1., dtype=float32)
         """
         cls = type(self)
         if isinstance(point, Mapping):
@@ -254,12 +254,12 @@ class PolyDict(AlgebraicPyTree):
         cls = type(self)
         result = cls.zero(self.num_vars, algebra=self.algebra, backend=self.backend)  # initialize with additive identity
 
-        def var_at(idx: int) -> Self:  # type: ignore[type-var]
-            return cls.variable(idx, self.num_vars, algebra=self.algebra, backend=self.backend)  # type: ignore[return-value]
+        def var_at(idx: int) -> "PolyDict":
+            return cls.variable(idx, self.num_vars, algebra=self.algebra, backend=self.backend)
 
-        def as_const(val: AlgebraicArray | Scalar) -> Self:  # type: ignore[type-var]
+        def as_const(val: AlgebraicArray | Scalar) -> "PolyDict":
             raw = val.data if isinstance(val, AlgebraicArray) else val
-            return cls.constant(raw, self.num_vars, algebra=self.algebra, backend=self.backend)  # type: ignore[return-value]
+            return cls.constant(raw, self.num_vars, algebra=self.algebra, backend=self.backend)
 
         for monomial, coeff in self.items():
             # make a new term by replacing the monomial terms with either the replacement if it exists, or a plain variable.
@@ -275,12 +275,12 @@ class PolyDict(AlgebraicPyTree):
     def isscalar(self) -> bool:
         return len(self) == 0 or (len(self) == 1 and self.get(frozenbitarray(self.num_vars)) is not None)
 
-    def tree_flatten(self) -> tuple[list[AlgebraicArray], tuple]:
+    def tree_flatten(self) -> tuple[list[AlgebraicArray], tuple[typing.Any, ...]]:
         keys = list(self.data.keys())
         return list(self.data.values()), (self.algebra, self.num_vars, keys, self.backend)
 
     @classmethod
-    def tree_unflatten(cls, aux_data: tuple, children: Sequence[AnyPyTree]) -> "PolyDict":
+    def tree_unflatten(cls, aux_data: tuple[typing.Any, ...], children: Sequence[AnyPyTree]) -> "PolyDict":
         algebra, num_vars, keys, backend = aux_data
         children = typing.cast(Sequence[AlgebraicArray], children)
         return cls(algebra, num_vars, dict(zip(keys, children)), backend=backend)

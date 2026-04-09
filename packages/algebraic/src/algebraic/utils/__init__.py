@@ -3,8 +3,6 @@ from __future__ import annotations
 import typing
 from collections.abc import Sequence
 
-import optree
-
 if typing.TYPE_CHECKING:
     from algebraic import AlgebraicArray
 from algebraic.types import Array, Number, is_array

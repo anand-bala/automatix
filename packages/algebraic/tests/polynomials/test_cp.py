@@ -170,7 +170,7 @@ class TestRankDecompositionMultiplication:
             result_rank = prod_rank.evaluate(point)
             rank_value = result_rank.factors[0, 0, 0].data
 
-            assert_equal(result_sparse, rank_value), f"Mismatch at {point}"
+            assert_equal(result_sparse, rank_value)
 
     def test_multiply_with_constant(self, maxmin_algebra: DeMorganAlgebra, backend: str) -> None:
         """Test multiplication with constant."""
@@ -358,7 +358,7 @@ class TestRankDecompositionCompose:
             val_rank = result_rank.evaluate(make_array(point, backend))
             rank_value = val_rank.factors[0, 0, 0].data
 
-            assert_equal(val_sparse, rank_value), f"Mismatch at {point}"
+            assert_equal(val_sparse, rank_value)
 
     def test_compose_zero_polynomial(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
         """Test composing zero polynomial with constants (regression test).

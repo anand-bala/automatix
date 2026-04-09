@@ -11,8 +11,9 @@ BACKENDS = list(str(b) for b in Backend)
 @pytest.fixture(params=BACKENDS)
 def backend(request: pytest.FixtureRequest) -> str:
     """Parametrized fixture that yields each backend name, skipping if unavailable."""
-    pytest.importorskip(request.param)
-    return request.param
+    name: str = request.param
+    pytest.importorskip(name)
+    return name
 
 
 @pytest.fixture

@@ -63,7 +63,7 @@ def is_scalar(x: object) -> TypeIs[Scalar]:
         return False
 
 
-def is_numpy_array(x: object) -> TypeIs[npt.NDArray]:
+def is_numpy_array(x: object) -> TypeIs[npt.NDArray[typing.Any]]:
     return array_api_compat.is_numpy_array(x)
 
 
@@ -134,7 +134,9 @@ class ScanFn[Carry, X, Y](Protocol):
     def __call__(self, carry: Carry, acc: X) -> tuple[Carry, Y]: ...
 
 
-type AnyPyTree = AlgebraicArray | AlgebraicPyTree | tuple[AnyPyTree, ...] | list[AnyPyTree] | dict[typing.Any, AnyPyTree]
+type AnyPyTree = (
+    Array | AlgebraicArray | AlgebraicPyTree | tuple[AnyPyTree, ...] | list[AnyPyTree] | dict[typing.Any, AnyPyTree]
+)
 
 
 @runtime_checkable

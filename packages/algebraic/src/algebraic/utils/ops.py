@@ -126,7 +126,7 @@ def _take(data: Array, index: int, axis: int) -> Array:
         return data.select(axis, index)
     import numpy as np
 
-    return np.take(data, index, axis=axis)
+    return np.take(data, index, axis=axis)  # type: ignore[no-any-return]
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

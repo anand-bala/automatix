@@ -10,7 +10,7 @@ from __future__ import annotations
 import torch
 
 
-class _LogAddExp(torch.autograd.Function):  # type: ignore[misc]
+class _LogAddExp(torch.autograd.Function):
     @staticmethod
     def forward(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         return torch.logaddexp(x, y)

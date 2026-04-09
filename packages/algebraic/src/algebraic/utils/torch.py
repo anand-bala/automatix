@@ -1,5 +1,7 @@
+import typing
 from collections.abc import Mapping, Sequence
 
+import torch
 import torch.nn as nn
 
 from algebraic.array import AlgebraicArray
@@ -16,7 +18,7 @@ class TorchWrapper(nn.Module):
         if prefix is None:
             prefix = ""
         if isinstance(wrapped, AlgebraicArray):
-            self.register_parameter(prefix + "algebraic_array", nn.Parameter(wrapped.data))
+            self.register_parameter(prefix + "algebraic_array", nn.Parameter(typing.cast(torch.Tensor, wrapped.data)))
         elif isinstance(wrapped, AlgebraicPyTree):
             for i, c in enumerate(wrapped.tree_flatten()[0]):
                 self._register(c, f"{prefix}{i}_")
