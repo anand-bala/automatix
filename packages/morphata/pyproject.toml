@@ -1,6 +1,6 @@
 [project]
 name = "morphata"
-version = "1.0.0"
+version = "1.0.1"
 description = "Flexible automata representations for regular and ω-regular languages."
 authors = [{ name = "Anand Balakrishnan" }]
 readme = "README.md"
