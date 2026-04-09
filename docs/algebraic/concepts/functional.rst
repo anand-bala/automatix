@@ -4,35 +4,30 @@ Functional Transforms
 When ``algebraic`` computations are used inside a training loop or a
 tight numerical simulation, two transforms matter most: *JIT compilation*
 (trace and compile a function for fast repeated execution) and *batching*
-(apply a function independently over a leading batch dimension).  Both are
-available for the JAX and PyTorch backends.
+(apply a function independently over a leading batch dimension).
 
-These transforms live in ``algebraic._jax_wrappers`` and are imported
-directly from there.  The module name reflects its origins but the wrappers
-support both JAX and PyTorch; the ``backend`` argument selects which.
-
-.. note::
-   ``algebraic._jax_wrappers`` is a semi-internal module -- the leading
-   underscore signals that its API may change.  If you depend on it, pin
-   the version.  A stable public path is planned for a future release.
+JIT compilation uses each backend's native API directly (``jax.jit``,
+``torch.compile``).  Batching is available through ``algebraic.vmap``,
+which delegates to the appropriate backend.
 
 JIT Compilation
 ---------------
 
-Wrapping a function with ``jit`` traces it once on the first call and then
-executes the compiled version on all subsequent calls.  This removes Python
-overhead and enables backend-specific optimisations (XLA fusion for JAX,
-``torch.compile`` for PyTorch).
+``AlgebraicArray`` is registered as a JAX PyTree (via
+``algebraic.utils.jax``), so ``jax.jit`` works out of the box.  Import
+the utility module once for its registration side-effect, then use
+``jax.jit`` as usual:
 
 .. code-block:: python
 
-   from algebraic._jax_wrappers import jit
+   import jax
    import algebraic
+   import algebraic.utils.jax  # registers AlgebraicArray as a JAX PyTree
    from algebraic.semirings import tropical_semiring
 
    tropical = tropical_semiring(minplus=True)
 
-   @jit(backend="jax")
+   @jax.jit
    def all_pairs_shortest_paths(dist):
        """Floyd-Warshall via repeated tropical matrix multiplication."""
        n = dist.shape[0]
@@ -45,9 +40,7 @@ overhead and enables backend-specific optimisations (XLA fusion for JAX,
    dist = algebraic.zeros((8, 8), semiring=tropical, backend="jax")
    paths = all_pairs_shortest_paths(dist)
 
-For JAX, ``jit`` wraps ``jax.jit``.  For PyTorch, it wraps
-``torch.compile``.  The NumPy backend does not support JIT; passing
-``backend="numpy"`` is a no-op (the function runs eagerly).
+For PyTorch, use ``torch.compile`` directly.
 
 .. important::
    JIT-compiled functions must not contain Python control flow that depends
@@ -64,7 +57,7 @@ this compiles to vectorised hardware instructions.
 
 .. code-block:: python
 
-   from algebraic._jax_wrappers import vmap
+   from algebraic import vmap
    import algebraic
    from algebraic.semirings import boolean_algebra
 
@@ -83,9 +76,8 @@ this compiles to vectorised hardware instructions.
 
    C = batched_matmul(A, B)   # shape: (batch_size, 4, 4)
 
-For PyTorch, ``vmap`` wraps ``torch.vmap``.  Support is present but not
-fully tested for all operation combinations; prefer JAX if batching is a
-primary concern.
+For PyTorch, ``vmap`` wraps ``torch.vmap``, automatically handling the
+conversion between ``AlgebraicArray`` and raw tensors.
 
 Combining jit and vmap
 -----------------------
@@ -96,24 +88,26 @@ pattern for training loops:
 
 .. code-block:: python
 
-   from algebraic._jax_wrappers import jit, vmap
+   import jax
+   import algebraic.utils.jax
+   from algebraic import vmap
 
-   fast_batched = jit(vmap(my_semiring_fn, backend="jax"), backend="jax")
+   fast_batched = jax.jit(vmap(my_semiring_fn, backend="jax"))
 
 Backend Support Summary
 -----------------------
 
-+----------------+------------------+--------------------+
-| Backend        | JIT              | vmap               |
-+================+==================+====================+
-| ``"jax"``      | ``jax.jit``      | ``jax.vmap``       |
-+----------------+------------------+--------------------+
-| ``"torch"``    | ``torch.compile``| ``torch.vmap``     |
-+----------------+------------------+--------------------+
-| ``"numpy"``    | no-op (eager)    | not supported      |
-+----------------+------------------+--------------------+
++----------------+--------------------+--------------------+
+| Backend        | JIT                | vmap               |
++================+====================+====================+
+| ``"jax"``      | ``jax.jit``        | ``jax.vmap``       |
++----------------+--------------------+--------------------+
+| ``"torch"``    | ``torch.compile``  | ``torch.vmap``     |
++----------------+--------------------+--------------------+
+| ``"numpy"``    | not applicable     | not supported      |
++----------------+--------------------+--------------------+
 
 If your semiring computation is prototype-stage and you are iterating
 quickly, start with ``backend="numpy"`` for easy debugging.  Once the logic
-is correct, switch to ``backend="jax"`` and add ``@jit`` to recover
+is correct, switch to ``backend="jax"`` and add ``@jax.jit`` to recover
 performance.

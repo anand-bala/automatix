@@ -2,7 +2,7 @@
 
 import copy
 import typing
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from itertools import product
 
@@ -15,11 +15,11 @@ import algebraic.ops as alge
 from algebraic.array import AlgebraicArray
 from algebraic.polynomials.dok import PolyDict
 from algebraic.spec import BoundedDistributiveLattice as Lattice
-from algebraic.types import Array, Backend, Scalar, is_array, is_scalar
+from algebraic.types import AlgebraicPyTree, AnyPyTree, Array, Backend, Scalar, is_array, is_scalar
 
 
 @dataclass
-class MonomialBasis:
+class MonomialBasis(AlgebraicPyTree):
     """Dense, monomial basis decomposition of a multilinear polynomial.
 
     This class represents the coefficients of a multilinear polynomial as a tensor of
@@ -306,9 +306,11 @@ class MonomialBasis:
         return [self.coeffs], (self.algebra, self.backend)
 
     @classmethod
-    def tree_unflatten(cls, aux_data: tuple, children: list[AlgebraicArray]) -> "MonomialBasis":
+    def tree_unflatten(cls, aux_data: tuple, children: Sequence[AnyPyTree]) -> "MonomialBasis":
         algebra, backend = aux_data
-        return cls(coeffs=children[0], algebra=algebra, backend=backend)
+        coeffs = children[0]
+        assert isinstance(coeffs, AlgebraicArray)
+        return cls(coeffs=coeffs, algebra=algebra, backend=backend)
 
     # -- Conversion ------------------------------------------------------------
 

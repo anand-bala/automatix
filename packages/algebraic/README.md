@@ -141,12 +141,18 @@ z_or = x + y  # [0.97, 0.86, 0.28]
 
 ### JAX-Specific Transformations
 
-For JAX users, backend-specific wrappers for `jit` and `vmap` are available:
+`AlgebraicArray` is registered as a JAX PyTree (via `algebraic.utils.jax`), so
+standard JAX transforms work out of the box:
 
 ```python
-from algebraic._jax_wrappers import jit, vmap
+import jax
+import algebraic
+import algebraic.utils.jax  # registers AlgebraicArray as a JAX PyTree
+from algebraic.semirings import tropical_semiring
 
-@jit(backend="jax")
+tropical = tropical_semiring(minplus=True)
+
+@jax.jit
 def shortest_paths(dist_matrix):
     """Compute all-pairs shortest paths using tropical matrix multiplication."""
     n = dist_matrix.shape[0]
@@ -156,9 +162,14 @@ def shortest_paths(dist_matrix):
     return result
 ```
 
-See `algebraic._jax_wrappers` for details.
-These wrappers also support PyTorch's `torch.compile` and `torch.vmap` when
-`backend="torch"` .
+For batching, use `algebraic.vmap` which delegates to `jax.vmap` or
+`torch.vmap` depending on the backend:
+
+```python
+from algebraic import vmap
+
+batched_fn = vmap(my_fn, backend="jax")
+```
 
 ### Advanced Features
 

@@ -39,7 +39,7 @@ else:
         dtype: DType
 
 
-Number = float | int | bool
+Number = float | int
 type Scalar = Number | Shaped[Array, ""]
 
 type Axis = int | Sequence[int]

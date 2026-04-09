@@ -4,7 +4,7 @@ import copy
 import functools
 import typing
 from collections import defaultdict
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 
 import bitarray.util as ba_util
@@ -15,11 +15,11 @@ from typing_extensions import Self
 import algebraic.ops as alge
 from algebraic.array import AlgebraicArray
 from algebraic.spec import BoundedDistributiveLattice as Lattice
-from algebraic.types import Array, Backend, Scalar, is_array
+from algebraic.types import AlgebraicPyTree, AnyPyTree, Array, Backend, Scalar, is_array
 
 
 @dataclass
-class PolyDict:
+class PolyDict(AlgebraicPyTree):
     """Sparse polynomial represented as monomial -> coefficient mapping."""
 
     algebra: Lattice
@@ -280,6 +280,7 @@ class PolyDict:
         return list(self.data.values()), (self.algebra, self.num_vars, keys, self.backend)
 
     @classmethod
-    def tree_unflatten(cls, aux_data: tuple, children: list[AlgebraicArray]) -> "PolyDict":
+    def tree_unflatten(cls, aux_data: tuple, children: Sequence[AnyPyTree]) -> "PolyDict":
         algebra, num_vars, keys, backend = aux_data
+        children = typing.cast(Sequence[AlgebraicArray], children)
         return cls(algebra, num_vars, dict(zip(keys, children)), backend=backend)

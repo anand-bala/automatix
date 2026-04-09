@@ -6,12 +6,16 @@ importing this module never triggers `jax`, `torch`, or `numpy` imports.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from algebraic.array.base import AlgebraicArray
 from algebraic.spec import Semiring
-from algebraic.types import Array, Backend, Number
+from algebraic.types import Array, Backend, Number, is_array, is_scalar
 
 
-def array(data: Array | Number, *, semiring: Semiring, backend: str | Backend | None = None) -> AlgebraicArray:
+def array(
+    data: Array | Number | Iterable[Array | Number], *, semiring: Semiring, backend: str | Backend | None = None
+) -> AlgebraicArray:
     """Create an :class:`AlgebraicArray` from an existing backend array.
 
     Parameters
@@ -38,20 +42,25 @@ def array(data: Array | Number, *, semiring: Semiring, backend: str | Backend | 
     AlgebraicArray([1., 2.], semiring=Semiring(...))
     """
     if backend is None:
-        backend = Backend.from_array(data)
+        if not is_array(data) and not is_scalar(data):
+            # Must be an iterable...
+            data = list(data)
+            backend = Backend.from_array(data[0])
+        else:
+            backend = Backend.from_array(data)
     backend = Backend(backend)
     if backend == Backend.JAX:
         import jax.numpy as jnp
 
-        return AlgebraicArray(jnp.asarray(data), semiring)
+        return AlgebraicArray(jnp.asarray(data, dtype=jnp.float32), semiring)
     elif backend == Backend.TORCH:
         import torch
 
-        return AlgebraicArray(torch.asarray(data), semiring)
+        return AlgebraicArray(torch.asarray(data, dtype=torch.float32), semiring)
     elif backend == Backend.NUMPY:
         import numpy as np
 
-        return AlgebraicArray(np.asarray(data), semiring)
+        return AlgebraicArray(np.asarray(data, dtype=np.float32), semiring)
     raise ValueError(f"Unsupported backend: {backend!r}")
 
 

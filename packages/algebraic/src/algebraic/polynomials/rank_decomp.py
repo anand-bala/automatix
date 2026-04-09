@@ -13,12 +13,12 @@ import algebraic.ops as algebraic
 from algebraic.array import AlgebraicArray
 from algebraic.polynomials.dok import PolyDict
 from algebraic.spec import BoundedDistributiveLattice as Lattice
-from algebraic.types import Array, Backend, Scalar, is_scalar
+from algebraic.types import AlgebraicPyTree, AnyPyTree, Array, Backend, Scalar, is_scalar
 from algebraic.utils import validate_semiring
 
 
 @dataclass
-class RankDecomposition:
+class RankDecomposition(AlgebraicPyTree):
     """CP (CANDECOMP/PARAFAC) decomposition of multilinear polynomial.
 
     Represents polynomial as sum of rank-1 components:
@@ -347,9 +347,11 @@ class RankDecomposition:
         return [self.factors], (self.algebra, self.max_rank, self.max_degree, self.max_replacement_degree, self.backend)
 
     @classmethod
-    def tree_unflatten(cls, aux_data: tuple, children: list[AlgebraicArray]) -> "RankDecomposition":
+    def tree_unflatten(cls, aux_data: tuple, children: Sequence[AnyPyTree]) -> "RankDecomposition":
         algebra, max_rank, max_degree, max_replacement_degree, backend = aux_data
-        return cls(children[0], algebra, max_rank, max_degree, max_replacement_degree, backend=backend)
+        factors = children[0]
+        assert isinstance(factors, AlgebraicArray)
+        return cls(factors, algebra, max_rank, max_degree, max_replacement_degree, backend=backend)
 
     def _index_to_bits(self, index: int) -> tuple[int, ...]:
         """Convert flat index to n-bit tuple."""

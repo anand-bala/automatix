@@ -1,25 +1,27 @@
-"""Tests for backend-agnostic jit and vmap transformations."""
+"""Tests for jit and vmap transformations."""
 # mypy: disable-error-code="no-untyped-def"
 
 from __future__ import annotations
 
+import functools
+
 import algebraic
 import algebraic.utils.jax
+import jax
 import numpy as np
 import pytest
 from algebraic import AlgebraicArray
-from algebraic._jax_wrappers import jit
 from algebraic.semirings import counting_semiring
 from algebraic.transforms import vmap
 
 
 class TestJit:
-    """Test jit wrapper."""
+    """Test jax.jit with AlgebraicArray."""
 
     def test_jit_jax(self, jax_backend: str) -> None:
         semiring = counting_semiring()
 
-        @jit(backend=jax_backend)
+        @jax.jit
         def add_arrays(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
             return x + y
 
@@ -29,25 +31,11 @@ class TestJit:
         assert isinstance(result, AlgebraicArray)
         assert result.semiring is semiring
 
-    def test_jit_numpy_passthrough(self) -> None:
-        """Numpy jit is a no-op passthrough."""
-        semiring = counting_semiring()
-
-        @jit(backend="numpy")
-        def add_arrays(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
-            return x + y
-
-        a = algebraic.zeros((3, 3), semiring=semiring, backend="numpy")
-        b = algebraic.ones((3, 3), semiring=semiring, backend="numpy")
-        result = add_arrays(a, b)
-        assert isinstance(result, AlgebraicArray)
-        assert result.semiring is semiring
-
     def test_jit_with_arguments(self, jax_backend: str) -> None:
         """Test that jit works with static_argnames (JAX-only)."""
         semiring = counting_semiring()
 
-        @jit(backend=jax_backend)
+        @functools.partial(jax.jit, static_argnames=("multiplier",))
         def scale_array(x: AlgebraicArray, multiplier: int) -> AlgebraicArray:
             result = x
             for _ in range(multiplier):
@@ -105,7 +93,7 @@ class TestCombinedTransformations:
         semiring = counting_semiring()
         one_arr = algebraic.ones((3, 3), semiring=semiring, backend=jax_backend)
 
-        @jit(backend=jax_backend)
+        @jax.jit
         @vmap(backend=jax_backend, in_axes=(0, None))
         def batch_add(x: AlgebraicArray, one: AlgebraicArray) -> AlgebraicArray:
             return x + one
@@ -120,7 +108,7 @@ class TestCombinedTransformations:
         one_arr = algebraic.ones((3, 3), semiring=semiring, backend=jax_backend)
 
         @vmap(backend=jax_backend, in_axes=(0, None))
-        @jit(backend=jax_backend)
+        @jax.jit
         def batch_add(x: AlgebraicArray, one: AlgebraicArray) -> AlgebraicArray:
             return x + one
 
@@ -136,7 +124,7 @@ class TestJitIndexUpdates:
     def test_jit_set(self, jax_backend: str) -> None:
         semiring = counting_semiring()
 
-        @jit(backend=jax_backend)
+        @jax.jit
         def update_fn(a: AlgebraicArray) -> AlgebraicArray:
             return a.at[1].set(10.0)
 
@@ -148,7 +136,7 @@ class TestJitIndexUpdates:
     def test_jit_add(self, jax_backend: str) -> None:
         semiring = counting_semiring()
 
-        @jit(backend=jax_backend)
+        @jax.jit
         def update_fn(a: AlgebraicArray) -> AlgebraicArray:
             return a.at[1].add(10.0)
 
@@ -159,7 +147,7 @@ class TestJitIndexUpdates:
     def test_jit_multiply(self, jax_backend: str) -> None:
         semiring = counting_semiring()
 
-        @jit(backend=jax_backend)
+        @jax.jit
         def update_fn(a: AlgebraicArray) -> AlgebraicArray:
             return a.at[1].multiply(5.0)
 
