@@ -50,7 +50,7 @@ jobs:
           fi
       - name: Type check
         working-directory: packages/algebraic
-        run: uv run --frozen ty check --output-format concise src/ tests/
+        run: uv run --frozen mypy --strict .
 
   release:
     name: Build and release algebraic

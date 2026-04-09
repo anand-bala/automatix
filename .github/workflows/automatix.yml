@@ -48,9 +48,7 @@ jobs:
             uv run --frozen pytest tests/ -v
           fi
       - name: Type check
-        run: |
-          uv run --frozen ty check --output-format concise src/ tests/
-          uv run --frozen pyrefly check --output-format min-text src/ tests/
+        run: uv run --frozen mypy --strict src/ tests/
 
   release:
     name: Build and release automatix
