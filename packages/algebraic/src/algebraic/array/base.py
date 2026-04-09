@@ -3,7 +3,6 @@
 This module defines an abstract `AlgebraicArray` that defines the interface for backend-specific algebraic array implementations.
 """
 
-import copy
 import math
 import typing
 from collections.abc import Sequence
@@ -14,7 +13,7 @@ import array_api_compat
 from typing_extensions import Self
 
 from algebraic.spec import Semiring, has_complement, is_ring
-from algebraic.types import AnyPyTree, Array, DType, MatmulFn, Number, Scalar, VdotFn, is_array
+from algebraic.types import AnyPyTree, Array, DType, MatmulFn, Number, Scalar, VdotFn, is_array, is_torch_array
 
 if typing.TYPE_CHECKING:
     from algebraic.utils.indexing import _IndexUpdateHelper
@@ -42,32 +41,30 @@ class AlgebraicArray:
     _vdot: VdotFn | None = None
     _matmul: MatmulFn | None = None
 
-    def _replace_attr(self, name: str, value: object) -> Self:
-        """Create a new instance with one attribute changed (backend-specific)."""
-        clone = copy.copy(self)
-        object.__setattr__(clone, name, value)
-        return clone
-
-    def _wrap(self, data: Array | Number) -> Self:
+    def _wrap(self, data: Array | Number) -> "AlgebraicArray":
         """Create a new instance with the given data, preserving all other attributes."""
-        if array_api_compat.is_torch_array(data):
+        if is_torch_array(self.data):
             import torch
 
-            data = typing.cast(Array, torch.as_tensor(data))
+            data = torch.as_tensor(data)
+        if is_torch_array(data):
+            import torch
+
+            data = typing.cast(Array, data.clone())
         else:
             array_ns = array_api_compat.array_namespace(self.data)
             data = typing.cast(Array, array_ns.asarray(data))
-        return self._replace_attr("data", data)
+        return AlgebraicArray(data, self.semiring, self._vdot, self._matmul)
 
-    def __add__(self, other: Self | Scalar) -> Self:
+    def __add__(self, other: Self | Scalar) -> "AlgebraicArray":
         other_data = other.data if isinstance(other, AlgebraicArray) else other
         return self._wrap(self.semiring.add(self.data, other_data))
 
-    def __mul__(self, other: Self | Scalar) -> Self:
+    def __mul__(self, other: Self | Scalar) -> "AlgebraicArray":
         other_data = other.data if isinstance(other, AlgebraicArray) else other
         return self._wrap(self.semiring.mul(self.data, other_data))
 
-    def __sub__(self, other: Self | Scalar) -> Self:
+    def __sub__(self, other: Self | Scalar) -> "AlgebraicArray":
         other_data, _other_semiring = (
             (other.data, other.semiring) if isinstance(other, AlgebraicArray) else (other, self.semiring)
         )
@@ -80,7 +77,7 @@ class AlgebraicArray:
         neg_rhs = self.semiring.additive_inverse(other_data)
         return self._wrap(self.semiring.add(self.data, neg_rhs))
 
-    def __neg__(self) -> Self:
+    def __neg__(self) -> "AlgebraicArray":
         semiring = self.semiring
 
         # Try additive_inverse first (for Rings)
@@ -98,7 +95,7 @@ class AlgebraicArray:
             f"Semiring {type(semiring).__name__} has neither."
         )
 
-    def __matmul__(self, other: Self) -> Self:
+    def __matmul__(self, other: Self) -> "AlgebraicArray":
         """Matrix multiplication using semiring operations.
 
         Delegates to ``dot_general`` with dimension numbers determined by ``ndim``:
@@ -139,7 +136,7 @@ class AlgebraicArray:
     # to make the intent clear to type checkers and documentation readers.
     __hash__: typing.ClassVar[None] = None  # type: ignore[assignment]
 
-    def __getitem__(self, key: Any) -> Self:  # noqa: ANN401
+    def __getitem__(self, key: Any) -> "AlgebraicArray":  # noqa: ANN401
         """Index into the array, forwarding to the underlying data."""
         return self._wrap(self.data[key])
 
@@ -169,11 +166,11 @@ class AlgebraicArray:
 
         return _IndexUpdateHelper(self)
 
-    def __pos__(self) -> Self:
-        """Unary positive; returns a shallow copy."""
-        return copy.copy(self)
+    def __pos__(self) -> "AlgebraicArray":
+        """Unary positive; is a no-op."""
+        return self
 
-    def to_device(self, device: object, /, *, stream: int | None = None) -> Self:
+    def to_device(self, device: object, /, *, stream: int | None = None) -> "AlgebraicArray":
         """Return a copy of this array on the specified device.
 
         Parameters
@@ -200,7 +197,7 @@ class AlgebraicArray:
     @property
     def shape(self) -> tuple[int, ...]:
         """Shape of the array as a tuple of ints."""
-        return self.data.shape
+        return typing.cast(tuple[int, ...], self.data.shape)
 
     @property
     def size(self) -> int:
@@ -214,13 +211,13 @@ class AlgebraicArray:
         return array_api_compat.device(self.data)
 
     @property
-    def T(self) -> Self:  # noqa: N802
+    def T(self) -> "AlgebraicArray":  # noqa: N802
         """Transpose of a 2-D matrix (swap last two axes)."""
         xp = array_api_compat.array_namespace(self.data)
         return self._wrap(xp.linalg.matrix_transpose(self.data))
 
     @property
-    def mT(self) -> Self:  # noqa: N802
+    def mT(self) -> "AlgebraicArray":  # noqa: N802
         """Batch matrix transpose (same as `T`; alias for Array-API compatibility)."""
         return self.T
 
@@ -233,3 +230,9 @@ class AlgebraicArray:
         data = children[0]
         assert is_array(data)
         return cls(data, semiring, _vdot, _matmul)
+
+    def clone(self) -> "AlgebraicArray":
+        if is_torch_array(self.data):
+            return AlgebraicArray(self.data.clone(), self.semiring, self._vdot, self._matmul)
+        else:
+            return self

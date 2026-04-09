@@ -12,7 +12,7 @@ from algebraic import AlgebraicArray, BooleanAlgebra, DeMorganAlgebra
 from algebraic.polynomials import PolyDict as SparsePolynomial
 from algebraic.polynomials import RankDecomposition
 from algebraic.polynomials.dok import PolyDict
-from algebraic.types import Array, Backend
+from algebraic.types import Array, Backend, is_torch_array
 from algebraic.utils.testing import assert_close, assert_equal, make_array
 from bitarray import frozenbitarray
 from hypothesis import given, settings
@@ -614,7 +614,6 @@ class TestTorchBackendRegressions:
         sub_arr = alg.array(sub_data, semiring=bool_alg, backend="torch")
         sub_rd = RankDecomposition(
             factors=sub_arr,
-            algebra=bool_alg,
             max_rank=1,
             max_degree=2,
             max_replacement_degree=3,
@@ -640,6 +639,7 @@ class TestTorchBackendRegressions:
 
         # Pad from degree-1 to degree-2; this exercises _set_at_index / index_put
         padded = pad_upto(factors, max_rank=1, max_degree=2, algebra=bool_alg)
+        assert is_torch_array(padded.data)
 
         loss = padded.data.sum()
         loss.backward()

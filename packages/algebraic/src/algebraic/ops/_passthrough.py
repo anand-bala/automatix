@@ -240,8 +240,14 @@ def squeeze(
     axis : int or tuple of int or None, optional
         Size-1 axes to remove. ``None`` removes all size-1 axes.
     """
-    xp = array_api_compat.array_namespace(x.data)
-    return x._wrap(xp.squeeze(x.data, axis=axis))
+    # NOTE: Turns out, the torch implementation of squeeze is not up to date even on the master branch
+
+    data = x.data
+    if axis is None:
+        squeezed = data.squeeze()
+    else:
+        squeezed = data.squeeze(axis)
+    return x._wrap(squeezed)
 
 
 def stack(arrays: Sequence[AlgebraicArray], *, axis: int = 0) -> AlgebraicArray:

@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 from algebraic import AlgebraicArray, Ring
 from algebraic.semirings import boolean_algebra, counting_semiring, tropical_semiring
+from algebraic.types import is_torch_array
 from algebraic.utils.testing import assert_close, assert_equal, make_array
 
 
@@ -392,25 +393,31 @@ class TestAlgebraicArrayBasics:
 class TestTorchRequiresGrad:
     """Regression tests: algebraic.array must not strip requires_grad from torch tensors."""
 
+    pytest.importorskip("torch")
+
     def test_requires_grad_preserved_float32(self) -> None:
         """array() wrapping a float32 tensor with requires_grad=True returns the same tensor."""
-        torch = pytest.importorskip("torch")
+        import torch
+
         semiring = counting_semiring()
 
         t = torch.tensor([0.8, 0.3], requires_grad=True)
         a = algebraic.array(t, semiring=semiring, backend="torch")
 
         assert a.data is t, "should return the same tensor object"
+        assert is_torch_array(a.data)
         assert t.requires_grad, "original tensor must still require grad"
         assert a.data.requires_grad, "wrapped tensor must require grad"
 
     def test_requires_grad_preserved_non_float32(self) -> None:
         """array() on a float64 tensor with requires_grad=True preserves requires_grad."""
-        torch = pytest.importorskip("torch")
+        import torch
+
         semiring = counting_semiring()
 
         t = torch.tensor([0.8, 0.3], dtype=torch.float64, requires_grad=True)
         a = algebraic.array(t, semiring=semiring, backend="torch")
 
+        assert is_torch_array(a.data)
         assert a.data.requires_grad, "dtype-converted tensor must require grad"
         assert a.data.dtype == torch.float32

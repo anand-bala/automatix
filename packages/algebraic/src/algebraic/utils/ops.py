@@ -1,7 +1,10 @@
 """Dispatchable common utility operations"""
 
+from __future__ import annotations
+
 import dataclasses
 import math
+import typing
 from typing import Any
 
 import array_api_compat
@@ -46,15 +49,20 @@ def reduce_axes(
         identity = jnp.asarray(identity, dtype=data.dtype)
         result = jax.lax.reduce(data, identity, semiring_op, dimensions=axis)
     elif is_torch_array(data) or is_numpy_array(data):
+        import numpy.typing as npt
+        import torch
+
+        acc: torch.Tensor | npt.NDArray[Any]
+
         identity = xp.asarray(identity, dtype=data.dtype)
 
-        result = xp.asarray(data)
+        result = data
         for dim in sorted(axis, reverse=True):
             n = result.shape[dim]
             slices = [_take(result, i, dim) for i in range(n)]
             acc = xp.broadcast_to(identity, slices[0].shape)
             for s in slices:
-                acc = xp.asarray(semiring_op(acc, s))
+                acc = typing.cast(torch.Tensor | npt.NDArray[Any], semiring_op(acc, s))
             result = acc
     else:
         raise NotImplementedError(f"Unsupported array type {type(data)}")
@@ -98,19 +106,31 @@ def prefix_scan_axis(
 
     scanned: Array
     if is_torch_array(data) or is_numpy_array(data):
+        import numpy as np
+        import torch
+
         n = data.shape[axis]
         slices = [_take(data, i, axis) for i in range(n)]
         outputs: list[Any] = []
-        acc = xp.broadcast_to(identity, slices[0].shape) if n > 0 else identity
+
+        acc: torch.Tensor | np.ndarray
+        init: torch.Tensor | np.ndarray
+
+        init = xp.asarray(identity)
+
+        acc = xp.broadcast_to(init, slices[0].shape) if n > 0 else init
         for s in slices:
-            acc = xp.asarray(semiring_op(acc, s))
+            acc = typing.cast(torch.Tensor | np.ndarray, semiring_op(acc, s))
             outputs.append(acc)
 
         scanned = xp.stack(outputs, axis=axis) if outputs else data
+        identity = init
     elif is_jax_array(data):
         import jax
 
         scanned = jax.lax.associative_scan(semiring_op, data, axis=axis)
+    else:
+        raise NotImplementedError(f"Unknown array type {type(data)}")
 
     if include_initial:
         shape = list(scanned.shape)

@@ -1,6 +1,5 @@
 """Backend-agnostic CP (CANDECOMP/PARAFAC) decomposition of multilinear polynomials."""
 
-import copy
 import typing
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -41,21 +40,34 @@ class RankDecomposition(AlgebraicPyTree):
     backend: Backend = field(default=Backend.NUMPY, kw_only=True)
     """The specific backend from the derived class"""
 
-    def _replace_attr(self, name: str, value: object) -> Self:
-        """Create a new instance with one attribute changed (backend-specific)."""
-        clone = copy.copy(self)
-        object.__setattr__(clone, name, value)
-        return clone
+    def __init__(
+        self,
+        factors: AlgebraicArray,
+        max_rank: int | None = 10,
+        max_degree: int | None = None,
+        max_replacement_degree: int | None = None,
+        *,
+        backend: str | Backend | None = None,
+    ) -> None:
+        super().__init__()
 
-    @classmethod
-    def _get_backend(cls, backend: str | Backend | None) -> str | Backend:
-        """Resolve backend: use explicit arg, class default, or fall back to NumPy."""
-        if backend is not None:
-            return backend
-        try:
-            return cls.backend
-        except AttributeError:
-            return Backend.NUMPY
+        if backend is None:
+            backend = Backend.from_array(factors.data)
+        elif isinstance(backend, str):
+            backend = Backend(backend)
+        num_vars = factors.shape[2] - 1
+
+        if not isinstance(factors.semiring, Lattice):
+            raise ValueError(
+                f"Unsupported type for polynomial sub-algebra {type(factors.semiring)}; expected BoundedDistributiveLattice"
+            )
+
+        self.factors = factors
+        self.algebra = factors.semiring
+        self.max_rank = max_rank if max_rank is not None else 10
+        self.max_degree = max_degree if max_degree is not None else num_vars
+        self.max_replacement_degree = max_replacement_degree if max_replacement_degree is not None else self.max_degree
+        self.backend = backend
 
     @property
     def rank(self) -> int:
@@ -69,9 +81,9 @@ class RankDecomposition(AlgebraicPyTree):
     def num_vars(self) -> int:
         return self.factors.shape[2] - 1
 
-    def _replace_factors(self, factors: AlgebraicArray) -> Self:
+    def _replace_factors(self, factors: AlgebraicArray) -> "RankDecomposition":
         """Return a new instance with the given factors, preserving other attrs."""
-        return self._replace_attr("factors", factors)
+        return RankDecomposition(factors, self.max_rank, self.max_degree, self.max_replacement_degree, backend=self.backend)
 
     @classmethod
     def variable(
@@ -83,7 +95,7 @@ class RankDecomposition(AlgebraicPyTree):
         max_degree: int | None = None,
         max_replacement_degree: int | None = None,
         *,
-        backend: str | Backend | None = None,
+        backend: str | Backend,
     ) -> Self:
         r"""Create rank-1 polynomial representing variable :math:`x_i`.
 
@@ -118,13 +130,11 @@ class RankDecomposition(AlgebraicPyTree):
         >>> x0.rank
         1
         """
-        backend = cls._get_backend(backend)
         factors = algebraic.zeros((1, 1, num_vars + 1), semiring=algebra, backend=backend)
         factors = factors.at[(0, 0, i + 1)].set(algebra.one)
 
-        return cls._make(
+        return cls(
             factors,
-            algebra,
             max_rank,
             max_degree,
             max_replacement_degree,
@@ -141,7 +151,7 @@ class RankDecomposition(AlgebraicPyTree):
         max_degree: int | None = None,
         max_replacement_degree: int | None = None,
         *,
-        backend: str | Backend | None = None,
+        backend: str | Backend,
     ) -> Self:
         """Create a rank-1 constant polynomial.
 
@@ -176,16 +186,14 @@ class RankDecomposition(AlgebraicPyTree):
         >>> c.rank
         1
         """
-        backend = cls._get_backend(backend)
         factors = algebraic.zeros((1, 1, num_vars + 1), semiring=algebra, backend=backend).at[(0, 0, 0)].set(value)
 
-        return cls._make(
+        return cls(
             factors,
-            algebra,
             max_rank,
             max_degree,
             max_replacement_degree,
-            backend,
+            backend=backend,
         )
 
     @classmethod
@@ -197,7 +205,7 @@ class RankDecomposition(AlgebraicPyTree):
         max_degree: int | None = None,
         max_replacement_degree: int | None = None,
         *,
-        backend: str | Backend | None = None,
+        backend: str | Backend,
     ) -> Self:
         return cls.constant(algebra.zero, num_vars, algebra, max_rank, max_degree, max_replacement_degree, backend=backend)
 
@@ -210,7 +218,7 @@ class RankDecomposition(AlgebraicPyTree):
         max_degree: int | None = None,
         max_replacement_degree: int | None = None,
         *,
-        backend: str | Backend | None = None,
+        backend: str | Backend,
     ) -> Self:
         return cls.constant(algebra.one, num_vars, algebra, max_rank, max_degree, max_replacement_degree, backend=backend)
 
@@ -238,9 +246,7 @@ class RankDecomposition(AlgebraicPyTree):
             backend=self.backend,
         )
 
-    # -- Arithmetic ------------------------------------------------------------
-
-    def __add__(self, other: "RankDecomposition | Scalar") -> Self:
+    def __add__(self, other: "RankDecomposition | Scalar") -> "RankDecomposition":
         """Add by concatenating rank-1 components.
 
         For CP decomposition: ``p + q`` = sum of all components from both.
@@ -253,10 +259,10 @@ class RankDecomposition(AlgebraicPyTree):
 
         new_factors = _add_factors(self.factors, other.factors, self.algebra)
         new_factors = prune_factors(new_factors, max_rank=self.max_rank)
-        result: Self = self._replace_factors(new_factors)
+        result = self._replace_factors(new_factors)
         return result
 
-    def __mul__(self, other: Self) -> Self:
+    def __mul__(self, other: "RankDecomposition") -> "RankDecomposition":
         """Multiply two CP-decomposed polynomials.
 
         Delegates core multiplication to ``_multiply_arrays()``, then applies
@@ -268,9 +274,7 @@ class RankDecomposition(AlgebraicPyTree):
 
         return result
 
-    # -- Evaluation / composition ----------------------------------------------
-
-    def evaluate(self, points: Array | AlgebraicArray) -> Self:
+    def evaluate(self, points: Array | AlgebraicArray) -> "RankDecomposition":
         """Evaluate polynomial at given point.
 
         Parameters
@@ -305,7 +309,7 @@ class RankDecomposition(AlgebraicPyTree):
 
         return self._make_const(result.data)
 
-    def compose(self, replacements: Sequence[Self]) -> Self:
+    def compose(self, replacements: Sequence["RankDecomposition"]) -> "RankDecomposition":
         """Compose polynomial with replacement polynomials.
 
         Parameters
@@ -351,7 +355,7 @@ class RankDecomposition(AlgebraicPyTree):
         algebra, max_rank, max_degree, max_replacement_degree, backend = aux_data
         factors = children[0]
         assert isinstance(factors, AlgebraicArray)
-        return cls(factors, algebra, max_rank, max_degree, max_replacement_degree, backend=backend)
+        return cls(factors, max_rank, max_degree, max_replacement_degree, backend=backend)
 
     def _index_to_bits(self, index: int) -> tuple[int, ...]:
         """Convert flat index to n-bit tuple."""
@@ -426,7 +430,7 @@ class RankDecomposition(AlgebraicPyTree):
             max_degree = sparse.num_vars
         algebra = sparse.algebra
         num_vars = sparse.num_vars
-        backend = cls._get_backend(backend)
+        backend = sparse.backend
 
         zero_poly = cls.constant(
             algebra.zero,
@@ -462,33 +466,13 @@ class RankDecomposition(AlgebraicPyTree):
                 for k in range(len(vars_in_monomial), max_degree):
                     factors = factors.at[(r, k, 0)].set(algebra.one)
 
-        return cls._make(
+        return cls(
             factors,
-            algebra,
             max_rank,
             max_degree,
             max_replacement_degree,
-            backend,
+            backend=backend,
         )
-
-    @classmethod
-    def _make(
-        cls,
-        factors: AlgebraicArray,
-        algebra: Lattice,
-        max_rank: int | None,
-        max_degree: int | None,
-        max_replacement_degree: int | None,
-        backend: str | Backend = Backend.NUMPY,
-    ) -> Self:
-        """Dispatch to the correct backend subclass."""
-        num_vars = factors.shape[2] - 1
-        backend = Backend(backend)
-        _max_rank = max_rank if max_rank is not None else 100
-        _max_degree = max_degree if max_degree is not None else num_vars
-        _max_replacement_degree = max_replacement_degree if max_replacement_degree is not None else _max_degree
-
-        return cls(factors, algebra, _max_rank, _max_degree, _max_replacement_degree, backend=backend)
 
 
 def prepare_replacement_factors(replacements: Sequence[RankDecomposition], algebra: Lattice) -> AlgebraicArray:

@@ -18,7 +18,7 @@ from typing_extensions import overload
 
 from algebraic.array.base import AlgebraicArray
 from algebraic.spec import is_ring
-from algebraic.types import Array, Scalar
+from algebraic.types import Array
 from algebraic.utils import normalize_axes, validate_semiring
 from algebraic.utils.ops import DotPlan, prefix_scan_axis, reduce_axes
 
@@ -93,9 +93,7 @@ def square(x: AlgebraicArray) -> AlgebraicArray:
     return x * x
 
 
-def sum(  # noqa: A001  (intentional shadowing of built-in)
-    x: AlgebraicArray, /, *, axis: int | Sequence[int] | None = None, keepdims: bool = False
-) -> AlgebraicArray:
+def sum(x: AlgebraicArray, /, *, axis: int | Sequence[int] | None = None, keepdims: bool = False) -> AlgebraicArray:
     """Reduce *x* using the semiring's addition along *axis*.
 
     Parameters
@@ -116,10 +114,8 @@ def sum(  # noqa: A001  (intentional shadowing of built-in)
     array(1., dtype=float32)
     """
 
-    xp = array_api_compat.get_namespace(x.data)
-    zero: Scalar = xp.asarray(x.semiring.zero, dtype=x.dtype)
     axis = normalize_axes(axis, x.ndim)
-    result = reduce_axes(x.data, zero, x.semiring.add, axis=axis, keepdims=keepdims)
+    result = reduce_axes(x.data, x.semiring.zero, x.semiring.add, axis=axis, keepdims=keepdims)
     return x._wrap(result)
 
 
@@ -150,10 +146,8 @@ def prod(
     array(6., dtype=float32)
     """
 
-    xp = array_api_compat.get_namespace(x.data)
-    one: Scalar = xp.asarray(x.semiring.one, dtype=x.dtype)
     axis = normalize_axes(axis, x.ndim)
-    result = reduce_axes(x.data, one, x.semiring.mul, axis=axis, keepdims=keepdims)
+    result = reduce_axes(x.data, x.semiring.one, x.semiring.mul, axis=axis, keepdims=keepdims)
     return x._wrap(result)
 
 
@@ -177,10 +171,8 @@ def cumulative_sum(
         ``result.shape[axis] == x.shape[axis] + 1``.
     """
 
-    xp = array_api_compat.get_namespace(x.data)
     axis = axis % x.ndim
-    zero = xp.asarray(x.semiring.zero, dtype=x.dtype)
-    result = prefix_scan_axis(x.data, zero, x.semiring.add, axis=axis, include_initial=include_initial)
+    result = prefix_scan_axis(x.data, x.semiring.zero, x.semiring.add, axis=axis, include_initial=include_initial)
     return x._wrap(result)
 
 
@@ -205,10 +197,8 @@ def cumulative_prod(
         ``result.shape[axis] == x.shape[axis] + 1``.
     """
 
-    xp = array_api_compat.get_namespace(x.data)
     axis = axis % x.ndim
-    one = xp.asarray(x.semiring.one, dtype=x.dtype)
-    result = prefix_scan_axis(x.data, one, x.semiring.mul, axis=axis, include_initial=include_initial)
+    result = prefix_scan_axis(x.data, x.semiring.one, x.semiring.mul, axis=axis, include_initial=include_initial)
     return x._wrap(result)
 
 
@@ -232,7 +222,6 @@ def dot_general(
     """
 
     validate_semiring(x, y)
-    xp = array_api_compat.get_namespace(x.data, y.data)
 
     (lhs_contract, rhs_contract), (lhs_batch, rhs_batch) = dimension_numbers
 
@@ -264,34 +253,38 @@ def dot_general(
     ):
         return x._wrap(x._matmul(x.data, y.data))
 
+    from algebraic import permute_dims, reshape, squeeze
+
     # General case
     plan = DotPlan.plan(x.data.shape, y.data.shape, dimension_numbers)
-    semiring = x.semiring
 
-    lhs_transposed: Array = xp.permute_dims(x.data, plan.lhs_perm)
-    rhs_transposed: Array = xp.permute_dims(y.data, plan.rhs_perm)
+    lhs_transposed = permute_dims(x, plan.lhs_perm)
+    rhs_transposed = permute_dims(y, plan.rhs_perm)
 
     if plan.n_batch > 0:
-        lhs_r = lhs_transposed.reshape(plan.batch_size, plan.lhs_free_size, plan.contract_size)
-        rhs_r = rhs_transposed.reshape(plan.batch_size, plan.rhs_free_size, plan.contract_size)
+        lhs_r = reshape(lhs_transposed, (plan.batch_size, plan.lhs_free_size, plan.contract_size))
+        rhs_r = reshape(rhs_transposed, (plan.batch_size, plan.rhs_free_size, plan.contract_size))
 
-        products: Array = xp.asarray(semiring.mul(lhs_r[:, :, None, :], rhs_r[:, None, :, :]))
+        products = lhs_r[:, :, None, :] * rhs_r[:, None, :, :]
     else:
-        lhs_2d = lhs_transposed.reshape(plan.lhs_free_size, plan.contract_size)
-        rhs_2d = rhs_transposed.reshape(plan.rhs_free_size, plan.contract_size)
+        lhs_2d = reshape(lhs_transposed, (plan.lhs_free_size, plan.contract_size))
+        rhs_2d = reshape(rhs_transposed, (plan.rhs_free_size, plan.contract_size))
 
-        products = xp.asarray(semiring.mul(lhs_2d[:, None, :], rhs_2d[None, :, :]))
+        products = lhs_2d[:, None, :] * rhs_2d[None, :, :]
 
     # Reduce along contract dimension (last dim) using semiring.add
     last_dim = normalize_axes(-1, products.ndim)
-    result = reduce_axes(products, semiring.zero, semiring.add, axis=last_dim)
+    result = sum(
+        products,
+        axis=last_dim,
+    )
 
     if plan.output_shape:
-        result = result.reshape(plan.output_shape)
+        result = reshape(result, plan.output_shape)
     else:
-        result = result.squeeze()
+        result = squeeze(result)
 
-    return x._wrap(result)
+    return result
 
 
 def matmul(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
@@ -614,12 +607,12 @@ def einsum(
     --------
     >>> import algebraic
     >>> sr = algebraic.semirings.tropical_semiring(minplus=True)
-    >>> A = algebraic.array([[0.0, 1.0], [2.0, 3.0]], semiring=sr, backend="numpy")
-    >>> B = algebraic.array([[4.0, 5.0], [6.0, 7.0]], semiring=sr, backend="numpy")
+    >>> A = algebraic.array([[0.0, 10.0], [2.0,  1.0]], semiring=sr, backend="numpy")
+    >>> B = algebraic.array([[4.0,  1.0], [0.0,  7.0]], semiring=sr, backend="numpy")
     >>> C = algebraic.einsum("ij,jk->ik", A, B)
-    >>> C.data  # doctest: +SKIP
-    array([[ 6.,  7.],
-           [ 6.,  7.]])
+    >>> C.data
+    array([[4., 1.],
+           [1., 3.]], dtype=float32)
     """
     import opt_einsum  # type: ignore[import-untyped]
 

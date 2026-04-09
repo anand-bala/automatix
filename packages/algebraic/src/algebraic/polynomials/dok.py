@@ -1,6 +1,5 @@
 """Sparse polynomial representation using dictionary-based storage."""
 
-import copy
 import functools
 import typing
 from collections import defaultdict
@@ -10,7 +9,6 @@ from dataclasses import dataclass, field
 import bitarray.util as ba_util
 from bitarray import bitarray, frozenbitarray
 from jaxtyping import Shaped
-from typing_extensions import Self
 
 import algebraic.ops as alge
 from algebraic.array import AlgebraicArray
@@ -130,16 +128,10 @@ class PolyDict(AlgebraicPyTree):
         coefficient = alge.ones((), semiring=algebra, backend=backend)
         return cls(algebra, num_vars, {frozenbitarray(monomial): coefficient}, backend=backend)
 
-    def _replace_attr(self, name: str, value: object) -> Self:
-        """Create a new instance with one attribute changed (backend-specific)."""
-        clone = copy.copy(self)
-        object.__setattr__(clone, name, value)
-        return clone
+    def _wrap(self, data: Mapping[frozenbitarray, AlgebraicArray]) -> "PolyDict":
+        return PolyDict(self.algebra, self.num_vars, dict(data), backend=self.backend)
 
-    def _wrap(self, data: Mapping[frozenbitarray, AlgebraicArray]) -> Self:
-        return self._replace_attr("data", data)
-
-    def __add__(self, other: Self | Scalar) -> Self:
+    def __add__(self, other: "PolyDict | Scalar") -> "PolyDict":
         # This will essentially merge the two polynomials by adding the monomial coefficients where they are common, or using the additive identity where one isn't available.
         other_data: Mapping[frozenbitarray, AlgebraicArray | Scalar]
         if isinstance(other, PolyDict):
@@ -159,7 +151,7 @@ class PolyDict(AlgebraicPyTree):
         }
         return self._wrap(ret)
 
-    def __mul__(self, other: Self | Scalar) -> Self:
+    def __mul__(self, other: "PolyDict | Scalar") -> "PolyDict":
         r"""Multiply two polynomials.
 
         $(\sum_{S \in a} c_S x^S) \cdot (\sum_{T \in b} d_T x^T) = sum_{S,T} (c_S * d_T) x^{S \cup T}$
@@ -187,7 +179,7 @@ class PolyDict(AlgebraicPyTree):
                 ret[new_monom] = ret[new_monom] + new_coeff
         return self._wrap(ret)
 
-    def evaluate(self, point: Shaped[Array, " {self.num_vars}"] | Mapping[int, Scalar]) -> Self:
+    def evaluate(self, point: Shaped[Array, " {self.num_vars}"] | Mapping[int, Scalar]) -> "PolyDict":
         """Evaluate polynomial at a point.
 
         Parameters
@@ -229,9 +221,9 @@ class PolyDict(AlgebraicPyTree):
                 i: cls.constant(point[i], self.num_vars, algebra=self.algebra, backend=self.backend)
                 for i in range(self.num_vars)
             }
-        return self.compose(replacements)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
+        return self.compose(replacements)
 
-    def compose(self, replacements: Mapping[int, Self]) -> Self:
+    def compose(self, replacements: Mapping[int, "PolyDict"]) -> "PolyDict":
         """Compose polynomial with multiple substitutions.
 
         Returns ``p(x_1 <- q_1, ..., x_n <- q_n)`` where only specified
@@ -270,7 +262,7 @@ class PolyDict(AlgebraicPyTree):
             )
             result = result + term
 
-        return result  # type: ignore[return-value]
+        return result
 
     def isscalar(self) -> bool:
         return len(self) == 0 or (len(self) == 1 and self.get(frozenbitarray(self.num_vars)) is not None)

@@ -1,6 +1,5 @@
 """Backend-agnostic dense tensor polynomial representations."""
 
-import copy
 import typing
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -9,7 +8,6 @@ from itertools import product
 from array_api_compat import array_namespace
 from bitarray import frozenbitarray
 from jaxtyping import Shaped
-from typing_extensions import Self
 
 import algebraic.ops as alge
 from algebraic.array import AlgebraicArray
@@ -39,15 +37,9 @@ class MonomialBasis(AlgebraicPyTree):
         """Number of variables/indeterminants in this multilinear polynomial."""
         return len(self.shape)
 
-    def _replace_attr(self, name: str, value: object) -> Self:
-        """Create a new instance with one attribute changed (backend-specific)."""
-        clone = copy.copy(self)
-        object.__setattr__(clone, name, value)
-        return clone
-
-    def _replace_coeffs(self, coeffs: AlgebraicArray) -> Self:
+    def _replace_coeffs(self, coeffs: AlgebraicArray) -> "MonomialBasis":
         """Return a new instance with the given coefficients, preserving other attrs."""
-        return self._replace_attr("coeffs", coeffs)
+        return MonomialBasis(coeffs.clone(), self.algebra, backend=self.backend)
 
     def _lift_tensor(self, tensor: AlgebraicArray, insert_axis: int) -> AlgebraicArray:
         """Lift (n-1)-dim tensor to n-dim by inserting axis and zero-padding."""
@@ -182,7 +174,7 @@ class MonomialBasis(AlgebraicPyTree):
 
     # -- Arithmetic ------------------------------------------------------------
 
-    def __add__(self, other: "MonomialBasis | Scalar") -> Self:
+    def __add__(self, other: "MonomialBasis | Scalar") -> "MonomialBasis":
         """Add two polynomials by adding the monomial coefficients for identical terms."""
         if is_scalar(other):
             other_coeffs = alge.zeros(self.shape, semiring=self.algebra, backend=self.backend)
@@ -193,7 +185,7 @@ class MonomialBasis(AlgebraicPyTree):
             coeffs = self.coeffs + other.coeffs
         return self._replace_coeffs(coeffs)
 
-    def __mul__(self, other: "MonomialBasis | Scalar") -> Self:
+    def __mul__(self, other: "MonomialBasis | Scalar") -> "MonomialBasis":
         r"""Multiply two polynomials.
 
         Uses the formula: :math:`c_k = \sum_{i \cup j = k} A_i \cdot B_j`
@@ -204,7 +196,7 @@ class MonomialBasis(AlgebraicPyTree):
             other_mb = self._replace_coeffs(other_coeffs)
         else:
             assert isinstance(other, MonomialBasis)
-            other_mb = other  # type: ignore[assignment]
+            other_mb = other
 
         # Scalar (0-var) case
         if self.num_vars == 0 or other_mb.num_vars == 0:
@@ -226,7 +218,7 @@ class MonomialBasis(AlgebraicPyTree):
     def evaluate(
         self,
         points: Mapping[int, Scalar] | Shaped[AlgebraicArray | Array, " {self.num_vars}"],
-    ) -> Self:
+    ) -> "MonomialBasis":
         """Evaluate polynomial at the given points using Horner-like scheme.
 
         Parameters
@@ -262,7 +254,7 @@ class MonomialBasis(AlgebraicPyTree):
     def compose(
         self,
         replacements: Mapping[int, "MonomialBasis | Scalar"],
-    ) -> Self:
+    ) -> "MonomialBasis":
         """Compose polynomial with multiple substitutions.
 
         Returns ``p(x_1 <- q_1, ..., x_n <- q_n)`` where only specified indices
@@ -274,7 +266,7 @@ class MonomialBasis(AlgebraicPyTree):
         """
         repl_keys: list[int] = list(sorted(replacements.keys()))
 
-        def _compose(poly: Self, at: int) -> Self:
+        def _compose(poly: "MonomialBasis", at: int) -> "MonomialBasis":
             if at >= len(repl_keys):
                 return poly
             coeffs = poly.coeffs
