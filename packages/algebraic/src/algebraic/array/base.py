@@ -50,8 +50,13 @@ class AlgebraicArray:
 
     def _wrap(self, data: Array | Number) -> Self:
         """Create a new instance with the given data, preserving all other attributes."""
-        array_ns = array_api_compat.array_namespace(self.data)
-        data = typing.cast(Array, array_ns.asarray(data))
+        if array_api_compat.is_torch_array(data):
+            import torch
+
+            data = typing.cast(Array, torch.as_tensor(data))
+        else:
+            array_ns = array_api_compat.array_namespace(self.data)
+            data = typing.cast(Array, array_ns.asarray(data))
         return self._replace_attr("data", data)
 
     def __add__(self, other: Self | Scalar) -> Self:

@@ -55,6 +55,8 @@ def _set_at_index(
 
         torchy = _torchy_index(idx, tuple(data.shape))
         value = torch.as_tensor(value, dtype=data.dtype, device=data.device)
+        broadcast_shape = torch.broadcast_shapes(*[t.shape for t in torchy])
+        value = value.reshape(broadcast_shape)
         return data.index_put(torchy, value)
     new_data = data.copy()
     new_data[idx] = value

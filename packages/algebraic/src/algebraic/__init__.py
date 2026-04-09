@@ -36,6 +36,7 @@ from algebraic.ops import diff as diff
 from algebraic.ops import einsum as einsum
 from algebraic.ops import equal as equal
 from algebraic.ops import expand_dims as expand_dims
+from algebraic.ops import eye as eye
 from algebraic.ops import flip as flip
 from algebraic.ops import full as full
 from algebraic.ops import isclose as isclose

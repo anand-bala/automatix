@@ -57,7 +57,9 @@ def array(
     elif backend == Backend.TORCH:
         import torch
 
-        return AlgebraicArray(torch.asarray(data, dtype=torch.float32), semiring)
+        if isinstance(data, torch.Tensor):
+            return AlgebraicArray(data.to(dtype=torch.float32), semiring)
+        return AlgebraicArray(torch.tensor(data, dtype=torch.float32), semiring)
     elif backend == Backend.NUMPY:
         import numpy as np
 

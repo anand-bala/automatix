@@ -580,5 +580,72 @@ class TestRankDecompositionMemoryEfficiency:
         assert_close(result.factors[0, 0, 0].data, (2.0))
 
 
+class TestTorchBackendRegressions:
+    """Regression tests for torch backend bugs in pad_upto and compose."""
+
+    def test_addition_different_degree_torch(self) -> None:
+        """(x0 * x1) + x2 must not crash on torch backend (pad_upto shape mismatch)."""
+        import algebraic as alg
+
+        torch = pytest.importorskip("torch")
+        bool_alg = alg.semirings.boolean_algebra(mode="soft")
+
+        x0 = RankDecomposition.variable(0, num_vars=3, algebra=bool_alg, backend="torch")
+        x1 = RankDecomposition.variable(1, num_vars=3, algebra=bool_alg, backend="torch")
+        x2 = RankDecomposition.variable(2, num_vars=3, algebra=bool_alg, backend="torch")
+
+        p = (x0 * x1) + x2
+
+        assert isinstance(p, RankDecomposition)
+        assert isinstance(p.factors.data, torch.Tensor)
+
+    def test_compose_different_degree_torch(self) -> None:
+        """compose() with substitution polynomials of different degree must not crash."""
+        import algebraic as alg
+
+        torch = pytest.importorskip("torch")
+        bool_alg = alg.semirings.boolean_algebra(mode="soft")
+
+        x0 = RankDecomposition.variable(0, num_vars=3, algebra=bool_alg, backend="torch")
+        x1 = RankDecomposition.variable(1, num_vars=3, algebra=bool_alg, backend="torch")
+        x2 = RankDecomposition.variable(2, num_vars=3, algebra=bool_alg, backend="torch")
+
+        sub_data = torch.randn(1, 2, 4)
+        sub_arr = alg.array(sub_data, semiring=bool_alg, backend="torch")
+        sub_rd = RankDecomposition(
+            factors=sub_arr,
+            algebra=bool_alg,
+            max_rank=1,
+            max_degree=2,
+            max_replacement_degree=3,
+            backend="torch",
+        )
+
+        result = x0.compose([sub_rd, x1, x2])
+
+        assert isinstance(result, RankDecomposition)
+        assert isinstance(result.factors.data, torch.Tensor)
+
+    def test_grad_flows_through_pad_upto_torch(self) -> None:
+        """Gradients must flow through pad_upto (the Bug 2 fix) on the torch backend."""
+        import algebraic as alg
+        from algebraic.polynomials.rank_decomp import pad_upto
+
+        torch = pytest.importorskip("torch")
+        bool_alg = alg.semirings.boolean_algebra(mode="soft")
+
+        # param has requires_grad=True; wrap it as a degree-1 RankDecomposition
+        param = torch.randn(1, 1, 4, requires_grad=True)
+        factors = alg.array(param, semiring=bool_alg, backend="torch")
+
+        # Pad from degree-1 to degree-2; this exercises _set_at_index / index_put
+        padded = pad_upto(factors, max_rank=1, max_degree=2, algebra=bool_alg)
+
+        loss = padded.data.sum()
+        loss.backward()
+
+        assert param.grad is not None, "gradient must flow back through pad_upto"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

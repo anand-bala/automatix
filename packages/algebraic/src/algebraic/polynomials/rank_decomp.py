@@ -502,9 +502,15 @@ def prepare_replacement_factors(replacements: Sequence[RankDecomposition], algeb
     target_rank, target_degree, n_plus_1 = tuple(map(max, zip(*((q.rank, q.degree, q.num_vars + 1) for q in replacements))))
     num_vars = n_plus_1 - 1
     backend = replacements[0].backend
+    one_factors = pad_upto(
+        RankDecomposition.one(num_vars, algebra, backend=backend).factors,
+        max_rank=target_rank,
+        max_degree=target_degree,
+        algebra=algebra,
+    )
     new_replacements = algebraic.stack(
         # Add the constant/bias term "replacement" to be the identity.
-        [RankDecomposition.one(num_vars, algebra, max_rank=target_rank, max_degree=target_degree, backend=backend).factors]
+        [one_factors]
         + [pad_upto(q.factors, max_rank=target_rank, max_degree=target_degree, algebra=algebra) for q in replacements]
     )
 
