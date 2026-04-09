@@ -1,5 +1,4 @@
 import os
-import typing
 from pathlib import Path
 
 os.environ.setdefault("PLUM_SIMPLE_DOC", "1")

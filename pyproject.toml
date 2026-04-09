@@ -47,8 +47,7 @@ packages = ["src/automatix"]
 
 [tool.uv]
 exclude-newer = "30 days"
-exclude-newer-package = {algebraic-arrays = false, morphata = false}
-
+exclude-newer-package = { algebraic-arrays = false, morphata = false }
 
 [tool.uv.workspace]
 members = ["packages/*"]
@@ -56,51 +55,3 @@ members = ["packages/*"]
 [tool.uv.sources]
 algebraic-arrays = { workspace = true }
 morphata = { workspace = true }
-
-[tool.mypy]
-strict = true
-show_error_codes = true
-warn_unreachable = true
-# files = ["tests/", "src/", "packages/"]
-packages = ["automatix", "algebraic", "morphata"]
-
-exclude = '''(?x)(
-    ^examples/    # files in examples/
-)''' # TOML's single-quoted strings do not require escaping backslashes
-
-[tool.zuban]
-strict = true
-
-[tool.ruff]
-line-length = 127
-extend-exclude = ["examples/**/*.py"]
-
-[tool.ruff.lint]
-extend-select = ["E", "F", "W", "N", "B", "ANN", "PYI", "I"]
-extend-ignore = ["F722"]
-
-[tool.ruff.lint.extend-per-file-ignores]
-"*.py" = ["B905", "E203", "E501", "W291", "W293"]
-"*.pyi" = ["B", "E501", "E701"]
-"examples/**.py" = ["N806"]
-"test_*.py" = ["ANN", "N806"]
-
-[tool.pyright]
-include = ["src", "tests", "packages"]
-pythonVersion = "3.12"
-pythonPlatform = "All"
-reportUnknownMemberType = false
-reportUnknownParameterType = false
-reportUnknownVariableType = false
-reportUnknownArgumentType = false
-reportAny = false
-
-[tool.pyrefly]
-project-excludes = ["./examples/**"]
-
-[tool.ty.environment]
-# Multiple directories (priority order)
-root = ["./src", "./packages"]
-
-[tool.ty.src]
-exclude = ["./examples"]

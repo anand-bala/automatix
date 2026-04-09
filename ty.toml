@@ -1,0 +1,10 @@
+[environment]
+# Multiple directories (priority order)
+root = ["./src", "./packages"]
+
+[rules]
+# Optional backends (jax, torch, equinox) are not always installed
+unresolved-import = "ignore"
+
+[src]
+exclude = ["./examples"]

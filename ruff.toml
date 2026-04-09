@@ -1,0 +1,12 @@
+line-length = 127
+extend-exclude = ["examples/**/*.py"]
+
+[lint]
+extend-select = ["E", "F", "W", "N", "B", "ANN", "PYI", "I"]
+extend-ignore = ["F722"]
+
+[lint.extend-per-file-ignores]
+"*.py" = ["B905", "E203", "E501", "W291", "W293"]
+"*.pyi" = ["B", "E501", "E701"]
+"examples/**.py" = ["N806"]
+"test_*.py" = ["ANN", "N806"]

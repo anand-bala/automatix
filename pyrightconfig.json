@@ -1,0 +1,14 @@
+{
+  "include": [
+    "src",
+    "tests",
+    "packages"
+  ],
+  "pythonVersion": "3.12",
+  "pythonPlatform": "All",
+  "reportUnknownMemberType": false,
+  "reportUnknownParameterType": false,
+  "reportUnknownVariableType": false,
+  "reportUnknownArgumentType": false,
+  "reportAny": false
+}

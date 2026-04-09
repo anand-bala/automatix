@@ -1,6 +1,11 @@
 [pytest]
 minversion = "9.0"
-addopts = ["--import-mode=importlib"]
+addopts = ["--import-mode=importlib", "--doctest-modules"]
+doctest_optionflags = [
+  "NORMALIZE_WHITESPACE",
+  "IGNORE_EXCEPTION_DETAIL",
+  "ELLIPSIS",
+]
 testpaths = ["tests", "src", "packages/**/tests", "packages/**/src"]
 
 markers = ["slow: mark test as slow."]

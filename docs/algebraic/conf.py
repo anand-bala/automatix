@@ -20,7 +20,7 @@ project_metadata = importlib.metadata.metadata(package_name)
 
 description = project_metadata["Summary"]
 
-html_theme_options["description"] = description
+html_theme_options["description"] = description  # noqa: F821  # ty: ignore[unresolved-reference]
 
 # -- autodoc signature fix for BetterABCMeta ---------------------------------
 # BetterABCMeta overrides __call__ with (*args, **kwargs), which Sphinx picks

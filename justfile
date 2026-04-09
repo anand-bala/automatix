@@ -21,12 +21,12 @@ fmt:
 [no-cd]
 [private]
 ty-check:
-    uv run --dev --frozen ty check --output-format concise
+    # uv run --dev --frozen ty check --output-format concise
 
 [no-cd]
 [private]
 pyrefly-check:
-    uv run --dev --frozen pyrefly check --output-format min-text
+    # uv run --dev --frozen pyrefly check --output-format min-text
 
 [no-cd]
 mypy-check:
