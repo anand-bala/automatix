@@ -121,16 +121,28 @@ small, fixed number of variables where you need the full coefficient structure.
 RankDecomposition: Structured CP Factorization
 -----------------------------------------------
 
-:class:`~algebraic.polynomials.RankDecomposition` stores the polynomial as a
-sum of rank-1 terms using a CP (CANDECOMP/PARAFAC) decomposition:
+:class:`~algebraic.polynomials.RankDecomposition` represents a multivariate
+polynomial using a CP (CANDECOMP/PARAFAC) decomposition over degree-``d``
+factorizations:
 
 .. math::
 
-   p(x) = \bigoplus_{r=1}^{R} \bigotimes_{k=1}^{d} f_{r,k,i_k}
+   p(x) = \sum_{r=1}^{R} \prod_{k=1}^{d}
+   \left\langle f_{r,k}, \phi(x) \right\rangle
 
-where :math:`f` is a factors tensor of shape ``(R, d, n+1)``, ``R`` is the
-rank, and ``d`` is the degree.  For each factor, index ``0`` represents the
-constant 1 and index ``i > 0`` represents variable :math:`x_{i-1}`.
+where :math:`f \in \mathcal{R}^{R \times d \times (n+1)}` is a tensor of
+coefficients, and :math:`\phi(x) \in \mathcal{R}^{n+1}` is the feature map
+
+.. math::
+
+   \phi(x) = (1, x_0, x_1, \dots, x_{n-1}).
+
+Equivalently, each :math:`f_{r,k}` defines a linear form in the inputs
+(including a bias term), and each rank-:math:`r` component is a product of
+``d`` such linear forms. The full polynomial is obtained by summing over
+``R`` components. This corresponds to a CP decomposition of the order-``d``
+coefficient tensor of the polynomial.
+
 
 .. code-block:: python
 
@@ -168,14 +180,58 @@ uses internally for AFA runs.
 Composition
 ^^^^^^^^^^^
 
-``RankDecomposition`` supports *variable substitution*: replacing each
-variable :math:`x_i` with another polynomial.  This is the operation used
-to step an AFA forward by one symbol:
+``RankDecomposition`` supports *variable substitution* (polynomial
+composition), where each variable :math:`x_i` is replaced by another
+polynomial :math:`g_i(x)`.
+
+Formally, given a polynomial :math:`p(x_0, \dots, x_{n-1})` and a set of
+polynomials :math:`\{g_i(x)\}_{i=0}^{n-1}`, the composition is
+
+.. math::
+
+   (p \circ g)(x) = p\big(g_0(x), g_1(x), \dots, g_{n-1}(x)\big).
+
+Under the rank-decomposition parameterization
+
+.. math::
+
+   p(x) = \sum_{r=1}^{R} \prod_{k=1}^{d}
+   \left\langle f_{r,k}, \phi(x) \right\rangle,
+
+composition is implemented by substituting each feature
+:math:`\phi_i(x)` with
+
+.. math::
+
+   \phi_0(x) = 1, \quad
+   \phi_i(x) \mapsto g_{i-1}(x) \;\; \text{for } i > 0,
+
+yielding
+
+.. math::
+
+   (p \circ g)(x)
+   = \sum_{r=1}^{R} \prod_{k=1}^{d}
+   \left(
+      f_{r,k,0}
+      \;+\;
+      \sum_{i=1}^{n} f_{r,k,i} \, g_{i-1}(x)
+   \right).
+
+That is, each linear form :math:`\langle f_{r,k}, \phi(x) \rangle` is
+transformed into a linear combination of the substituted polynomials,
+and each rank-1 term becomes a product of such polynomials. Since each
+:math:`g_i(x)` is itself represented as a rank decomposition, this
+operation is closed within the representation (up to an increase in
+rank).
+
+This operation is used, for example, to step an algebraic finite
+automaton (AFA) forward by one symbol.
 
 .. code-block:: python
 
    # Replace each variable with a new polynomial over the next time step.
-   substitutions = {i: new_poly_for_var_i for i in range(num_vars)}
+   substitutions = [new_poly_for_var_i for i in range(num_vars)]
    stepped = p.compose(substitutions)
 
 Conversion Between Representations
