@@ -16,6 +16,10 @@ dependencies = [
   "scipy>=1.17.1",
 ]
 
+[project.urls]
+Documentation = "https://docs.anandb.dev/algebraic"
+Repository = "https://git.anandb.dev/automatix.git"
+
 [dependency-groups]
 dev = ["scipy-stubs>=1.17"]
 

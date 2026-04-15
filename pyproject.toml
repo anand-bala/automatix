@@ -24,6 +24,10 @@ dependencies = [
 jax = ["jax>=0.8"]
 torch = ["torch>=2.0"]
 
+[project.urls]
+Documentation = "https://docs.anandb.dev/automatix"
+Repository = "https://git.anandb.dev/automatix.git"
+
 [dependency-groups]
 dev = [
   "beartype>=0.22.5",
