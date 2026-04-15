@@ -18,7 +18,7 @@ This repository also contains the following packages in the `packages/` subdirec
 ### Installation
 
 ```bash
-pip install git+https://github.com/anand-bala/automatix
+pip install argus-automatix
 ```
 
 ### Basic Usage

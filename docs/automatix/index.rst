@@ -2,8 +2,8 @@ automatix
 =========
 
 **automatix** is a library for symbolic weighted automata monitors, built on the
-:external:ref:`morphata` (structural automata) and :external:ref:`algebraic` (semiring
-algebra) foundation packages.
+`morphata <../morphata/index.html>`_ (structural automata) and
+`algebraic <../algebraic/index.html>`_ (semiring algebra) foundation packages.
 
 Features
 --------
@@ -73,6 +73,7 @@ If you are using alternating weighted automata for multi-agent systems:
 
 .. toctree::
    :maxdepth: 2
-   :caption: API Reference
 
-   api
+   quick-start
+   concepts/index
+   api/modules

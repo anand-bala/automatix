@@ -9,4 +9,5 @@ _parent_spec.loader.exec_module(_parent_conf)
 globals().update({k: v for k, v in vars(_parent_conf).items() if not k.startswith("_")})
 
 project = "automatix"
-release = importlib.metadata.version(project)
+package_name = "argus-automatix"
+release = importlib.metadata.version(package_name)
