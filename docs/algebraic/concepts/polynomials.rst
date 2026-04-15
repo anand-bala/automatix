@@ -31,6 +31,9 @@ computational trade-offs:
 +---------------------+-------------------------------------+---------------------------------------------+
 | ``RankDecomposition``| CP factors of shape ``(R, d, n+1)``| Structured low-rank problems; JIT-friendly  |
 +---------------------+-------------------------------------+---------------------------------------------+
+| ``LowRankFactors``  | Weights ``(R, d, n)`` + bias        | Training pipelines needing separate params  |
+|                     | ``(R, d)``                          |                                             |
++---------------------+-------------------------------------+---------------------------------------------+
 
 For small ``n`` (up to roughly 10--12 variables), ``MonomialBasis`` or
 ``PolyDict`` are straightforward.  For larger problems where the polynomial
@@ -234,6 +237,60 @@ automaton (AFA) forward by one symbol.
    substitutions = [new_poly_for_var_i for i in range(num_vars)]
    stepped = p.compose(substitutions)
 
+LowRankFactors: Split-Storage CP Factorization
+------------------------------------------------
+
+:class:`~algebraic.polynomials.LowRankFactors` is a variant of
+``RankDecomposition`` that stores the constant (bias) and variable factors
+separately, analogous to how a neural network layer separates
+:math:`W \mathbf{x}` from :math:`\mathbf{b}`:
+
+- ``weights``: shape ``(R, d, n)`` -- one entry per variable per degree per rank component.
+- ``bias``: shape ``(R, d)`` -- the constant factor for each degree and rank component.
+
+This split is useful for training pipelines where you need independent
+parameter groups (e.g. separate learning rates, freezing the bias, or applying
+different regularization to weights and bias).
+
+Mathematically, ``LowRankFactors`` represents the same polynomial as
+``RankDecomposition``:
+
+.. math::
+
+   p(x) = \sum_{r=1}^{R} \prod_{k=1}^{d}
+   \left( b_{r,k} + \sum_{i=0}^{n-1} w_{r,k,i} \, x_i \right)
+
+where :math:`b_{r,k}` is the bias and :math:`w_{r,k,i}` are the weights.
+The merged form ``(R, d, n+1)`` used by ``RankDecomposition`` simply
+concatenates :math:`b` as the zeroth column.
+
+.. code-block:: python
+
+   import algebraic
+   from algebraic.polynomials import LowRankFactors
+   from algebraic.semirings import boolean_algebra
+
+   bool_alg = boolean_algebra(mode="soft")
+
+   x0 = LowRankFactors.variable(0, num_vars=3, algebra=bool_alg, backend="numpy")
+   x1 = LowRankFactors.variable(1, num_vars=3, algebra=bool_alg, backend="numpy")
+
+   p = x0 * x1
+
+   # Separate parameter tensors for training.
+   print(p.weights.shape)  # (R, d, 3)
+   print(p.bias.shape)     # (R, d)
+
+   # Convert to/from RankDecomposition for interop.
+   rd = p.to_rank_decomposition()
+   p_back = LowRankFactors.from_rank_decomposition(rd)
+
+All arithmetic operations (``+``, ``*``, ``evaluate``, ``compose``) produce
+``LowRankFactors`` instances, and the class is registered as a JAX pytree
+so ``jit``, ``vmap``, and ``grad`` work out of the box. Because ``weights``
+and ``bias`` are separate leaves in the pytree, JAX and PyTorch autodiff
+naturally computes independent gradients for each.
+
 Conversion Between Representations
 ------------------------------------
 
@@ -260,7 +317,7 @@ Conversion is useful when you need to inspect individual monomial coefficients
 Shared Interface
 -----------------
 
-All three representations support the following common operations:
+All four representations support the following common operations:
 
 - ``p + q`` -- semiring addition (OR / max / min depending on algebra).
 - ``p * q`` -- semiring multiplication (AND / min / + depending on algebra).

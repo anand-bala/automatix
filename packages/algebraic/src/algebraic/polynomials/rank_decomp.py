@@ -287,35 +287,16 @@ class RankDecomposition(AlgebraicPyTree):
         RankDecomposition
             Constant polynomial after evaluation.
         """
-        rank, d, _ = self.factors.shape
-
-        one_array = algebraic.ones((1,), semiring=self.algebra, backend=self.backend)
-        if is_array(points):
-            points_array = algebraic.array(points, semiring=self.algebra, backend=self.backend)
-        else:
-            points_array = points
-        selector = algebraic.concat([one_array, points_array])
-
-        result = algebraic.zeros((), semiring=self.algebra, backend=self.backend)
-        for r in range(rank):
-            component_value = algebraic.ones((), semiring=self.algebra, backend=self.backend)
-            for k in range(d):
-                dim_value = algebraic.zeros((), semiring=self.algebra, backend=self.backend)
-                for i in range(self.num_vars + 1):
-                    term = self.factors[r, k, i] * selector[i]
-                    dim_value = dim_value + term
-                component_value = component_value * dim_value
-            result = result + component_value
-
-        return self._make_const(result.data)
+        result_data = evaluate_factors(self.factors, points, self.algebra, self.backend)
+        return self._make_const(result_data)
 
     def compose(self, replacements: Sequence["RankDecomposition"]) -> "RankDecomposition":
         """Compose polynomial with replacement polynomials.
 
         Parameters
         ----------
-        replacements : dict[int, RankDecomposition]
-            Dict mapping variable indices to replacement polynomials.
+        replacements : Sequence[RankDecomposition]
+            Sequence of replacement polynomials, one per variable.
 
         Returns
         -------
@@ -326,26 +307,9 @@ class RankDecomposition(AlgebraicPyTree):
             raise ValueError(
                 f"Cannot compose a sequence of {len(replacements)} replacements for a polynomial with {self.num_vars} variables"
             )
-        # shape: (R, D, N+1)
-        p_factor = self.factors
-
-        # shape: (N+1, R2, D2, N+1)
-        q_factors = prepare_replacement_factors(replacements, self.algebra)
-
-        # n-mode contraction over variable axis
-        # result: (R, D, R2, D2, N+1)
-        contracted = algebraic.einsum("pdk,kqev->pdqev", p_factor, q_factors)
-
-        # Collapsing the additional dimensions in the `contracted` output can cause
-        # major explosion in the size of this polynomial.
-        # So, before we do the outer/Khatri-Rao product to collapse the additional
-        # dimensions, we wil compress the contraction by essentially performing
-        # a version of beam search on `contracted`.
-
-        result_factors = contraction_compression(contracted, self.max_rank, self.algebra)
-        result_poly = self._replace_factors(result_factors)
-
-        return result_poly
+        replacement_factors = [r.factors for r in replacements]
+        result_factors = compose_factors(self.factors, replacement_factors, self.max_rank, self.algebra)
+        return self._replace_factors(result_factors)
 
     def tree_flatten(self) -> tuple[list[AlgebraicArray], tuple[typing.Any, ...]]:
         return [self.factors], (self.algebra, self.max_rank, self.max_degree, self.max_replacement_degree, self.backend)
@@ -475,17 +439,116 @@ class RankDecomposition(AlgebraicPyTree):
         )
 
 
-def prepare_replacement_factors(replacements: Sequence[RankDecomposition], algebra: Lattice) -> AlgebraicArray:
-    """Prepare padded array of replacement polynomials.
+def evaluate_factors(
+    factors: AlgebraicArray,
+    points: Array | AlgebraicArray,
+    algebra: Lattice,
+    backend: str | Backend,
+) -> Scalar:
+    """Evaluate CP factors at a given point.
 
-    Returns:
-        Array of shape [n+1, R_max, max_replacement_degree, n+1]
-        Index 0: constant (identity: always 1)
-        Index i+1: variable x_i (or its replacement)
+    Parameters
+    ----------
+    factors : AlgebraicArray
+        CP factors of shape ``(R, D, N+1)``.
+    points : Array or AlgebraicArray
+        An array of shape ``(num_vars,)`` to replace each variable with.
+    algebra : BoundedDistributiveLattice
+        Lattice algebra governing operations.
+    backend : str or Backend
+        Backend to use.
+
+    Returns
+    -------
+    Scalar
+        The raw evaluated scalar value.
     """
-    target_rank, target_degree, n_plus_1 = tuple(map(max, zip(*((q.rank, q.degree, q.num_vars + 1) for q in replacements))))
+    rank, d, n_plus_1 = factors.shape
     num_vars = n_plus_1 - 1
-    backend = replacements[0].backend
+
+    one_array = algebraic.ones((1,), semiring=algebra, backend=backend)
+    if is_array(points):
+        points_array = algebraic.array(points, semiring=algebra, backend=backend)
+    else:
+        points_array = points
+    selector = algebraic.concat([one_array, points_array])
+
+    result = algebraic.zeros((), semiring=algebra, backend=backend)
+    for r in range(rank):
+        component_value = algebraic.ones((), semiring=algebra, backend=backend)
+        for k in range(d):
+            dim_value = algebraic.zeros((), semiring=algebra, backend=backend)
+            for i in range(num_vars + 1):
+                term = factors[r, k, i] * selector[i]
+                dim_value = dim_value + term
+            component_value = component_value * dim_value
+        result = result + component_value
+
+    return result.data
+
+
+def compose_factors(
+    factors: AlgebraicArray,
+    replacement_factors: Sequence[AlgebraicArray],
+    max_rank: int,
+    algebra: Lattice,
+) -> AlgebraicArray:
+    """Compose CP factors with replacement factor arrays.
+
+    Parameters
+    ----------
+    factors : AlgebraicArray
+        CP factors of shape ``(R, D, N+1)``.
+    replacement_factors : Sequence[AlgebraicArray]
+        Sequence of N replacement factor arrays, each of shape ``(R_i, D_i, N+1)``.
+    max_rank : int
+        Maximum rank for pruning.
+    algebra : BoundedDistributiveLattice
+        Lattice algebra governing operations.
+
+    Returns
+    -------
+    AlgebraicArray
+        New CP factors of shape ``(R', D', N+1)``.
+    """
+    # shape: (N+1, R2, D2, N+1)
+    q_factors = prepare_replacement_factors(replacement_factors, algebra)
+
+    # n-mode contraction over variable axis
+    # result: (R, D, R2, D2, N+1)
+    contracted = algebraic.einsum("pdk,kqev->pdqev", factors, q_factors)
+
+    # Collapsing the additional dimensions in the `contracted` output can cause
+    # major explosion in the size of this polynomial.
+    # So, before we do the outer/Khatri-Rao product to collapse the additional
+    # dimensions, we will compress the contraction by essentially performing
+    # a version of beam search on `contracted`.
+
+    return contraction_compression(contracted, max_rank, algebra)
+
+
+def prepare_replacement_factors(replacement_factors: Sequence[AlgebraicArray], algebra: Lattice) -> AlgebraicArray:
+    """Prepare padded array of replacement factor arrays.
+
+    Parameters
+    ----------
+    replacement_factors : Sequence[AlgebraicArray]
+        Sequence of N replacement factor arrays, each of shape ``(R_i, D_i, N_i+1)``.
+    algebra : BoundedDistributiveLattice
+        Lattice algebra governing operations.
+
+    Returns
+    -------
+    AlgebraicArray
+        Padded array of shape ``[N+1, R_max, D_max, N+1]``.
+        Index 0: constant (identity: always 1).
+        Index i+1: replacement for variable ``x_i``.
+    """
+    target_rank, target_degree, n_plus_1 = tuple(
+        map(max, zip(*((q.shape[0], q.shape[1], q.shape[2]) for q in replacement_factors)))
+    )
+    num_vars = n_plus_1 - 1
+    backend = Backend.from_array(replacement_factors[0].data)
     one_factors = pad_upto(
         RankDecomposition.one(num_vars, algebra, backend=backend).factors,
         max_rank=target_rank,
@@ -495,7 +558,7 @@ def prepare_replacement_factors(replacements: Sequence[RankDecomposition], algeb
     new_replacements = algebraic.stack(
         # Add the constant/bias term "replacement" to be the identity.
         [one_factors]
-        + [pad_upto(q.factors, max_rank=target_rank, max_degree=target_degree, algebra=algebra) for q in replacements]
+        + [pad_upto(q, max_rank=target_rank, max_degree=target_degree, algebra=algebra) for q in replacement_factors]
     )
 
     assert new_replacements.shape == (n_plus_1, target_rank, target_degree, n_plus_1)
@@ -681,3 +744,351 @@ def _add_factors(p: AlgebraicArray, q: AlgebraicArray, algebra: Lattice) -> Alge
 
     new_factors = algebraic.concat([a_padded, b_padded], axis=0)
     return new_factors
+
+
+def _merge_weights_bias(weights: AlgebraicArray, bias: AlgebraicArray) -> AlgebraicArray:
+    """Merge split weights and bias into merged factors of shape ``(R, D, N+1)``.
+
+    Parameters
+    ----------
+    weights : AlgebraicArray
+        Variable factors of shape ``(R, D, N)``.
+    bias : AlgebraicArray
+        Constant factors of shape ``(R, D)``.
+
+    Returns
+    -------
+    AlgebraicArray
+        Merged factors of shape ``(R, D, N+1)`` with bias as column 0.
+    """
+    # bias: (R, D) -> (R, D, 1)
+    bias_col = algebraic.reshape(bias, (*bias.shape, 1))
+    return algebraic.concat([bias_col, weights], axis=2)
+
+
+def _split_merged_factors(factors: AlgebraicArray) -> tuple[AlgebraicArray, AlgebraicArray]:
+    """Split merged factors of shape ``(R, D, N+1)`` into weights and bias.
+
+    Parameters
+    ----------
+    factors : AlgebraicArray
+        Merged factors of shape ``(R, D, N+1)``.
+
+    Returns
+    -------
+    tuple[AlgebraicArray, AlgebraicArray]
+        ``(weights, bias)`` where weights has shape ``(R, D, N)`` and bias has shape ``(R, D)``.
+    """
+    bias_col = factors[:, :, :1]  # (R, D, 1)
+    weights = factors[:, :, 1:]  # (R, D, N)
+    bias = algebraic.reshape(bias_col, bias_col.shape[:2])  # (R, D)
+    return weights, bias
+
+
+@dataclass
+class LowRankFactors(AlgebraicPyTree):
+    """CP decomposition with separated variable weights and constant bias.
+
+    Like :class:`RankDecomposition`, but stores factors split into:
+        - ``weights``: shape ``(R, D, N)`` — variable-affiliated factors
+        - ``bias``: shape ``(R, D)`` — constant/bias factors
+
+    This separation is analogous to an MLP's ``W @ x + b`` and is useful for
+    training pipelines that need independent parameter groups (e.g., separate
+    learning rates, freezing the bias).
+    """
+
+    weights: AlgebraicArray
+    """Variable factors of shape ``(rank, degree, num_vars)``."""
+    bias: AlgebraicArray
+    """Constant factors of shape ``(rank, degree)``."""
+    algebra: Lattice
+    max_rank: int
+    max_degree: int
+    max_replacement_degree: int
+    backend: Backend = field(default=Backend.NUMPY, kw_only=True)
+
+    def __init__(
+        self,
+        weights: AlgebraicArray,
+        bias: AlgebraicArray,
+        max_rank: int | None = 10,
+        max_degree: int | None = None,
+        max_replacement_degree: int | None = None,
+        *,
+        backend: str | Backend | None = None,
+    ) -> None:
+        super().__init__()
+
+        if backend is None:
+            backend = Backend.from_array(weights.data)
+        elif isinstance(backend, str):
+            backend = Backend(backend)
+
+        if not isinstance(weights.semiring, Lattice):
+            raise ValueError(
+                f"Unsupported type for polynomial sub-algebra {type(weights.semiring)}; expected BoundedDistributiveLattice"
+            )
+
+        num_vars = weights.shape[2]
+        self.weights = weights
+        self.bias = bias
+        self.algebra = weights.semiring
+        self.max_rank = max_rank if max_rank is not None else 10
+        self.max_degree = max_degree if max_degree is not None else num_vars
+        self.max_replacement_degree = max_replacement_degree if max_replacement_degree is not None else self.max_degree
+        self.backend = backend
+
+    @property
+    def rank(self) -> int:
+        return self.weights.shape[0]
+
+    @property
+    def degree(self) -> int:
+        return self.weights.shape[1]
+
+    @property
+    def num_vars(self) -> int:
+        return self.weights.shape[2]
+
+    def to_merged(self) -> AlgebraicArray:
+        """Merge weights and bias into a single factors array of shape ``(R, D, N+1)``."""
+        return _merge_weights_bias(self.weights, self.bias)
+
+    @classmethod
+    def from_merged(
+        cls,
+        factors: AlgebraicArray,
+        max_rank: int | None = None,
+        max_degree: int | None = None,
+        max_replacement_degree: int | None = None,
+        *,
+        backend: str | Backend | None = None,
+    ) -> "LowRankFactors":
+        """Create from merged factors of shape ``(R, D, N+1)``."""
+        weights, bias = _split_merged_factors(factors)
+        return cls(weights, bias, max_rank, max_degree, max_replacement_degree, backend=backend)
+
+    def _replace_merged(self, factors: AlgebraicArray) -> "LowRankFactors":
+        """Return a new instance from merged factors, preserving other attrs."""
+        weights, bias = _split_merged_factors(factors)
+        return LowRankFactors(weights, bias, self.max_rank, self.max_degree, self.max_replacement_degree, backend=self.backend)
+
+    @classmethod
+    def variable(
+        cls,
+        i: int,
+        num_vars: int,
+        algebra: Lattice,
+        max_rank: int | None = None,
+        max_degree: int | None = None,
+        max_replacement_degree: int | None = None,
+        *,
+        backend: str | Backend,
+    ) -> "LowRankFactors":
+        r"""Create rank-1 polynomial representing variable :math:`x_i`.
+
+        Parameters
+        ----------
+        i : int
+            Variable index (0-based).
+        num_vars : int
+            Total number of variables.
+        algebra : BoundedDistributiveLattice
+            Lattice algebra governing operations.
+        max_rank : int or None, optional
+            Maximum rank for the decomposition.
+        max_degree : int or None, optional
+            Maximum degree for the polynomial.
+        max_replacement_degree : int or None, optional
+            Maximum degree for replacement polynomials in :meth:`compose`.
+        backend : str or Backend
+            Backend to use.
+
+        Returns
+        -------
+        LowRankFactors
+            A rank-1 polynomial with degree 1.
+        """
+        weights = algebraic.zeros((1, 1, num_vars), semiring=algebra, backend=backend)
+        weights = weights.at[(0, 0, i)].set(algebra.one)
+        bias = algebraic.zeros((1, 1), semiring=algebra, backend=backend)
+        return cls(weights, bias, max_rank, max_degree, max_replacement_degree, backend=backend)
+
+    @classmethod
+    def constant(
+        cls,
+        value: Scalar,
+        num_vars: int,
+        algebra: Lattice,
+        max_rank: int | None = None,
+        max_degree: int | None = None,
+        max_replacement_degree: int | None = None,
+        *,
+        backend: str | Backend,
+    ) -> "LowRankFactors":
+        """Create a rank-1 constant polynomial.
+
+        Parameters
+        ----------
+        value : Scalar
+            Constant value.
+        num_vars : int
+            Total number of variables.
+        algebra : BoundedDistributiveLattice
+            Lattice algebra governing operations.
+        max_rank : int or None, optional
+            Maximum rank for the decomposition.
+        max_degree : int or None, optional
+            Maximum degree for the polynomial.
+        max_replacement_degree : int or None, optional
+            Maximum degree for replacement polynomials in :meth:`compose`.
+        backend : str or Backend
+            Backend to use.
+
+        Returns
+        -------
+        LowRankFactors
+            A rank-1 constant polynomial.
+        """
+        weights = algebraic.zeros((1, 1, num_vars), semiring=algebra, backend=backend)
+        bias = algebraic.zeros((1, 1), semiring=algebra, backend=backend).at[(0, 0)].set(value)
+        return cls(weights, bias, max_rank, max_degree, max_replacement_degree, backend=backend)
+
+    @classmethod
+    def zero(
+        cls,
+        num_vars: int,
+        algebra: Lattice,
+        max_rank: int | None = None,
+        max_degree: int | None = None,
+        max_replacement_degree: int | None = None,
+        *,
+        backend: str | Backend,
+    ) -> "LowRankFactors":
+        return cls.constant(algebra.zero, num_vars, algebra, max_rank, max_degree, max_replacement_degree, backend=backend)
+
+    @classmethod
+    def one(
+        cls,
+        num_vars: int,
+        algebra: Lattice,
+        max_rank: int | None = None,
+        max_degree: int | None = None,
+        max_replacement_degree: int | None = None,
+        *,
+        backend: str | Backend,
+    ) -> "LowRankFactors":
+        return cls.constant(algebra.one, num_vars, algebra, max_rank, max_degree, max_replacement_degree, backend=backend)
+
+    def _var_at(self, idx: int) -> "LowRankFactors":
+        return LowRankFactors.variable(
+            idx,
+            self.num_vars,
+            self.algebra,
+            self.max_rank,
+            self.max_degree,
+            self.max_replacement_degree,
+            backend=self.backend,
+        )
+
+    def _make_const(self, val: Scalar) -> "LowRankFactors":
+        return LowRankFactors.constant(
+            val,
+            self.num_vars,
+            self.algebra,
+            self.max_rank,
+            self.max_degree,
+            self.max_replacement_degree,
+            backend=self.backend,
+        )
+
+    def __add__(self, other: "LowRankFactors | Scalar") -> "LowRankFactors":
+        """Add by concatenating rank-1 components."""
+        if is_scalar(other):
+            other = self._make_const(other)
+        assert isinstance(other, LowRankFactors)
+        assert other.num_vars == self.num_vars
+        validate_semiring(self.weights, other.weights)
+
+        merged_self = self.to_merged()
+        merged_other = other.to_merged()
+        new_factors = _add_factors(merged_self, merged_other, self.algebra)
+        new_factors = prune_factors(new_factors, max_rank=self.max_rank)
+        return self._replace_merged(new_factors)
+
+    def __mul__(self, other: "LowRankFactors") -> "LowRankFactors":
+        """Multiply two CP-decomposed polynomials."""
+        merged_self = self.to_merged()
+        merged_other = other.to_merged()
+        new_factors = _multiply_factors(merged_self, merged_other)
+        new_factors = prune_factors(new_factors, self.max_rank)
+        return self._replace_merged(new_factors)
+
+    def evaluate(self, points: Array | AlgebraicArray) -> "LowRankFactors":
+        """Evaluate polynomial at given point.
+
+        Parameters
+        ----------
+        points : Array or AlgebraicArray
+            An array of shape ``(num_vars,)`` to replace each variable with.
+
+        Returns
+        -------
+        LowRankFactors
+            Constant polynomial after evaluation.
+        """
+        merged = self.to_merged()
+        result_data = evaluate_factors(merged, points, self.algebra, self.backend)
+        return self._make_const(result_data)
+
+    def compose(self, replacements: Sequence["LowRankFactors"]) -> "LowRankFactors":
+        """Compose polynomial with replacement polynomials.
+
+        Parameters
+        ----------
+        replacements : Sequence[LowRankFactors]
+            Sequence of replacement polynomials, one per variable.
+
+        Returns
+        -------
+        LowRankFactors
+            The composed polynomial.
+        """
+        if len(replacements) != self.num_vars:
+            raise ValueError(
+                f"Cannot compose a sequence of {len(replacements)} replacements for a polynomial with {self.num_vars} variables"
+            )
+        merged_self = self.to_merged()
+        replacement_merged = [r.to_merged() for r in replacements]
+        result_factors = compose_factors(merged_self, replacement_merged, self.max_rank, self.algebra)
+        return self._replace_merged(result_factors)
+
+    def to_rank_decomposition(self) -> RankDecomposition:
+        """Convert to a :class:`RankDecomposition`."""
+        return RankDecomposition(
+            self.to_merged(), self.max_rank, self.max_degree, self.max_replacement_degree, backend=self.backend
+        )
+
+    @classmethod
+    def from_rank_decomposition(cls, rd: RankDecomposition) -> "LowRankFactors":
+        """Create from a :class:`RankDecomposition`."""
+        return cls.from_merged(rd.factors, rd.max_rank, rd.max_degree, rd.max_replacement_degree, backend=rd.backend)
+
+    def tree_flatten(self) -> tuple[list[AlgebraicArray], tuple[typing.Any, ...]]:
+        return [self.weights, self.bias], (
+            self.algebra,
+            self.max_rank,
+            self.max_degree,
+            self.max_replacement_degree,
+            self.backend,
+        )
+
+    @classmethod
+    def tree_unflatten(cls, aux_data: tuple[typing.Any, ...], children: Sequence[AnyPyTree]) -> "LowRankFactors":
+        algebra, max_rank, max_degree, max_replacement_degree, backend = aux_data
+        weights = children[0]
+        bias = children[1]
+        assert isinstance(weights, AlgebraicArray)
+        assert isinstance(bias, AlgebraicArray)
+        return cls(weights, bias, max_rank, max_degree, max_replacement_degree, backend=backend)
