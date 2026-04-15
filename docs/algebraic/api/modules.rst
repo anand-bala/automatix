@@ -10,6 +10,5 @@
    algebraic.array
    algebraic.ops
    algebraic.types
-   algebraic.kernels
    algebraic.polynomials
    algebraic.utils
