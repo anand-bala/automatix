@@ -1,5 +1,5 @@
-morphata documentation
-======================
+morphata
+========
 
 **morphata** is a Python library for constructing, manipulating, and translating
 automata over regular and omega-regular languages.
@@ -34,101 +34,17 @@ Features
 
   - Base automaton interfaces without weighted semantics
   - NetworkX-based graph representations
-  - Clean separation from quantitative monitoring (provided by automatix)
+  - Clean separation from quantitative monitoring (provided by
+    `automatix <../automatix/index.html>`_)
 
-Quick Example
--------------
+- **LTL to Alternating Finite Automaton conversion**
 
-.. code-block:: python
-
-   from morphata.automata import NFA
-   from logic_asts import base
-
-   # Create an NFA
-   nfa = NFA[str]()
-   nfa.add_location(0, initial=True)
-   nfa.add_location(1, final=True)
-
-   # Add transition with guard
-   guard_a = base.Variable("a")
-   nfa.add_transition(0, 1, guard_a)
-
-   # Use the automaton
-   accepting, next_state = nfa({"a"}, nfa.initial_state)
-   print(f"Accepting: {accepting}, Next state: {next_state}")
-
-HOA Parser Example
-------------------
-
-Standard HOA Format (Omega-Automata)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: python
-
-   from morphata.hoa.parser import parse
-
-   hoa_string = """
-   HOA: v1
-   States: 2
-   Start: 0
-   acc-name: Buchi
-   Acceptance: 1 Inf(0)
-   AP: 1 "a"
-   --BODY--
-   State: 0
-     [0] 1
-   State: 1 {0}
-     [t] 1
-   --END--
-   """
-
-   automaton = parse(hoa_string)
-   print(f"Acceptance: {automaton.header.acc}")
-
-Extended Format: Finite-Word Acceptance
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Morphata extends the HOA v1 format with a ``Final(n)`` operator for finite-word
-automata.
-This is **not part of the standard HOA specification** but provides a natural
-way to express finite-word acceptance in the HOA syntax.
-
-.. code-block:: python
-
-   from morphata.hoa.parser import parse
-
-   finite_hoa = """
-   HOA: v1
-   States: 2
-   Start: 0
-   acc-name: Finite
-   Acceptance: 1 Final(0)
-   AP: 1 "a"
-   --BODY--
-   State: 0
-     [0] 1 {0}
-     [!0] 0
-   State: 1
-     [t] 1
-   --END--
-   """
-
-   automaton = parse(finite_hoa)
-   # Accepts finite words ending with 'a'
-
-.. note::
-
-   The ``Final(n)`` operator semantics differ from ``Fin(n)`` and ``Inf(n)``:
-
-   - ``Inf(n)``:
-     Accept if acceptance set n is visited **infinitely often** (omega-regular)
-   - ``Fin(n)``:
-     Accept if acceptance set n is visited **finitely often** (omega-regular)
-   - ``Final(n)``:
-     Accept if the run **ends in** a state marked with acceptance set n (regular)
+  - LTL/LTLf formulas to AFAs via ``ltl_to_automaton``
+  - Finite-word (``Finite``) and infinite-word (``Buchi``) acceptance
 
 .. toctree::
    :maxdepth: 2
-   :caption: API Reference
 
-   api
+   quick-start
+   concepts/index
+   api/modules

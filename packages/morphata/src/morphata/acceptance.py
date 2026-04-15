@@ -178,7 +178,7 @@ class AccPair(ty.NamedTuple, ty.Generic[State]):
 
 @frozen
 class Streett(AcceptanceCondition[State]):
-    """Streett condition: a run, r, is accpting iff _for all_ `i`, we have that inf(r) does not intersect with `pairs[i].rejecting` and does intersect with `pairs[i].accepting`"""
+    """Streett condition: a run, r, is accepting iff *for all* ``i``, we have that inf(r) does not intersect with ``pairs[i].rejecting`` and does intersect with ``pairs[i].accepting``."""
 
     pairs: tuple[AccPair[State], ...]
 
@@ -195,7 +195,7 @@ class Streett(AcceptanceCondition[State]):
 
 @frozen
 class Rabin(AcceptanceCondition[State]):
-    """Rabin condition: a run, r, is accpting iff _for some_ `i`, we have that inf(r) does not intersect with `pairs[i].rejecting` and does intersect with `pairs[i].accepting`"""
+    """Rabin condition: a run, r, is accepting iff *for some* ``i``, we have that inf(r) does not intersect with ``pairs[i].rejecting`` and does intersect with ``pairs[i].accepting``."""
 
     pairs: tuple[AccPair[State], ...]
 

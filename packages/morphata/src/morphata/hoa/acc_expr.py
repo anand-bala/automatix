@@ -16,38 +16,41 @@ from typing_extensions import override
 
 
 class AccExpr(ABC):
-    """Generalized omega-regular and regular acceptance conditions
+    """Generalized omega-regular and regular acceptance conditions.
 
     Acceptance formulas are positive Boolean formula over atoms of the form
-    `t`, `f`, `Inf(n)`, `Fin(n)`, or `Final(n)`, where `n` is a non-negative
-    integer denoting an acceptance set.
+    ``t``, ``f``, ``Inf(n)``, ``Fin(n)``, or ``Final(n)``, where *n* is a
+    non-negative integer denoting an acceptance set.
 
     Standard HOA v1 operators (for omega-automata):
-    - `t` denotes the true acceptance condition: any run is accepting
-    - `f` denotes the false acceptance condition: no run is accepting
-    - `Inf(n)` means that a run is accepting if it visits infinitely often
-        the acceptance set `n`
-    - `Fin(n)` means that a run is accepting if it visits finitely often the
-        acceptance set `n`
+
+    - ``t`` denotes the true acceptance condition: any run is accepting
+    - ``f`` denotes the false acceptance condition: no run is accepting
+    - ``Inf(n)`` means that a run is accepting if it visits infinitely often
+      the acceptance set *n*
+    - ``Fin(n)`` means that a run is accepting if it visits finitely often the
+      acceptance set *n*
 
     Extended operators (morphata-specific):
-    - `Final(n)` means that a finite run is accepting if it ends in a state
-        marked with acceptance set `n` (for finite-word automata)
 
-    The above atoms can be combined using only the operator `&` and `|`
+    - ``Final(n)`` means that a finite run is accepting if it ends in a state
+      marked with acceptance set *n* (for finite-word automata)
+
+    The above atoms can be combined using only the operators ``&`` and ``|``
     (with obvious semantics), and parentheses for grouping. Note that there
-    is no negation, but an acceptance condition can be negated swapping `t`
-    and `f`, `&` and `|`, and `Fin(n)` and `Inf(n)`.
+    is no negation, but an acceptance condition can be negated swapping ``t``
+    and ``f``, ``&`` and ``|``, and ``Fin(n)`` and ``Inf(n)``.
 
     Examples:
-    - `Inf(0)&Inf(1)`: Generalized Büchi acceptance - accepting runs visit
-        both acceptance set 0 and set 1 infinitely often
-    - `Fin(0)|Fin(1)`: Generalized co-Büchi acceptance - accepting runs visit
-        set 0 or set 1 finitely often
-    - `(Fin(0)&Inf(1)) | (Fin(2)&Inf(3)) | (Fin(4)&Inf(5))`: Rabin acceptance
-        with 3 pairs
-    - `Final(0)`: Finite-word acceptance - accepting runs end in states marked
-        with set 0
+
+    - ``Inf(0)&Inf(1)``: Generalized Buchi acceptance — accepting runs visit
+      both acceptance set 0 and set 1 infinitely often
+    - ``Fin(0)|Fin(1)``: Generalized co-Buchi acceptance — accepting runs visit
+      set 0 or set 1 finitely often
+    - ``(Fin(0)&Inf(1)) | (Fin(2)&Inf(3)) | (Fin(4)&Inf(5))``: Rabin acceptance
+      with 3 pairs
+    - ``Final(0)``: Finite-word acceptance — accepting runs end in states marked
+      with set 0
     """
 
     def __and__(self, other: AccExpr) -> AccExpr:

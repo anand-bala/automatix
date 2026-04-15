@@ -4,14 +4,16 @@ Provides parsing of automaton definitions in HOA format and data structures
 for representing parsed automata.
 
 This parser supports the standard HOA v1 format with the following extension:
-    - Final(n) operator: For finite-word automata acceptance conditions
-      (not part of the standard HOA v1 specification)
+
+- ``Final(n)`` operator: For finite-word automata acceptance conditions
+  (not part of the standard HOA v1 specification)
 
 Standard HOA v1 acceptance operators (Inf, Fin, Buchi, co-Buchi, Rabin, Streett,
-Parity, Muller) are fully supported. The Final(n) operator provides a natural
+Parity, Muller) are fully supported. The ``Final(n)`` operator provides a natural
 way to express finite-word acceptance in HOA syntax.
 
-Example extended HOA with finite acceptance:
+Example extended HOA with finite acceptance::
+
     HOA: v1
     States: 2
     Start: 0
