@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-03-18T05:01:15.048431626Z"
+exclude-newer = "2026-03-18T05:06:31.666163562Z"
 exclude-newer-span = "P30D"
 
 [options.exclude-newer-package]
@@ -864,7 +864,7 @@ wheels = [
 
 [[package]]
 name = "morphata"
-version = "1.0.1"
+version = "1.0.2"
 source = { editable = "packages/morphata" }
 dependencies = [
     { name = "attrs" },
