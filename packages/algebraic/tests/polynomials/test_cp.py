@@ -731,5 +731,149 @@ class TestTorchBackendRegressions:
         assert len(set(results)) == 1, "compose() of fixed-point polynomial must produce identical bytes on every call"
 
 
+class TestToSparseHighDegree:
+    """Regression tests for the to_sparse degree-blowup bug (fixed 2026-04).
+
+    The old implementation enumerated ``(num_vars+1)^degree`` assignments in
+    a Python loop.  After ``compose()`` the internal degree grows to
+    ``1 + degree_current * degree_transition``, so step 2 of an AFA run could
+    trigger ``O(4^10) ≈ 1 M`` iterations — effectively hanging.
+
+    The replacement is an ``O(R * D * 2^n * n)`` subset DP whose cost is
+    independent of ``degree``.
+
+    These tests:
+    1. Verify ``to_sparse`` produces correct monomials for high-degree encodings
+       of simple polynomials (padding to degree > max_degree adds constant-1
+       factors that should not change the multilinear semantics).
+    2. Verify ``normalize()`` preserves evaluation after compose inflates degree.
+    3. Verify ``LowRankFactors.normalize()`` (delegates to RankDecomposition) also
+       keeps degree bounded.
+    """
+
+    def test_to_sparse_roundtrip_variable_high_degree(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
+        """to_sparse on x_0 padded to degree 7 round-trips via from_sparse correctly.
+
+        Padding to degree 7 inserts constant-1 slots; the polynomial is still x_0.
+        Before the fix, (num_vars+1)^7 = 4^7 = 16 K Python iterations would run
+        for this case.
+        """
+        from algebraic.polynomials.rank_decomp import pad_upto
+
+        num_vars = 3
+        x0 = RankDecomposition.variable(0, num_vars, bool_algebra, backend=backend)
+        high_factors = pad_upto(x0.factors, max_rank=1, max_degree=7, algebra=bool_algebra)
+        # Wrap in a new RankDecomposition whose degree field reports 7
+        x0_high = RankDecomposition(
+            high_factors,
+            max_rank=1,
+            max_degree=num_vars,
+            max_replacement_degree=num_vars,
+            backend=backend,
+        )
+        assert x0_high.degree == 7
+
+        sparse = x0_high.to_sparse()
+        rd_back = RankDecomposition.from_sparse(sparse)
+
+        # Must evaluate identically to the original at every boolean point
+        for bits in np.ndindex(*([2] * num_vars)):
+            point = np.array([bool_algebra.one if b else bool_algebra.zero for b in bits])
+            orig = np.asarray(x0_high.evaluate(point).factors.data[0, 0, 0]).flat[0]
+            back = np.asarray(rd_back.evaluate(point).factors.data[0, 0, 0]).flat[0]
+            assert_close(orig, back)
+
+    def test_to_sparse_roundtrip_conjunction_high_degree(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
+        """to_sparse on x_0 & x_1 padded to degree 8 round-trips correctly.
+
+        Before the fix, (3+1)^8 = 65 536 iterations — the slowest case tested here.
+        After the fix, 1 * 8 * 8 * 3 = 192 subset-DP steps.
+        """
+        from algebraic.polynomials.rank_decomp import pad_upto
+
+        num_vars = 3
+        x0 = RankDecomposition.variable(0, num_vars, bool_algebra, backend=backend)
+        x1 = RankDecomposition.variable(1, num_vars, bool_algebra, backend=backend)
+        x0x1 = x0 * x1  # degree 2
+
+        high_factors = pad_upto(x0x1.factors, max_rank=x0x1.rank, max_degree=8, algebra=bool_algebra)
+        x0x1_high = RankDecomposition(
+            high_factors,
+            max_rank=10,
+            max_degree=num_vars,
+            max_replacement_degree=num_vars,
+            backend=backend,
+        )
+        assert x0x1_high.degree == 8
+
+        sparse = x0x1_high.to_sparse()
+        rd_back = RankDecomposition.from_sparse(sparse)
+
+        for bits in np.ndindex(*([2] * num_vars)):
+            point = np.array([bool_algebra.one if b else bool_algebra.zero for b in bits])
+            orig = np.asarray(x0x1_high.evaluate(point).factors.data[0, 0, 0]).flat[0]
+            back = np.asarray(rd_back.evaluate(point).factors.data[0, 0, 0]).flat[0]
+            assert_close(orig, back)
+
+    def test_normalize_after_compose_preserves_semantics(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
+        """normalize() preserves semantics after compose inflates degree > max_degree.
+
+        Sets up transitions matching the F(a)&F(b) AFA (3 states, empty symbol):
+          T0 = x_1 * x_2   (state 0 transitions to x_1 AND x_2)
+          T1 = x_1          (state 1 self-loop)
+          T2 = x_2          (state 2 self-loop)
+        initial = x_0
+
+        step 1: compose x_0 with [T0,T1,T2] → x_1*x_2  (degree inflated, normalized)
+        step 2: compose result with [T0,T1,T2] → x_1*x_2 (degree inflated again)
+
+        Step 2 is the one that previously hung (to_sparse called with degree 10).
+        """
+        num_vars = 3
+        x0 = RankDecomposition.variable(0, num_vars, bool_algebra, backend=backend)
+        x1 = RankDecomposition.variable(1, num_vars, bool_algebra, backend=backend)
+        x2 = RankDecomposition.variable(2, num_vars, bool_algebra, backend=backend)
+
+        transitions = [x1 * x2, x1, x2]  # T0, T1, T2
+
+        poly1 = x0.compose(transitions)
+        assert poly1.degree <= poly1.max_degree, "degree must be bounded after step 1"
+
+        poly2 = poly1.compose(transitions)  # this was the hanging step
+        assert poly2.degree <= poly2.max_degree, "degree must be bounded after step 2"
+
+        # Semantic check: both steps must agree with the reference (x_1 & x_2)
+        ref = x1 * x2
+        for bits in np.ndindex(*([2] * num_vars)):
+            point = np.array([bool_algebra.one if b else bool_algebra.zero for b in bits])
+            ref_val = np.asarray(ref.evaluate(point).factors.data[0, 0, 0]).flat[0]
+            p1_val = np.asarray(poly1.evaluate(point).factors.data[0, 0, 0]).flat[0]
+            p2_val = np.asarray(poly2.evaluate(point).factors.data[0, 0, 0]).flat[0]
+            assert_close(p1_val, ref_val)
+            assert_close(p2_val, ref_val)
+
+    def test_low_rank_factors_normalize_degree_bounded(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
+        """LowRankFactors.compose also keeps degree bounded after degree-inflating steps.
+
+        LowRankFactors.normalize() delegates to RankDecomposition.normalize() which
+        calls to_sparse — so the same fix applies.
+        """
+        from algebraic.polynomials.rank_decomp import LowRankFactors
+
+        num_vars = 3
+
+        def lrf_var(i: int) -> LowRankFactors:
+            return LowRankFactors.variable(i, num_vars, bool_algebra, backend=backend)
+
+        x0, x1, x2 = lrf_var(0), lrf_var(1), lrf_var(2)
+        transitions = [x1 * x2, x1, x2]
+
+        poly1 = x0.compose(transitions)
+        assert poly1.degree <= poly1.max_degree
+
+        poly2 = poly1.compose(transitions)
+        assert poly2.degree <= poly2.max_degree
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

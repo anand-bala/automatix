@@ -3,7 +3,6 @@
 import typing
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from itertools import product
 
 from bitarray import frozenbitarray
 from typing_extensions import Self
@@ -347,35 +346,57 @@ class RankDecomposition(AlgebraicPyTree):
         return tuple(int2ba(index, length=self.num_vars))
 
     def to_sparse(self) -> PolyDict:
-        """Convert CP to sparse by enumerating all monomial evaluations.
+        """Convert CP to sparse via a subset DP over variable bitmasks.
 
-        WARNING: This is expensive ``O((n+1)^d)`` where d is degree.
+        Replaces the previous ``O((n+1)^d)`` enumeration with an
+        ``O(R * D * 2^n * n)`` DP that is independent of ``degree``.
+        This prevents exponential blowup when ``degree > max_degree``
+        (which happens after :meth:`compose` before :meth:`normalize`
+        has been applied).
+
+        The DP assumes idempotent variable multiplication (``x_i * x_i = x_i``),
+        which holds for multilinear polynomials over bounded distributive lattices.
         """
         backend = Backend(self.backend)
-
-        result: dict[frozenbitarray, AlgebraicArray] = {}
-
         zero = algebraic.zeros((), semiring=self.algebra, backend=self.backend)
         one = algebraic.ones((), semiring=self.algebra, backend=self.backend)
+        n = self.num_vars
 
-        for assignment in product(range(self.num_vars + 1), repeat=self.degree):
-            vars_present = frozenbitarray(
-                [any(assignment[k] == i + 1 for k in range(self.degree)) for i in range(self.num_vars)]
-            )
+        # result[bits] accumulates the coefficient for monomial prod_{i: bits[i]} x_i
+        result: dict[frozenbitarray, AlgebraicArray] = {}
 
-            coeff: AlgebraicArray = zero
-            for r in range(self.rank):
-                component: AlgebraicArray = one
-                for k in range(self.degree):
-                    factor_value: AlgebraicArray = self.factors[r, k, assignment[k]]
-                    component = factor_value * component
-                coeff = component + coeff
+        for r in range(self.rank):
+            # dp maps integer bitmask → accumulated coefficient.
+            # Bit i set ⟺ variable x_i is part of the monomial.
+            # Starting state: empty monomial (bitmask 0) with coefficient 1.
+            dp: dict[int, AlgebraicArray] = {0: one}
 
-            if not bool(algebraic.allclose(coeff, zero)):
-                if vars_present in result:
-                    result[vars_present] = result[vars_present] + coeff
-                else:
-                    result[vars_present] = coeff
+            for k in range(self.degree):
+                new_dp: dict[int, AlgebraicArray] = {}
+
+                for mask, c in dp.items():
+                    # Slot k selects the constant term (index 0).
+                    const_factor: AlgebraicArray = self.factors[r, k, 0]
+                    if not bool(algebraic.allclose(const_factor, zero)):
+                        contribution = const_factor * c
+                        new_dp[mask] = (new_dp[mask] + contribution) if mask in new_dp else contribution
+
+                    # Slot k selects variable x_i (index i+1).
+                    # Idempotent rule: x_i * x_i = x_i, so mask | (1<<i) == mask when bit i is set.
+                    for i in range(n):
+                        var_factor: AlgebraicArray = self.factors[r, k, i + 1]
+                        if bool(algebraic.allclose(var_factor, zero)):
+                            continue
+                        new_mask = mask | (1 << i)
+                        contribution = var_factor * c
+                        new_dp[new_mask] = (new_dp[new_mask] + contribution) if new_mask in new_dp else contribution
+
+                dp = new_dp
+
+            for mask, coeff in dp.items():
+                if not bool(algebraic.allclose(coeff, zero)):
+                    bits = frozenbitarray([bool(mask & (1 << i)) for i in range(n)])
+                    result[bits] = (result[bits] + coeff) if bits in result else coeff
 
         return PolyDict(self.algebra, self.num_vars, result, backend=backend)
 
