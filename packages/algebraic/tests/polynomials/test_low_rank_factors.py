@@ -432,6 +432,90 @@ class TestLowRankFactorsJAXTransformations:
         assert_close(gradient, expected)
 
 
+class TestLowRankFactorsTorchRegressions:
+    """Regression tests for torch backend bugs in pad_upto and compose."""
+
+    def test_compose_torch_pad_upto_rank_degree_mismatch(self) -> None:
+        """compose() with replacements of different ranks must not crash on torch.
+
+        Regression for _set_at_index broadcast failure: prepare_replacement_factors
+        calls pad_upto on each replacement to align ranks and degrees. When one
+        replacement has rank=2, degree=3 and another has rank=1, degree=2 with
+        n_plus_1=3, the [:, :2, :] index produces torchy shapes (2,),(2,),(3,) —
+        previously crashing in torch.broadcast_shapes.
+        """
+        import algebraic as alg
+
+        torch = pytest.importorskip("torch")
+        bool_alg = alg.semirings.boolean_algebra(mode="logic")
+
+        num_vars = 3
+
+        # Build replacements with deliberately different ranks so pad_upto is exercised.
+        # rank-2 replacement: shape (2, 3, num_vars)
+        w2 = torch.zeros(2, 3, num_vars)
+        w2[0, 0, 0] = 1.0
+        b2 = torch.zeros(2, 3)
+        rep_rank2 = LowRankFactors(
+            alg.array(w2, semiring=bool_alg, backend="torch"),
+            alg.array(b2, semiring=bool_alg, backend="torch"),
+        )
+
+        # rank-1 replacement: shape (1, 2, num_vars)
+        w1 = torch.zeros(1, 2, num_vars)
+        w1[0, 0, 1] = 1.0
+        b1 = torch.zeros(1, 2)
+        rep_rank1 = LowRankFactors(
+            alg.array(w1, semiring=bool_alg, backend="torch"),
+            alg.array(b1, semiring=bool_alg, backend="torch"),
+        )
+
+        p = LowRankFactors.variable(0, num_vars=num_vars, algebra=bool_alg, backend="torch")
+        result = p.compose([rep_rank2, rep_rank1, rep_rank1])
+
+        assert isinstance(result, LowRankFactors)
+        assert is_torch_array(result.weights.data)
+
+    def test_compose_degree_stays_bounded(self) -> None:
+        """compose() must not let degree grow beyond max_degree across repeated calls."""
+        import algebraic as alg
+
+        pytest.importorskip("torch")
+        bool_alg = alg.semirings.boolean_algebra(mode="logic")
+
+        num_vars = 2
+        x0 = LowRankFactors.variable(0, num_vars=num_vars, algebra=bool_alg, backend="torch")
+        x1 = LowRankFactors.variable(1, num_vars=num_vars, algebra=bool_alg, backend="torch")
+
+        sub0 = x0 * x1  # degree 2 replacement
+        sub1 = x1  # degree 1 replacement
+
+        p = x0
+        for _ in range(5):
+            p = p.compose([sub0, sub1])
+
+        rd = p.to_rank_decomposition()
+        assert rd.degree <= rd.max_degree, f"degree {rd.degree} exceeded max_degree {rd.max_degree} after repeated compose()"
+
+    def test_compose_byte_canonical_after_repeated_steps(self) -> None:
+        """Fixed-point compose() must produce identical factor bytes on every call."""
+        import algebraic as alg
+
+        pytest.importorskip("torch")
+        bool_alg = alg.semirings.boolean_algebra(mode="logic")
+
+        num_vars = 1
+        x0 = LowRankFactors.variable(0, num_vars=num_vars, algebra=bool_alg, backend="torch")
+
+        p = x0
+        results = []
+        for _ in range(4):
+            p = p.compose([x0])
+            results.append(p.weights.data.detach().cpu().numpy().tobytes())
+
+        assert len(set(results)) == 1, "compose() of fixed-point polynomial must produce identical bytes on every call"
+
+
 class TestLowRankFactorsTorchGradients:
     """Test gradient flow on torch backend."""
 

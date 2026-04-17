@@ -646,6 +646,89 @@ class TestTorchBackendRegressions:
 
         assert param.grad is not None, "gradient must flow back through pad_upto"
 
+    def test_pad_upto_torch_incompatible_rank_degree_n_plus_1(self) -> None:
+        """pad_upto must not crash when rank, degree, and n_plus_1 are all different sizes.
+
+        Regression for the _set_at_index torch broadcast bug: when padding a factor of
+        shape (1, 2, 3) up to (2, 3, 3), the index [:, :2, :] produces torchy aranges of
+        shapes (2,), (2,), (3,) — previously torch.broadcast_shapes raised RuntimeError
+        because 2 != 3 and neither is 1 in the degree/n_plus_1 positions.
+        """
+        import algebraic as alg
+        from algebraic.polynomials.rank_decomp import pad_upto
+
+        torch = pytest.importorskip("torch")
+        bool_alg = alg.semirings.boolean_algebra(mode="soft")
+
+        # shape (1, 2, 3): rank=1, degree=2, n_plus_1=3
+        data = torch.randn(1, 2, 3)
+        factors = alg.array(data, semiring=bool_alg, backend="torch")
+
+        # Padding rank 1→2, degree 2→3 forces [:, :2, :] assignment on a (2, 3, 3) base,
+        # producing torchy shapes (2,), (2,), (3,) — incompatible under the old code.
+        padded = pad_upto(factors, max_rank=2, max_degree=3, algebra=bool_alg)
+
+        assert padded.shape == (2, 3, 3)
+        assert is_torch_array(padded.data)
+        # The original factors must appear in the first rank slot, first two degree slots.
+        import numpy as np
+
+        np.testing.assert_allclose(
+            padded.data[:1, :2, :].detach().cpu().numpy(),
+            data.numpy(),
+        )
+
+    def test_compose_degree_stays_bounded(self) -> None:
+        """compose() must not let degree grow beyond max_degree across repeated calls.
+
+        Regression for the degree-explosion bug: without normalize(), each compose()
+        call multiplied degrees so that d_1=5, d_2=11, d_3=23, ...
+        """
+        import algebraic as alg
+
+        pytest.importorskip("torch")
+        bool_alg = alg.semirings.boolean_algebra(mode="logic")
+
+        # Two-variable polynomial: p(x0, x1) = x0
+        num_vars = 2
+        x0 = RankDecomposition.variable(0, num_vars=num_vars, algebra=bool_alg, backend="torch")
+        x1 = RankDecomposition.variable(1, num_vars=num_vars, algebra=bool_alg, backend="torch")
+
+        # Replacements have degree > 1 so composition inflates degree if not normalized.
+        # sub0 = x0 * x1 (degree 2), sub1 = x1 (degree 1)
+        sub0 = x0 * x1  # degree 2
+        sub1 = x1  # degree 1
+
+        p = x0
+        for _ in range(5):
+            p = p.compose([sub0, sub1])
+
+        assert p.degree <= p.max_degree, f"degree {p.degree} exceeded max_degree {p.max_degree} after repeated compose()"
+
+    def test_compose_byte_canonical_after_repeated_steps(self) -> None:
+        """Semantically identical residuals must produce identical factor bytes.
+
+        Stepping a fixed-point polynomial (one that maps to itself) with the same symbol
+        repeatedly must yield the same factor bytes on every step — demonstrating that
+        normalize() produces a canonical representation.
+        """
+        import algebraic as alg
+
+        pytest.importorskip("torch")
+        bool_alg = alg.semirings.boolean_algebra(mode="logic")
+
+        # p(x0) = x0: stepping with identity substitution [x0] should be a fixed point.
+        num_vars = 1
+        x0 = RankDecomposition.variable(0, num_vars=num_vars, algebra=bool_alg, backend="torch")
+
+        p = x0
+        results = []
+        for _ in range(4):
+            p = p.compose([x0])
+            results.append(p.factors.data.detach().cpu().numpy().tobytes())
+
+        assert len(set(results)) == 1, "compose() of fixed-point polynomial must produce identical bytes on every call"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

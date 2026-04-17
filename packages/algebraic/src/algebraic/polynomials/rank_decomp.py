@@ -246,6 +246,24 @@ class RankDecomposition(AlgebraicPyTree):
             backend=self.backend,
         )
 
+    def normalize(self) -> "RankDecomposition":
+        """Canonicalize via truth-table round-trip, bounding degree to max_degree.
+
+        Converts to sparse form (enumerating all monomial evaluations) and back,
+        producing a canonical CP decomposition with degree <= max_degree.
+        This prevents unbounded degree growth across repeated :meth:`compose` calls.
+        """
+        if self.degree <= self.max_degree:
+            return self
+        sparse = self.to_sparse()
+        return RankDecomposition.from_sparse(
+            sparse,
+            self.max_rank,
+            self.max_degree,
+            self.max_replacement_degree,
+            backend=self.backend,
+        )
+
     def __add__(self, other: "RankDecomposition | Scalar") -> "RankDecomposition":
         """Add by concatenating rank-1 components.
 
@@ -309,7 +327,8 @@ class RankDecomposition(AlgebraicPyTree):
             )
         replacement_factors = [r.factors for r in replacements]
         result_factors = compose_factors(self.factors, replacement_factors, self.max_rank, self.algebra)
-        return self._replace_factors(result_factors)
+        result = self._replace_factors(result_factors)
+        return result.normalize()
 
     def tree_flatten(self) -> tuple[list[AlgebraicArray], tuple[typing.Any, ...]]:
         return [self.factors], (self.algebra, self.max_rank, self.max_degree, self.max_replacement_degree, self.backend)
@@ -1003,6 +1022,16 @@ class LowRankFactors(AlgebraicPyTree):
             backend=self.backend,
         )
 
+    def normalize(self) -> "LowRankFactors":
+        """Canonicalize via truth-table round-trip, bounding degree to max_degree.
+
+        Delegates to :meth:`RankDecomposition.normalize` via round-trip conversion.
+        """
+        rd = self.to_rank_decomposition()
+        if rd.degree <= rd.max_degree:
+            return self
+        return LowRankFactors.from_rank_decomposition(rd.normalize())
+
     def __add__(self, other: "LowRankFactors | Scalar") -> "LowRankFactors":
         """Add by concatenating rank-1 components."""
         if is_scalar(other):
@@ -1062,7 +1091,8 @@ class LowRankFactors(AlgebraicPyTree):
         merged_self = self.to_merged()
         replacement_merged = [r.to_merged() for r in replacements]
         result_factors = compose_factors(merged_self, replacement_merged, self.max_rank, self.algebra)
-        return self._replace_merged(result_factors)
+        result = self._replace_merged(result_factors)
+        return result.normalize()
 
     def to_rank_decomposition(self) -> RankDecomposition:
         """Convert to a :class:`RankDecomposition`."""

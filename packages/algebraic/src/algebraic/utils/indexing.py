@@ -53,11 +53,11 @@ def _set_at_index(
     if array_api_compat.is_torch_array(data):
         import torch
 
-        torchy = _torchy_index(idx, tuple(data.shape))
-        value = torch.as_tensor(value, dtype=data.dtype, device=data.device)
-        broadcast_shape = torch.broadcast_shapes(*[t.shape for t in torchy])  # type: ignore[no-untyped-call]
-        value = value.reshape(broadcast_shape)
-        return data.index_put(torchy, value)
+        new_data = data.clone()
+        if not isinstance(value, torch.Tensor):
+            value = torch.as_tensor(value, dtype=data.dtype, device=data.device)
+        new_data[idx] = value
+        return new_data
     new_data = data.copy()
     new_data[idx] = value
     return new_data
