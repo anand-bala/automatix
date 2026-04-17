@@ -463,3 +463,79 @@ class TestSymbolicPolynomialOperatorAccepts:
         ]
         for word in words:
             assert_close(op_rd.accepts(word), op_lrf.accepts(word))
+
+
+class TestSymbolicPolynomialOperatorStep:
+    """Regression tests for step() degree-blowup bug (fixed 2026-04).
+
+    Before the fix, ``SymbolicPolynomialOperator.step()`` called
+    ``compose()`` which could grow the CP degree to ``1 + D_old * D_trans``.
+    On step 2 this reached degree 10 for the ``F(a)&F(b)`` formula, causing
+    ``normalize()`` (via ``to_sparse``) to loop ``4^10 ≈ 1 M`` times and hang.
+    """
+
+    @pytest.fixture
+    def algebra(self) -> algebraic.BooleanAlgebra:
+        return boolean_algebra()
+
+    @pytest.mark.parametrize("output", ["rank_decomposition", "low_rank_factors"])
+    @pytest.mark.timeout(10)
+    def test_step_two_eventualities_terminates(
+        self,
+        output: str,
+        algebra: algebraic.BooleanAlgebra,
+    ) -> None:
+        """step() must terminate for F(a)&F(b) across at least two steps.
+
+        This is the minimal reproducer from tests/repro_step_hang.py.
+        Both output modes exercise the same to_sparse path via normalize().
+
+        Regression: the second step inflates the CP degree to 10, triggering
+        normalize() -> to_sparse() with 4^10 ≈ 1 M Python iterations (~100 s).
+        The timeout catches that regression within 10 s.
+        """
+        formula = ltl.Eventually(ltl.Variable("a")) & ltl.Eventually(ltl.Variable("b"))
+        op = SymbolicPolynomialOperator.from_ltl(
+            formula,
+            algebra,
+            backend="numpy",
+            finite=True,
+            output=output,  # type: ignore[arg-type]
+        )
+        sigma = frozenset()  # empty symbol — the case that previously hung
+
+        poly1 = op.step(op.initial_poly, sigma)
+        poly2 = op.step(poly1, sigma)  # this was the hanging call
+
+        # Both results must have bounded degree
+        assert poly1.degree <= poly1.max_degree
+        assert poly2.degree <= poly2.max_degree
+
+    @pytest.mark.timeout(10)
+    def test_step_second_level_agrees_with_run_polynomial(
+        self,
+        algebra: algebraic.BooleanAlgebra,
+    ) -> None:
+        """step() called twice must agree with run_polynomial on a 2-symbol word.
+
+        Regression: same degree-10 path as test_step_two_eventualities_terminates.
+        """
+        formula = ltl.Eventually(ltl.Variable("a")) & ltl.Eventually(ltl.Variable("b"))
+        op = SymbolicPolynomialOperator.from_ltl(
+            formula, algebra, backend="numpy", finite=True
+        )
+        sigma = frozenset()
+
+        # Manual two-step
+        poly_via_step = op.step(op.step(op.initial_poly, sigma), sigma)
+
+        # run_polynomial on a 2-symbol word
+        poly_via_run = op.run_polynomial([sigma, sigma])
+
+        # Both must evaluate identically at all boolean points
+        num_vars = op.num_states
+        for bits in itertools.product([False, True], repeat=num_vars):
+            point = np.array([algebra.one if b else algebra.zero for b in bits])
+            step_val = np.asarray(poly_via_step.evaluate(point).factors.data[0, 0, 0]).flat[0]
+            run_val = np.asarray(poly_via_run.evaluate(point).factors.data[0, 0, 0]).flat[0]
+            np.testing.assert_allclose(step_val, run_val, err_msg=f"Mismatch at {bits}")
