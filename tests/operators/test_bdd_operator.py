@@ -5,6 +5,7 @@ from __future__ import annotations
 import typing
 from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import Any
 
 import logic_asts as logic
 import logic_asts.ltl as ltl
@@ -15,7 +16,17 @@ from morphata.spec import BoolExpr
 from typing_extensions import override
 
 from automatix.operators import BDDOperator
-from automatix.operators._bdd import BDDDag, bdd_to_boolexpr, boolexpr_to_bdd, compose_bdd, evaluate_bdd
+from automatix.operators._bdd import (
+    BDDDag,
+    bdd_to_boolexpr,
+    bdd_to_poly_dict,
+    bdd_to_rank_decomp,
+    boolexpr_to_bdd,
+    compose_bdd,
+    evaluate_bdd,
+    poly_dict_to_boolexpr,
+    rank_decomp_to_bdd,
+)
 
 # ---------------------------------------------------------------------------
 # Test helpers
@@ -533,3 +544,252 @@ class TestBDDOperatorAccepts:
         ]
         for word in words:
             assert op_natural.accepts(word) is op_reversed.accepts(word), f"Mismatch on {word}"
+
+
+# ---------------------------------------------------------------------------
+# TestPolyDictToBoolexpr
+# ---------------------------------------------------------------------------
+
+
+class TestPolyDictToBoolexpr:
+    """Unit tests for poly_dict_to_boolexpr."""
+
+    def _algebra(self) -> Any:
+        from algebraic.semirings import boolean_algebra
+
+        return boolean_algebra()
+
+    def test_zero_poly_dict(self) -> None:
+        """Zero PolyDict -> Literal(False)."""
+        from algebraic.polynomials import PolyDict
+
+        sparse = PolyDict.zero(2, algebra=self._algebra(), backend="numpy")
+        expr = poly_dict_to_boolexpr(sparse)
+        assert expr == logic.Literal(False)
+
+    def test_one_poly_dict(self) -> None:
+        """One PolyDict -> Literal(True)."""
+        from algebraic.polynomials import PolyDict
+
+        sparse = PolyDict.one(2, algebra=self._algebra(), backend="numpy")
+        expr = poly_dict_to_boolexpr(sparse)
+        assert expr == logic.Literal(True)
+
+    def test_single_variable(self) -> None:
+        """PolyDict.variable(0) -> Variable(0)."""
+        from algebraic.polynomials import PolyDict
+
+        sparse = PolyDict.variable(0, 2, algebra=self._algebra(), backend="numpy")
+        expr = poly_dict_to_boolexpr(sparse)
+        assert expr == logic.Variable(0)
+
+    def test_and_monomial(self) -> None:
+        """x_0 * x_1 PolyDict -> And(Variable(0), Variable(1)) semantics."""
+        import itertools
+
+        from algebraic.polynomials import PolyDict
+
+        algebra = self._algebra()
+        x0 = PolyDict.variable(0, 2, algebra=algebra, backend="numpy")
+        x1 = PolyDict.variable(1, 2, algebra=algebra, backend="numpy")
+        sparse = x0 * x1
+        expr = poly_dict_to_boolexpr(sparse)
+        for a, b in itertools.product([False, True], repeat=2):
+            point = {0: a, 1: b}
+            assert eval_boolexpr(expr, point) == (a and b), f"Mismatch at {a}, {b}"
+
+    def test_or_of_monomials(self) -> None:
+        """x_0 + x_1 PolyDict -> Or semantics."""
+        import itertools
+
+        from algebraic.polynomials import PolyDict
+
+        algebra = self._algebra()
+        x0 = PolyDict.variable(0, 2, algebra=algebra, backend="numpy")
+        x1 = PolyDict.variable(1, 2, algebra=algebra, backend="numpy")
+        sparse = x0 + x1
+        expr = poly_dict_to_boolexpr(sparse)
+        for a, b in itertools.product([False, True], repeat=2):
+            point = {0: a, 1: b}
+            assert eval_boolexpr(expr, point) == (a or b), f"Mismatch at {a}, {b}"
+
+
+# ---------------------------------------------------------------------------
+# TestRankDecompToBdd
+# ---------------------------------------------------------------------------
+
+
+class TestRankDecompToBdd:
+    """Unit tests for rank_decomp_to_bdd."""
+
+    def _algebra(self) -> Any:
+        from algebraic.semirings import boolean_algebra
+
+        return boolean_algebra()
+
+    def test_variable_polynomial(self) -> None:
+        """x_0 RankDecomposition -> BDD evaluates correctly."""
+        from algebraic.polynomials import RankDecomposition
+
+        algebra = self._algebra()
+        poly = RankDecomposition.variable(0, num_vars=2, algebra=algebra, backend="numpy")
+        bdd = rank_decomp_to_bdd(poly)
+        assert evaluate_bdd(bdd, {0: True, 1: False}) is True
+        assert evaluate_bdd(bdd, {0: False, 1: True}) is False
+        assert evaluate_bdd(bdd, {0: False, 1: False}) is False
+
+    def test_and_polynomial(self) -> None:
+        """x_0 * x_1 -> AND semantics."""
+        import itertools
+
+        from algebraic.polynomials import RankDecomposition
+
+        algebra = self._algebra()
+        x0 = RankDecomposition.variable(0, num_vars=2, algebra=algebra, backend="numpy")
+        x1 = RankDecomposition.variable(1, num_vars=2, algebra=algebra, backend="numpy")
+        bdd = rank_decomp_to_bdd(x0 * x1)
+        for a, b in itertools.product([False, True], repeat=2):
+            assert evaluate_bdd(bdd, {0: a, 1: b}) is (a and b), f"Mismatch at {a}, {b}"
+
+    def test_or_polynomial(self) -> None:
+        """x_0 + x_1 -> OR semantics."""
+        import itertools
+
+        from algebraic.polynomials import RankDecomposition
+
+        algebra = self._algebra()
+        x0 = RankDecomposition.variable(0, num_vars=2, algebra=algebra, backend="numpy")
+        x1 = RankDecomposition.variable(1, num_vars=2, algebra=algebra, backend="numpy")
+        bdd = rank_decomp_to_bdd(x0 + x1)
+        for a, b in itertools.product([False, True], repeat=2):
+            assert evaluate_bdd(bdd, {0: a, 1: b}) is (a or b), f"Mismatch at {a}, {b}"
+
+    def test_zero_polynomial(self) -> None:
+        """Zero polynomial -> BDD root is false_id."""
+        from algebraic.polynomials import RankDecomposition
+
+        algebra = self._algebra()
+        poly = RankDecomposition.zero(num_vars=2, algebra=algebra, backend="numpy")
+        bdd = rank_decomp_to_bdd(poly)
+        assert bdd.root_id == bdd.false_id
+
+    def test_one_polynomial(self) -> None:
+        """One polynomial -> BDD root is true_id."""
+        from algebraic.polynomials import RankDecomposition
+
+        algebra = self._algebra()
+        poly = RankDecomposition.one(num_vars=2, algebra=algebra, backend="numpy")
+        bdd = rank_decomp_to_bdd(poly)
+        assert bdd.root_id == bdd.true_id
+
+    def test_low_rank_factors(self) -> None:
+        """LowRankFactors input is converted via to_rank_decomposition()."""
+        from algebraic.polynomials import LowRankFactors, RankDecomposition
+
+        algebra = self._algebra()
+        rd = RankDecomposition.variable(0, num_vars=2, algebra=algebra, backend="numpy")
+        lrf = LowRankFactors.from_rank_decomposition(rd)
+        bdd = rank_decomp_to_bdd(lrf)
+        assert evaluate_bdd(bdd, {0: True, 1: False}) is True
+        assert evaluate_bdd(bdd, {0: False, 1: True}) is False
+
+    def test_wrong_type_raises(self) -> None:
+        """Non-polynomial input raises TypeError."""
+        with pytest.raises(TypeError, match="RankDecomposition or LowRankFactors"):
+            rank_decomp_to_bdd("not a polynomial")
+
+
+# ---------------------------------------------------------------------------
+# TestBddToPoly
+# ---------------------------------------------------------------------------
+
+
+class TestBddToPoly:
+    """Unit tests for bdd_to_poly_dict and bdd_to_rank_decomp."""
+
+    def _algebra(self) -> Any:
+        from algebraic.semirings import boolean_algebra
+
+        return boolean_algebra()
+
+    def _eval_poly(self, poly: Any, point: dict[int, bool]) -> bool:
+        """Evaluate a PolyDict at a boolean point, returning a Python bool."""
+        result = poly.evaluate(point)
+        # A nonzero polynomial has a constant-monomial entry with a truthy coefficient.
+        for coeff in result.data.values():
+            if coeff.data.item():
+                return True
+        return False
+
+    def test_true_bdd_to_poly_dict(self) -> None:
+        """Literal(True) BDD -> one PolyDict (constant True)."""
+        algebra = self._algebra()
+        bdd = boolexpr_to_bdd(logic.Literal(True), num_vars=2)
+        poly = bdd_to_poly_dict(bdd, algebra)
+        assert self._eval_poly(poly, {0: False, 1: False}) is True
+        assert self._eval_poly(poly, {0: True, 1: True}) is True
+
+    def test_false_bdd_to_poly_dict(self) -> None:
+        """Literal(False) BDD -> zero PolyDict (constant False)."""
+        algebra = self._algebra()
+        bdd = boolexpr_to_bdd(logic.Literal(False), num_vars=2)
+        poly = bdd_to_poly_dict(bdd, algebra)
+        assert self._eval_poly(poly, {0: False, 1: False}) is False
+        assert self._eval_poly(poly, {0: True, 1: True}) is False
+
+    def test_variable_bdd_to_poly_dict(self) -> None:
+        """Variable(0) BDD -> PolyDict that evaluates correctly."""
+        algebra = self._algebra()
+        bdd = boolexpr_to_bdd(logic.Variable(0), num_vars=2)
+        poly = bdd_to_poly_dict(bdd, algebra)
+        assert self._eval_poly(poly, {0: True, 1: False}) is True
+        assert self._eval_poly(poly, {0: False, 1: True}) is False
+
+    def test_and_bdd_to_poly_dict(self) -> None:
+        """AND BDD -> PolyDict with AND semantics."""
+        import itertools
+
+        algebra = self._algebra()
+        expr = typing.cast(logic.BoolExpr[int], logic.And((logic.Variable(0), logic.Variable(1))))
+        bdd = boolexpr_to_bdd(expr, num_vars=2)
+        poly = bdd_to_poly_dict(bdd, algebra)
+        for a, b in itertools.product([False, True], repeat=2):
+            assert self._eval_poly(poly, {0: a, 1: b}) is (a and b), f"Mismatch at {a}, {b}"
+
+    def test_or_bdd_to_poly_dict(self) -> None:
+        """OR BDD -> PolyDict with OR semantics."""
+        import itertools
+
+        algebra = self._algebra()
+        expr = typing.cast(logic.BoolExpr[int], logic.Or((logic.Variable(0), logic.Variable(1))))
+        bdd = boolexpr_to_bdd(expr, num_vars=2)
+        poly = bdd_to_poly_dict(bdd, algebra)
+        for a, b in itertools.product([False, True], repeat=2):
+            assert self._eval_poly(poly, {0: a, 1: b}) is (a or b), f"Mismatch at {a}, {b}"
+
+    def test_bdd_to_rank_decomp_variable(self) -> None:
+        """Variable BDD -> RankDecomposition; round-trips correctly via to_sparse."""
+        algebra = self._algebra()
+        bdd = boolexpr_to_bdd(logic.Variable(1), num_vars=2)
+        rd = bdd_to_rank_decomp(bdd, algebra)
+        # Evaluate via PolyDict (to_sparse -> evaluate) to avoid internal repr details.
+        assert self._eval_poly(rd.to_sparse(), {0: False, 1: False}) is False
+        assert self._eval_poly(rd.to_sparse(), {0: False, 1: True}) is True
+        assert self._eval_poly(rd.to_sparse(), {0: True, 1: False}) is False
+
+    def test_roundtrip_rank_decomp_to_bdd_to_poly_dict(self) -> None:
+        """rank_decomp_to_bdd -> bdd_to_poly_dict roundtrip evaluates correctly."""
+        import itertools
+
+        from algebraic.polynomials import RankDecomposition
+
+        algebra = self._algebra()
+        x0 = RankDecomposition.variable(0, num_vars=3, algebra=algebra, backend="numpy")
+        x1 = RankDecomposition.variable(1, num_vars=3, algebra=algebra, backend="numpy")
+        x2 = RankDecomposition.variable(2, num_vars=3, algebra=algebra, backend="numpy")
+        poly_orig = (x0 * x1) + x2
+        bdd = rank_decomp_to_bdd(poly_orig)
+        poly_rt = bdd_to_poly_dict(bdd, algebra)
+        for a, b, c in itertools.product([False, True], repeat=3):
+            expected = (a and b) or c
+            assert self._eval_poly(poly_rt, {0: a, 1: b, 2: c}) is expected, f"Mismatch at {a}, {b}, {c}"

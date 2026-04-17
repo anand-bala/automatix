@@ -21,7 +21,7 @@ import logic_asts as logic
 from morphata.spec import BoolExpr
 
 try:
-    import dd.cudd as _dd_backend  # type: ignore[import-not-found]
+    import dd.cudd as _dd_backend
 except ImportError:
     import dd.autoref as _dd_backend
 
@@ -200,6 +200,184 @@ def bdd_to_boolexpr(dag: BDDDag) -> BoolExpr[int]:
             result = logic.Or((logic.And((var, high)), logic.And((logic.Not(var), low))))
         cache[node_id] = result
     return cache[dag.root_id]
+
+
+def poly_dict_to_boolexpr(sparse: Any) -> BoolExpr[int]:
+    """Convert a :class:`~algebraic.polynomials.PolyDict` to a :class:`~morphata.spec.BoolExpr`.
+
+    Each key in ``sparse.data`` is a ``frozenbitarray`` of length ``num_vars``
+    indicating which variables form the monomial; all stored coefficients are
+    assumed nonzero (``PolyDict.to_sparse()`` guarantees this). Each monomial
+    becomes an ``And`` of its variables; the result is the ``Or`` over all
+    monomials.
+
+    Parameters
+    ----------
+    sparse :
+        A ``PolyDict`` whose variable indices correspond to integer state
+        indices ``0..num_vars-1``.
+
+    Returns
+    -------
+    BoolExpr[int]
+        Boolean expression semantically equivalent to *sparse* over
+        ``{0, 1}^num_vars``.
+    """
+    terms: list[BoolExpr[int]] = []
+    for mask, coeff in sparse.data.items():
+        # Skip zero-coefficient entries (PolyDict may store explicit zeros).
+        if not coeff.data.item():
+            continue
+        vars_in_monomial = [i for i, bit in enumerate(mask) if bit]
+        if not vars_in_monomial:
+            # Constant-1 monomial: the polynomial is identically True.
+            return logic.Literal(True)
+        monomial: BoolExpr[int]
+        if len(vars_in_monomial) == 1:
+            monomial = logic.Variable(vars_in_monomial[0])
+        else:
+            monomial = logic.And(tuple(logic.Variable(i) for i in vars_in_monomial))
+        terms.append(monomial)
+    if not terms:
+        return logic.Literal(False)
+    if len(terms) == 1:
+        return terms[0]
+    return logic.Or(tuple(terms))
+
+
+def rank_decomp_to_bdd(
+    poly: Any,
+    *,
+    var_order: Sequence[int] | None = None,
+) -> BDDDag:
+    """Convert a :class:`~algebraic.polynomials.RankDecomposition` or
+    :class:`~algebraic.polynomials.LowRankFactors` polynomial to a BDD DAG.
+
+    Converts the polynomial to its sparse
+    :class:`~algebraic.polynomials.PolyDict` form via
+    :func:`poly_dict_to_boolexpr`, then builds a BDD using
+    :func:`boolexpr_to_bdd`.  Only meaningful for polynomials over a boolean
+    algebra where all coefficients are in ``{0, 1}``.
+
+    Parameters
+    ----------
+    poly :
+        A ``RankDecomposition`` or ``LowRankFactors`` with integer-indexed
+        variables ``0..num_vars-1``.
+    var_order :
+        Optional permutation of ``range(poly.num_vars)`` specifying the BDD
+        variable order.  Defaults to natural order.
+
+    Returns
+    -------
+    BDDDag
+        BDD encoding the same boolean function as *poly*.
+
+    Raises
+    ------
+    TypeError
+        If *poly* is not a ``RankDecomposition`` or ``LowRankFactors``.
+    """
+    from algebraic.polynomials import LowRankFactors, RankDecomposition
+
+    if isinstance(poly, LowRankFactors):
+        poly = poly.to_rank_decomposition()
+    elif not isinstance(poly, RankDecomposition):
+        raise TypeError(f"Expected RankDecomposition or LowRankFactors, got {type(poly).__name__}")
+    sparse = poly.to_sparse()
+    expr = poly_dict_to_boolexpr(sparse)
+    return boolexpr_to_bdd(expr, poly.num_vars, var_order=var_order)
+
+
+def bdd_to_poly_dict(
+    dag: BDDDag,
+    algebra: Any,
+    *,
+    backend: str = "numpy",
+) -> Any:
+    """Convert a BDD DAG to a :class:`~algebraic.polynomials.PolyDict` polynomial.
+
+    Uses the Shannon expansion
+
+    .. math::
+
+        \\text{ite}(x_i, H, L) = (x_i \\cdot H) + L
+
+    which is exact for **monotone** boolean functions — those where every
+    internal BDD node satisfies ``H \\geq L`` pointwise (guaranteed when the
+    BDD was built from a positive sum-of-products polynomial via
+    :func:`rank_decomp_to_bdd` or :func:`boolexpr_to_bdd`).  For
+    non-monotone BDDs the result over-approximates the true function.
+
+    Parameters
+    ----------
+    dag :
+        Extracted BDD DAG.
+    algebra :
+        Algebraic structure (semiring/lattice) for the resulting polynomial.
+        Should be a boolean algebra for correct ``{0, 1}`` semantics.
+    backend :
+        Array backend for the polynomial (``"numpy"``, ``"jax"``, or
+        ``"torch"``).
+
+    Returns
+    -------
+    PolyDict
+        Sparse polynomial encoding the same boolean function as *dag*
+        (for monotone BDDs).
+    """
+    from algebraic.polynomials import PolyDict
+
+    cache: dict[int, Any] = {}
+    for node_id in dag.topo_order:
+        node = dag.nodes[node_id]
+        if node.var_index is None:
+            if node_id == dag.true_id:
+                cache[node_id] = PolyDict.one(dag.num_vars, algebra=algebra, backend=backend)
+            else:
+                cache[node_id] = PolyDict.zero(dag.num_vars, algebra=algebra, backend=backend)
+        else:
+            assert node.high_id is not None
+            assert node.low_id is not None
+            x_poly = PolyDict.variable(node.var_index, dag.num_vars, algebra=algebra, backend=backend)
+            poly_h = cache[node.high_id]
+            poly_l = cache[node.low_id]
+            cache[node_id] = (x_poly * poly_h) + poly_l
+    return cache[dag.root_id]
+
+
+def bdd_to_rank_decomp(
+    dag: BDDDag,
+    algebra: Any,
+    *,
+    backend: str = "numpy",
+) -> Any:
+    """Convert a BDD DAG to a :class:`~algebraic.polynomials.RankDecomposition`.
+
+    Delegates to :func:`bdd_to_poly_dict` then converts the result to a
+    ``RankDecomposition`` via
+    :meth:`~algebraic.polynomials.RankDecomposition.from_sparse`.
+
+    Parameters
+    ----------
+    dag :
+        Extracted BDD DAG (should encode a monotone boolean function; see
+        :func:`bdd_to_poly_dict` for details).
+    algebra :
+        Algebraic structure for the resulting polynomial.
+    backend :
+        Array backend (``"numpy"``, ``"jax"``, or ``"torch"``).
+
+    Returns
+    -------
+    RankDecomposition
+        CP-decomposition polynomial encoding the same boolean function as
+        *dag* (for monotone BDDs).
+    """
+    from algebraic.polynomials import RankDecomposition
+
+    sparse = bdd_to_poly_dict(dag, algebra, backend=backend)
+    return RankDecomposition.from_sparse(sparse)
 
 
 def boolexpr_to_bdd(
