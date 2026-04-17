@@ -9,8 +9,12 @@ This module provides operators for weighted automata:
 
 from automatix.operators.matrix import MatrixOperator as MatrixOperator
 from automatix.operators.polynomial import PolynomialOperator as PolynomialOperator
+from automatix.operators.symbolic_polynomial import (
+    SymbolicPolynomialOperator as SymbolicPolynomialOperator,
+)
 
 __all__ = [
     "MatrixOperator",
     "PolynomialOperator",
+    "SymbolicPolynomialOperator",
 ]
