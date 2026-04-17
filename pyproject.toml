@@ -18,6 +18,7 @@ dependencies = [
   "algebraic-arrays>=1.2.0",
   "morphata>=1.0.0",
   "jaxtyping>=0.3",
+  "dd>=0.6.0",
 ]
 
 [project.optional-dependencies]
