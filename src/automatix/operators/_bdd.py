@@ -5,9 +5,9 @@ automatix never imports from ``dd`` directly.
 
 The backend is selected once at import time:
 
-* ``dd.cudd`` — wraps the CUDD C library (much faster, supports automatic
+* ``dd.cudd`` - wraps the CUDD C library (much faster, supports automatic
   variable reordering).
-* ``dd.autoref`` — pure-Python fallback.
+* ``dd.autoref`` - pure-Python fallback.
 """
 
 from __future__ import annotations
@@ -58,6 +58,150 @@ class BDDDag:
     topo_order: tuple[int, ...]
 
 
+def evaluate_bdd(dag: BDDDag, point: dict[int, bool]) -> bool:
+    """Evaluate a BDD DAG at a boolean assignment.
+
+    Parameters
+    ----------
+    dag :
+        Extracted BDD DAG.
+    point :
+        Mapping from state index to boolean value, covering all
+        ``0..dag.num_vars - 1``.
+
+    Returns
+    -------
+    bool
+        The value of the boolean function encoded by *dag* at *point*.
+    """
+    current = dag.root_id
+    while current != dag.false_id and current != dag.true_id:
+        node = dag.nodes[current]
+        assert node.var_index is not None
+        assert node.high_id is not None
+        assert node.low_id is not None
+        current = node.high_id if point[node.var_index] else node.low_id
+    return current == dag.true_id
+
+
+def compose_bdd(run_dag: BDDDag, substitutions: list[BDDDag]) -> BDDDag:
+    """Compose a BDD by substituting each variable with another BDD.
+
+    Computes :math:`f(g_0, g_1, \\ldots, g_{n-1})` where :math:`f` is
+    encoded by *run_dag* and each :math:`g_i` is encoded by
+    ``substitutions[i]``.
+
+    Parameters
+    ----------
+    run_dag :
+        BDD encoding the function to compose into.
+    substitutions :
+        BDDs indexed by state variable -- ``substitutions[i]`` replaces
+        :math:`q_i` in *run_dag*.  Must have the same ``num_vars``
+        as *run_dag*.
+
+    Returns
+    -------
+    BDDDag
+        BDD encoding :math:`f(g_0, \\ldots, g_{n-1})`.
+
+    Raises
+    ------
+    ValueError
+        If ``len(substitutions) != run_dag.num_vars``.
+    """
+    if len(substitutions) != run_dag.num_vars:
+        raise ValueError(f"Expected {run_dag.num_vars} substitutions, got {len(substitutions)}")
+    num_vars = run_dag.num_vars
+    mgr = _dd_backend.BDD()
+    var_names = [f"q{i}" for i in range(num_vars)]
+    mgr.declare(*var_names)
+    mgr.configure(reordering=False)
+
+    run_node = _dag_to_manager_node(run_dag, mgr)
+    sub_nodes = [_dag_to_manager_node(s, mgr) for s in substitutions]
+
+    subs_dict: dict[str, Any] = {f"q{i}": sub_nodes[i] for i in range(num_vars)}
+    result_node = mgr.let(subs_dict, run_node)
+
+    return _extract_bdd_dag(result_node, mgr, num_vars, tuple(range(num_vars)))
+
+
+def bdd_to_boolexpr(dag: BDDDag) -> BoolExpr[int]:
+    """Convert a BDD DAG back to a :class:`~morphata.spec.BoolExpr`.
+
+    Reconstructs the boolean expression bottom-up from the DAG using the
+    Shannon expansion :math:`\\text{ite}(q_i, \\text{high}, \\text{low})`,
+    with the following simplifications to keep the output compact:
+
+    +--------------------+--------------------+---------------------------+
+    | ``high``           | ``low``            | Result                    |
+    +====================+====================+===========================+
+    | ``True``           | ``False``          | ``q_i``                   |
+    +--------------------+--------------------+---------------------------+
+    | ``False``          | ``True``           | ``NOT q_i``               |
+    +--------------------+--------------------+---------------------------+
+    | anything           | ``False``          | ``q_i AND high``          |
+    +--------------------+--------------------+---------------------------+
+    | ``True``           | anything           | ``q_i OR low``            |
+    +--------------------+--------------------+---------------------------+
+    | ``False``          | anything           | ``NOT q_i AND low``       |
+    +--------------------+--------------------+---------------------------+
+    | anything           | ``True``           | ``NOT q_i OR high``       |
+    +--------------------+--------------------+---------------------------+
+    | anything           | anything           | ``(q_i AND high) OR       |
+    |                    |                    | (NOT q_i AND low)``       |
+    +--------------------+--------------------+---------------------------+
+
+    Parameters
+    ----------
+    dag :
+        Extracted BDD DAG.
+
+    Returns
+    -------
+    BoolExpr[int]
+        Boolean expression semantically equivalent to *dag*. Variable
+        indices match the state indices in the DAG.
+
+    Notes
+    -----
+    BDD structural sharing is not preserved -- if the DAG has exponential
+    sharing the resulting expression tree may be exponentially large.
+    """
+    cache: dict[int, BoolExpr[int]] = {
+        dag.false_id: logic.Literal(False),
+        dag.true_id: logic.Literal(True),
+    }
+    for node_id in dag.topo_order:
+        if node_id in cache:
+            continue
+        node = dag.nodes[node_id]
+        assert node.var_index is not None
+        assert node.low_id is not None
+        assert node.high_id is not None
+        var: BoolExpr[int] = logic.Variable(node.var_index)
+        low = cache[node.low_id]
+        high = cache[node.high_id]
+        result: BoolExpr[int]
+        if node.high_id == dag.true_id and node.low_id == dag.false_id:
+            result = var
+        elif node.high_id == dag.false_id and node.low_id == dag.true_id:
+            result = logic.Not(var)
+        elif node.low_id == dag.false_id:
+            result = logic.And((var, high))
+        elif node.high_id == dag.true_id:
+            result = logic.Or((var, low))
+        elif node.high_id == dag.false_id:
+            result = logic.And((logic.Not(var), low))
+        elif node.low_id == dag.true_id:
+            result = logic.Or((logic.Not(var), high))
+        else:
+            result = logic.Or((logic.And((var, high)), logic.And((logic.Not(var), low))))
+        cache[node_id] = result
+    return cache[dag.root_id]
+
+
 def boolexpr_to_bdd(
     expr: BoolExpr[int],
     num_vars: int,
@@ -70,12 +214,12 @@ def boolexpr_to_bdd(
     ----------
     expr :
         Boolean expression with integer variable names (state indices).
-        Must be in positive normal form — ``Not`` nodes raise :class:`ValueError`.
+        Must be in positive normal form - ``Not`` nodes raise :class:`ValueError`.
     num_vars :
         Total number of state variables.
     var_order :
         Optional permutation of ``range(num_vars)`` specifying the BDD variable
-        order. Defaults to natural order ``0, 1, …, num_vars - 1``.
+        order. Defaults to natural order ``0, 1, ... , num_vars - 1``.
 
     Returns
     -------
@@ -113,6 +257,30 @@ def boolexpr_to_bdd(
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+
+def _dag_to_manager_node(dag: BDDDag, mgr: Any) -> Any:
+    """Reconstruct a live BDD node from a *BDDDag* inside *mgr*.
+
+    All variables ``q0..q{num_vars-1}`` must already be declared in *mgr*.
+    Uses Shannon-expansion ITE reconstruction bottom-up over ``topo_order``.
+    """
+    cache: dict[int, Any] = {}
+    for node_id in dag.topo_order:
+        node = dag.nodes[node_id]
+        if node.var_index is None:
+            cache[node_id] = mgr.true if node_id == dag.true_id else mgr.false
+        else:
+            assert node.low_id is not None
+            assert node.high_id is not None
+            low = cache[node.low_id]
+            high = cache[node.high_id]
+            var_node = mgr.var(f"q{node.var_index}")
+            # ite(var, high, low) = (var AND high) OR (NOT var AND low)
+            t_branch = mgr.apply("and", var_node, high)
+            f_branch = mgr.apply("and", mgr.apply("not", var_node), low)
+            cache[node_id] = mgr.apply("or", t_branch, f_branch)
+    return cache[dag.root_id]
 
 
 def _resolve_var_order(num_vars: int, var_order: Sequence[int] | None) -> tuple[int, ...]:
