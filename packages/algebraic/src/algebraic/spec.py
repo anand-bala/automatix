@@ -24,7 +24,7 @@ class AlgebraicStructure(metaclass=BetterABCMeta):
     Attributes
     ----------
     properties : set of Property
-        Runtime-queryable set of algebraic properties.  Valid values are
+        Runtime-queryable set of algebraic properties. Valid values are
         ``"idempotent_add"``, ``"idempotent_mul"``, ``"commutative"``,
         ``"simple"``, and ``"complemented"``.
     """
@@ -82,16 +82,16 @@ class Semiring(AlgebraicStructure):
     Attributes
     ----------
     add : BinaryOp
-        Semiring addition :math:`\oplus`.  Must be associative, commutative,
+        Semiring addition :math:`\oplus`. Must be associative, commutative,
         and have :attr:`zero` as its identity.
     mul : BinaryOp
-        Semiring multiplication :math:`\otimes`.  Must be associative,
+        Semiring multiplication :math:`\otimes`. Must be associative,
         distribute over :attr:`add`, and have :attr:`one` as its identity.
         :attr:`zero` must absorb under multiplication.
     zero : Number
-        Additive identity (:math:`0`).  Must be a scalar.
+        Additive identity (:math:`0`). Must be a scalar.
     one : Number
-        Multiplicative identity (:math:`1`).  Must be a scalar.
+        Multiplicative identity (:math:`1`). Must be a scalar.
     """
 
     add: BinaryOp  # type: ignore[misc]

@@ -10,7 +10,7 @@ class _StaticAux:
     """Wrapper making arbitrary objects usable as JAX pytree aux_data.
 
     Uses ``hash()`` when available, falls back to ``id()`` for unhashable
-    objects.  This mirrors equinox's behaviour for static fields.
+    objects. This mirrors equinox's behaviour for static fields.
     """
 
     __slots__ = ("value",)

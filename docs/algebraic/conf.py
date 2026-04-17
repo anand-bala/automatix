@@ -24,7 +24,7 @@ html_theme_options["description"] = description  # noqa: F821  # ty: ignore[unre
 
 # -- autodoc signature fix for BetterABCMeta ---------------------------------
 # BetterABCMeta overrides __call__ with (*args, **kwargs), which Sphinx picks
-# up instead of the dataclass __init__.  When that happens, read __init__
+# up instead of the dataclass __init__. When that happens, read __init__
 # directly so the rendered signature shows the actual field names.
 
 

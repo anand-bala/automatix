@@ -31,7 +31,7 @@ class BDDDagNode:
     """A single node in the extracted BDD DAG.
 
     Terminal nodes have ``var_index``, ``low_id``, and ``high_id`` set to
-    ``None``.  Internal nodes have all fields populated.
+    ``None``. Internal nodes have all fields populated.
     """
 
     id: int
@@ -44,8 +44,8 @@ class BDDDagNode:
 class BDDDag:
     """An extracted, reduced BDD as a plain dataclass.
 
-    Node IDs are dense integers starting from 0.  Terminals always have
-    IDs 0 (false) and 1 (true).  ``topo_order`` lists node IDs with children
+    Node IDs are dense integers starting from 0. Terminals always have
+    IDs 0 (false) and 1 (true). ``topo_order`` lists node IDs with children
     before parents (suitable for bottom-up DP).
     """
 
@@ -75,7 +75,7 @@ def boolexpr_to_bdd(
         Total number of state variables.
     var_order :
         Optional permutation of ``range(num_vars)`` specifying the BDD variable
-        order.  Defaults to natural order ``0, 1, …, num_vars - 1``.
+        order. Defaults to natural order ``0, 1, …, num_vars - 1``.
 
     Returns
     -------
@@ -129,7 +129,7 @@ def _resolve(cached: Any, mgr: Any) -> Any:
 
     Variable nodes are stored in ``bdd_cache`` as their variable name string
     (e.g. ``"q3"``) and must be looked up via ``mgr.var()`` to get a live
-    reference.  Compound nodes (terminals, And/Or results) are already live
+    reference. Compound nodes (terminals, And/Or results) are already live
     node objects and are returned as-is.
     """
     if isinstance(cached, str):
@@ -182,7 +182,7 @@ def _extract_bdd_dag(
     the tensorisation step can pre-populate its cache unconditionally.
 
     Node objects are used directly as dict keys (both backends implement
-    value-based ``__hash__`` / ``__eq__``).  Variable nodes are re-fetched by
+    value-based ``__hash__`` / ``__eq__``). Variable nodes are re-fetched by
     name via ``mgr.var()`` whenever a stable reference is needed.
     """
     false_dense = 0

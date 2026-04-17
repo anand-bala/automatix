@@ -2,7 +2,7 @@ Polynomial Representations
 ==========================
 
 ``algebraic`` provides three representations of *multilinear polynomials* over
-a semiring.  These are polynomials in Boolean variables
+a semiring. These are polynomials in Boolean variables
 :math:`x_0, x_1, \ldots, x_{n-1}` where every variable appears at most once
 per monomial (no powers), and where arithmetic is performed using the semiring's
 ``add`` and ``mul`` in place of the usual ``+`` and ``*``.
@@ -36,20 +36,20 @@ computational trade-offs:
 +---------------------+-------------------------------------+---------------------------------------------+
 
 For small ``n`` (up to roughly 10--12 variables), ``MonomialBasis`` or
-``PolyDict`` are straightforward.  For larger problems where the polynomial
+``PolyDict`` are straightforward. For larger problems where the polynomial
 is expected to have low rank (e.g. automata with many states but sparse
 transitions), ``RankDecomposition`` is more efficient and is the representation
 used internally by ``automatix``'s ``PolynomialOperator``.
 
 All three representations require a :class:`~algebraic.spec.BoundedDistributiveLattice`
-as their algebra.  Plain :class:`~algebraic.spec.Semiring` instances are not
+as their algebra. Plain :class:`~algebraic.spec.Semiring` instances are not
 accepted because multilinear arithmetic requires idempotent operations.
 
 PolyDict: Sparse Dictionary
 ----------------------------
 
 :class:`~algebraic.polynomials.PolyDict` stores the polynomial as a mapping
-from frozen bit vectors (monomials) to ``AlgebraicArray`` coefficients.  It
+from frozen bit vectors (monomials) to ``AlgebraicArray`` coefficients. It
 is the most transparent representation and behaves like a dictionary.
 
 .. code-block:: python
@@ -84,7 +84,7 @@ is the most transparent representation and behaves like a dictionary.
    one  = PolyDict.one(num_vars=3, algebra=bool_alg, backend="numpy")
 
 ``PolyDict`` is the easiest representation to inspect manually and is well
-suited to symbolic manipulation where you iterate over monomials.  However,
+suited to symbolic manipulation where you iterate over monomials. However,
 its dictionary overhead makes it slower than tensor-backed representations for
 large-scale numerical computations.
 
@@ -93,7 +93,7 @@ MonomialBasis: Dense Tensor
 
 :class:`~algebraic.polynomials.MonomialBasis` stores all :math:`2^n`
 coefficients as a dense tensor of shape ``(2, 2, ..., 2)`` (one axis per
-variable).  The entry at index ``(i_0, i_1, ..., i_{n-1})`` is the coefficient
+variable). The entry at index ``(i_0, i_1, ..., i_{n-1})`` is the coefficient
 of the monomial :math:`x_0^{i_0} x_1^{i_1} \cdots x_{n-1}^{i_{n-1}}`.
 
 .. code-block:: python
@@ -118,7 +118,7 @@ of the monomial :math:`x_0^{i_0} x_1^{i_1} \cdots x_{n-1}^{i_{n-1}}`.
    result = p.evaluate({0: 0.8, 1: 0.3})
 
 ``MonomialBasis`` is memory-intensive for large ``n`` (exponential growth) but
-offers fast elementwise tensor arithmetic.  It is best for problems with a
+offers fast elementwise tensor arithmetic. It is best for problems with a
 small, fixed number of variables where you need the full coefficient structure.
 
 RankDecomposition: Structured CP Factorization
@@ -170,14 +170,14 @@ coefficient tensor of the polynomial.
    result = p.evaluate({0: 0.9, 1: 0.4, 2: 0.1})
 
 The factors tensor is a regular ``AlgebraicArray``, so batch evaluation and
-JIT compilation work naturally.  This representation is the most
+JIT compilation work naturally. This representation is the most
 JIT-friendly of the three and is what ``automatix``'s ``PolynomialOperator``
 uses internally for AFA runs.
 
 .. note::
-   Polynomial multiplication can increase the rank.  The ``max_rank``
+   Polynomial multiplication can increase the rank. The ``max_rank``
    parameter (set at construction time or via subclassing) controls when the
-   representation truncates low-weight components.  A higher rank is more
+   representation truncates low-weight components. A higher rank is more
    accurate but uses more memory; the right setting depends on the problem.
 
 Composition
@@ -294,7 +294,7 @@ naturally computes independent gradients for each.
 Conversion Between Representations
 ------------------------------------
 
-``PolyDict`` is the common intermediate format.  Both ``MonomialBasis`` and
+``PolyDict`` is the common intermediate format. Both ``MonomialBasis`` and
 ``RankDecomposition`` can convert to and from a ``PolyDict``:
 
 .. code-block:: python

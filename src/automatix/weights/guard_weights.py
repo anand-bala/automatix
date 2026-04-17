@@ -1,7 +1,7 @@
 """Conversion of :class:`Guard` expressions to :class:`WeightFunction`\\ s.
 
 Provides composable predicate classes that evaluate boolean guard expressions
-using semiring operations (AND → multiply, OR → add).  These are plain Python
+using semiring operations (AND → multiply, OR → add). These are plain Python
 dataclasses; users who want JIT compilation or gradient support should wrap
 their predicates via ``jaxify()`` or ``torchify()`` from ``algebraic.utils``.
 """
@@ -25,7 +25,7 @@ class AbstractPredicate:
     """A predicate is an effective Boolean alphabet over some domain.
 
     A predicate evaluates a condition on input data and returns a weight
-    in a semiring.  Predicates can be combined using boolean operations
+    in a semiring. Predicates can be combined using boolean operations
     (:class:`And`, :class:`Or`) which compose using semiring operations
     (multiplication for AND, addition for OR).
 

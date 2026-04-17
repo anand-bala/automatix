@@ -2,7 +2,7 @@ Algebraic Array
 ===============
 
 :py:class:`~algebraic.array.AlgebraicArray` is the primary data structure in
-``algebraic``.  It is a thin wrapper around a backend array (NumPy, JAX, or
+``algebraic``. It is a thin wrapper around a backend array (NumPy, JAX, or
 PyTorch) that carries a semiring and overrides the standard arithmetic
 operators to dispatch to that semiring's ``add`` and ``mul`` instead of the
 usual ``+`` and ``*``.
@@ -17,13 +17,13 @@ Backends
 Every ``AlgebraicArray`` is backed by one of three array libraries, selected
 at creation time via the ``backend`` parameter:
 
-- ``"numpy"`` -- NumPy arrays.  The default.  Eager, CPU-only, no JIT.
-- ``"jax"`` -- JAX arrays.  Supports JIT compilation and ``vmap``; required
+- ``"numpy"`` -- NumPy arrays. The default. Eager, CPU-only, no JIT.
+- ``"jax"`` -- JAX arrays. Supports JIT compilation and ``vmap``; required
   for gradient-based use (e.g. differentiable tropical or smooth Boolean).
-- ``"torch"`` -- PyTorch tensors.  Supports ``torch.compile`` and GPU.
+- ``"torch"`` -- PyTorch tensors. Supports ``torch.compile`` and GPU.
 
 All three backends expose the same semiring operations through
-``AlgebraicArray``.  Switching backends is a one-line change at the creation
+``AlgebraicArray``. Switching backends is a one-line change at the creation
 call; the arithmetic code above it is identical.
 
 .. seealso::
@@ -58,7 +58,7 @@ functions rather than instantiating backend classes directly:
 
 ``algebraic.zeros`` fills the array with the semiring's additive identity
 (``semiring.zero``), and ``algebraic.ones`` fills it with the multiplicative
-identity (``semiring.one``).  For the min-plus tropical semiring those are
+identity (``semiring.one``). For the min-plus tropical semiring those are
 ``inf`` and ``0`` respectively -- which is the right initialisation for a
 distance matrix.
 
@@ -146,8 +146,8 @@ Semiring Compatibility
 -----------------------
 
 Operations between two ``AlgebraicArray`` instances require that both carry
-the *same* semiring object (by identity, not just by type).  Mixing semirings
-raises a ``ValueError`` at runtime.  This is a deliberate design choice: there
+the *same* semiring object (by identity, not just by type). Mixing semirings
+raises a ``ValueError`` at runtime. This is a deliberate design choice: there
 is no implicit coercion or promotion between semirings.
 
 .. code-block:: python
@@ -170,7 +170,7 @@ Functional Index Updates
 -------------------------
 
 ``AlgebraicArray`` supports functional (copy-on-write) index updates via the
-``.at`` interface, modelled after JAX's ``jnp.ndarray.at``.  Each update
+``.at`` interface, modelled after JAX's ``jnp.ndarray.at``. Each update
 returns a new array without modifying the original:
 
 .. code-block:: python
@@ -193,5 +193,5 @@ returns a new array without modifying the original:
 .. important::
    While this interface is idiomatic for JAX arrays (which are immutable and
    always return copies), in the NumPy and PyTorch backends ``.at`` updates
-   will also return a copy of the underlying array.  If this causes a
+   will also return a copy of the underlying array. If this causes a
    performance issue, file a bug report.

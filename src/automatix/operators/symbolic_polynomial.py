@@ -13,7 +13,7 @@ path for AFA transition polynomials via BDD canonicalisation:
 
 The BDD step (via :mod:`automatix.operators._bdd`) canonicalises each
 transition formula before tensorisation, so structurally shared sub-functions
-are tensorised exactly once.  The runtime API mirrors
+are tensorised exactly once. The runtime API mirrors
 :class:`~automatix.operators.polynomial.PolynomialOperator`.
 """
 

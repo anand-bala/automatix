@@ -3,7 +3,7 @@
 Provides :class:`MatrixOperator` for constructing weighted finite-word
 automaton operators from an NFA and a weight function.
 
-The operator implements :class:`~algebraic.types.AlgebraicPyTree`.  Use
+The operator implements :class:`~algebraic.types.AlgebraicPyTree`. Use
 ``algebraic.utils.jax.jaxify()`` or ``algebraic.utils.torch.torchify()``
 for backend-specific integration.
 
@@ -138,16 +138,16 @@ class MatrixOperator:
             Which backend to use: ``'numpy'``, ``'jax'``, or ``'torch'``.
             If *None*, inferred from *initial_weights* or *final_weights*.
         initial_weights :
-            Pre-built initial-state weight vector.  Defaults to ``semiring.one``
+            Pre-built initial-state weight vector. Defaults to ``semiring.one``
             at initial locations and ``semiring.zero`` elsewhere.
         final_weights :
-            Pre-built final-state weight vector.  Defaults to ``semiring.one``
+            Pre-built final-state weight vector. Defaults to ``semiring.one``
             at final locations and ``semiring.zero`` elsewhere.
 
         Returns
         -------
         MatrixOperator
-            The constructed operator.  Use ``jaxify()`` or ``torchify()``
+            The constructed operator. Use ``jaxify()`` or ``torchify()``
             from ``algebraic.utils`` for backend-specific integration.
 
         Raises

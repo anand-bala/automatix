@@ -4,7 +4,7 @@ Provides :class:`PolynomialOperator` for representing AFA transitions and runs
 as multilinear polynomials over a bounded distributive lattice (typically
 Boolean algebra).
 
-The operator implements :class:`~algebraic.types.AlgebraicPyTree`.  Use
+The operator implements :class:`~algebraic.types.AlgebraicPyTree`. Use
 ``algebraic.utils.jax.jaxify()`` or ``algebraic.utils.torch.torchify()``
 for backend-specific integration.
 
@@ -292,7 +292,7 @@ class PolynomialOperator:
         Returns
         -------
         PolynomialOperator
-            The constructed operator.  Use ``jaxify()`` or ``torchify()``
+            The constructed operator. Use ``jaxify()`` or ``torchify()``
             from ``algebraic.utils`` for backend-specific integration.
 
         Raises

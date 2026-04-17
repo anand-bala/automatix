@@ -4,7 +4,7 @@ Array Operations
 ``algebraic`` provides a set of operations over
 :py:class:`~algebraic.array.AlgebraicArray` that mirror the
 `Python Array API <https://data-apis.org/array-api/latest/>`__ but replace
-standard arithmetic with semiring operations wherever appropriate.  The
+standard arithmetic with semiring operations wherever appropriate. The
 operations fall into three groups:
 
 1. *Semiring operations* -- reductions, contractions, and scans that use the
@@ -29,7 +29,7 @@ Reductions
 ----------
 
 :func:`~algebraic.ops.sum` reduces an array along one or more axes using the
-semiring's ``add``.  :func:`~algebraic.ops.prod` does the same with ``mul``.
+semiring's ``add``. :func:`~algebraic.ops.prod` does the same with ``mul``.
 
 .. code-block:: python
 
@@ -65,7 +65,7 @@ the product uses ``semiring.mul``:
 
    C_{ij} = \bigoplus_k A_{ik} \otimes B_{kj}
 
-For the min-plus semiring this is the shortest-path step.  For the boolean
+For the min-plus semiring this is the shortest-path step. For the boolean
 semiring it is boolean reachability in one hop.
 
 .. code-block:: python
@@ -94,7 +94,7 @@ Tensor contractions
 ^^^^^^^^^^^^^^^^^^^
 
 :func:`~algebraic.ops.tensordot` generalises matrix multiply to higher-rank
-tensors.  ``axes=2`` is equivalent to ``matmul`` for 2-D arrays.  Explicit
+tensors. ``axes=2`` is equivalent to ``matmul`` for 2-D arrays. Explicit
 axis lists ``(lhs_axes, rhs_axes)`` allow arbitrary contractions:
 
 .. code-block:: python
@@ -114,7 +114,7 @@ contracted along a single axis (default: the last axis):
    dot = algebraic.vecdot(a, b, axis=0)  # contract along axis 0
 
 :func:`~algebraic.ops.outer` computes the outer product of two 1-D arrays
-using semiring multiplication.  The result has shape
+using semiring multiplication. The result has shape
 ``(a.shape[0], b.shape[0])``:
 
 .. code-block:: python
@@ -152,7 +152,7 @@ contraction path and executing each pairwise step with semiring operations.
    # Element-wise product then sum (dot product semantics).
    scalar = algebraic.einsum("i,i->", a, b)
 
-``einsum`` is the most flexible contraction interface.  Use it when
+``einsum`` is the most flexible contraction interface. Use it when
 ``matmul``, ``tensordot``, or ``vecdot`` would require awkward reshaping.
 
 Prefix Scans
@@ -179,14 +179,14 @@ Prefix Scans
    # [3.0, 3+1, 3+1+4, 3+1+4+1] = [3.0, 4.0, 8.0, 9.0]
 
 Both functions accept an ``axis`` argument (default 0) and an
-``include_initial`` flag.  When ``include_initial=True`` the output length
+``include_initial`` flag. When ``include_initial=True`` the output length
 along the scan axis is ``n + 1``, with the semiring identity prepended.
 
 Ring-Only Operations
 --------------------
 
 Some operations are only meaningful when the underlying semiring supports
-subtraction.  ``algebraic`` checks for this at call time using
+subtraction. ``algebraic`` checks for this at call time using
 :func:`~algebraic.spec.is_ring`.
 
 :func:`~algebraic.ops.subtract` (also ``a - b``) requires a
@@ -224,7 +224,7 @@ Passthrough Operations
 ----------------------
 
 Shape manipulation operations do not touch semiring arithmetic; they re-wrap
-the transformed backend array with the same semiring.  These mirror the Array
+the transformed backend array with the same semiring. These mirror the Array
 API specification:
 
 - ``algebraic.reshape(x, shape)``

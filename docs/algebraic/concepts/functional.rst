@@ -7,14 +7,14 @@ tight numerical simulation, two transforms matter most: *JIT compilation*
 (apply a function independently over a leading batch dimension).
 
 JIT compilation uses each backend's native API directly (``jax.jit``,
-``torch.compile``).  Batching is available through ``algebraic.vmap``,
+``torch.compile``). Batching is available through ``algebraic.vmap``,
 which delegates to the appropriate backend.
 
 JIT Compilation
 ---------------
 
 ``AlgebraicArray`` is registered as a JAX PyTree (via
-``algebraic.utils.jax``), so ``jax.jit`` works out of the box.  Import
+``algebraic.utils.jax``), so ``jax.jit`` works out of the box. Import
 the utility module once for its registration side-effect, then use
 ``jax.jit`` as usual:
 
@@ -44,15 +44,15 @@ For PyTorch, use ``torch.compile`` directly.
 
 .. important::
    JIT-compiled functions must not contain Python control flow that depends
-   on array *values* (shapes and dtypes are fine).  This is a JAX constraint
-   that also applies here.  Loops over a fixed number of steps (as in the
+   on array *values* (shapes and dtypes are fine). This is a JAX constraint
+   that also applies here. Loops over a fixed number of steps (as in the
    example above) are safe; conditionals on ``arr.data > 0`` are not.
 
 Batching with vmap
 -------------------
 
 ``vmap`` lifts a function that operates on a single example into one that
-operates on a batch, without writing explicit loops or reshaping.  Under JAX
+operates on a batch, without writing explicit loops or reshaping. Under JAX
 this compiles to vectorised hardware instructions.
 
 .. code-block:: python
@@ -83,7 +83,7 @@ Combining jit and vmap
 -----------------------
 
 The two transforms compose: ``jit(vmap(f))`` first vectorises ``f`` over the
-batch dimension, then compiles the vectorised version.  This is the standard
+batch dimension, then compiles the vectorised version. This is the standard
 pattern for training loops:
 
 .. code-block:: python
@@ -108,6 +108,6 @@ Backend Support Summary
 +----------------+--------------------+--------------------+
 
 If your semiring computation is prototype-stage and you are iterating
-quickly, start with ``backend="numpy"`` for easy debugging.  Once the logic
+quickly, start with ``backend="numpy"`` for easy debugging. Once the logic
 is correct, switch to ``backend="jax"`` and add ``@jax.jit`` to recover
 performance.
