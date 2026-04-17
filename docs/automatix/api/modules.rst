@@ -11,4 +11,5 @@
    automatix.operators
    automatix.operators.matrix
    automatix.operators.polynomial
+   automatix.operators.symbolic_polynomial
    automatix.weights

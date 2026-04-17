@@ -118,6 +118,76 @@ Access intermediate representations:
    run_poly = op.run_polynomial(word)  # RankDecomposition
    print(f"Rank: {run_poly.rank}")
 
+SymbolicPolynomialOperator (BDD-based Alternating Automata)
+-----------------------------------------------------------
+
+:class:`~automatix.operators.symbolic_polynomial.SymbolicPolynomialOperator`
+is an alternative to
+:class:`~automatix.operators.polynomial.PolynomialOperator` that routes each
+boolean transition formula through a **reduced ordered BDD** (via
+:mod:`automatix.operators._bdd`) before tensorisation. This canonicalises
+shared sub-functions so they are tensorised exactly once, which can reduce
+redundant computation for automata with structurally shared transitions.
+
+The pipeline is:
+
+.. code-block:: text
+
+   morphata.Automaton (AlternatingTransitions)
+       → BoolExpr[int]
+       → reduced ordered BDD (dd)
+       → tensorised polynomial
+       → RankDecomposition or LowRankFactors
+
+The runtime API mirrors ``PolynomialOperator`` — :meth:`accepts`,
+:meth:`run_polynomial`, :meth:`step`, and :meth:`evaluate_at_accepting` all
+work identically.
+
+Construction
+^^^^^^^^^^^^
+
+From an LTL formula (convenience):
+
+.. code-block:: python
+
+   import algebraic
+   from automatix.operators.symbolic_polynomial import SymbolicPolynomialOperator
+   import logic_asts as logic
+
+   algebra = algebraic.semirings.boolean_algebra()
+   formula = logic.Eventually(logic.Variable("a"))
+
+   op = SymbolicPolynomialOperator.from_ltl(
+       formula, algebra, backend="numpy", finite=True
+   )
+
+From an existing AFA:
+
+.. code-block:: python
+
+   from morphata.examples.ltl import ltl_to_automaton
+   from automatix.operators.symbolic_polynomial import SymbolicPolynomialOperator
+
+   aut = ltl_to_automaton(formula, finite=True)
+   op = SymbolicPolynomialOperator.from_afa(
+       aut, algebra, backend="numpy", cache_transitions=True
+   )
+
+The ``output`` parameter selects the polynomial representation —
+``"rank_decomposition"`` (default) or ``"low_rank_factors"``. An optional
+``var_order`` controls the BDD variable ordering.
+
+Evaluation
+^^^^^^^^^^
+
+.. code-block:: python
+
+   word = [{"a": False}, {"a": True}]
+   result = op.accepts(word)  # True — eventually "a" is satisfied
+
+   run_poly = op.run_polynomial(word)
+   print(f"Rank: {run_poly.rank}")
+
 JAX and PyTorch Integration
 ---------------------------
 
