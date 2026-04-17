@@ -38,6 +38,7 @@ dev = [
   "pyrefly>=0.49.0",
   "pytest>=9.0.0",
   "pytest-mypy>=1.0.1",
+  "pytest-timeout",
   "rstcheck>=6.2.5",
   "ruff",
   "rust-just>=1.46.0",
