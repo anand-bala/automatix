@@ -27,7 +27,7 @@ class AcceptanceCondition(ABC, ty.Generic[State]):
     @classmethod
     @abstractmethod
     def is_omega_regular(cls) -> bool:
-        """Determines if the concrete `AcceptanceCondition` is ω-regular or not."""
+        """Determines if the concrete `AcceptanceCondition` is omega-regular or not."""
 
 
 class Domain(ABC, ty.Generic[State, Symbol]):

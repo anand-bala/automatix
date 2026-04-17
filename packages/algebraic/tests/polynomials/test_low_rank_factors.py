@@ -441,7 +441,7 @@ class TestLowRankFactorsTorchRegressions:
         Regression for _set_at_index broadcast failure: prepare_replacement_factors
         calls pad_upto on each replacement to align ranks and degrees. When one
         replacement has rank=2, degree=3 and another has rank=1, degree=2 with
-        n_plus_1=3, the [:, :2, :] index produces torchy shapes (2,),(2,),(3,) —
+        n_plus_1=3, the [:, :2, :] index produces torchy shapes (2,),(2,),(3,) -
         previously crashing in torch.broadcast_shapes.
         """
         import algebraic as alg

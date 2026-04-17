@@ -138,7 +138,7 @@ class PolynomialOperator:
     algebra : Lattice
         Bounded distributive lattice for polynomial coefficients.
     _transition_cache : Mapping
-        ``{(state_idx, symbol): RankDecomposition}`` — pre-computed transition
+        ``{(state_idx, symbol): RankDecomposition}`` - pre-computed transition
         polynomials.
     """
 

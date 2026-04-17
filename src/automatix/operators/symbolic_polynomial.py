@@ -6,10 +6,10 @@ path for AFA transition polynomials via BDD canonicalisation:
 .. code-block:: text
 
     morphata.Automaton (AlternatingTransitions)
-        → BoolExpr[int]
-        → reduced ordered BDD (dd)
-        → tensorised polynomial
-        → RankDecomposition or LowRankFactors
+        -> BoolExpr[int]
+        -> reduced ordered BDD (dd)
+        -> tensorised polynomial
+        -> RankDecomposition or LowRankFactors
 
 The BDD step (via :mod:`automatix.operators._bdd`) canonicalises each
 transition formula before tensorisation, so structurally shared sub-functions
@@ -123,7 +123,7 @@ def boolexpr_to_symbolic_polynomial(
     backend :
         Array backend: ``'numpy'``, ``'jax'``, or ``'torch'``.
     output :
-        Return type — ``"rank_decomposition"`` (default) or
+        Return type - ``"rank_decomposition"`` (default) or
         ``"low_rank_factors"``.
     var_order :
         Optional BDD variable order (permutation of ``range(num_vars)``).
@@ -162,7 +162,7 @@ class SymbolicPolynomialOperator:
     algebra : Lattice
         Bounded distributive lattice for polynomial coefficients.
     _transition_cache : Mapping
-        ``{(state_idx, symbol): polynomial}`` — pre-computed transition
+        ``{(state_idx, symbol): polynomial}`` - pre-computed transition
         polynomials.
     """
 
@@ -335,7 +335,7 @@ class SymbolicPolynomialOperator:
         cache_transitions :
             Whether to pre-compute all ``(state, symbol)`` transition polynomials.
         output :
-            Polynomial representation — ``"rank_decomposition"`` (default) or
+            Polynomial representation - ``"rank_decomposition"`` (default) or
             ``"low_rank_factors"``.
         var_order :
             Optional BDD variable order (permutation of ``range(num_states)``).
@@ -433,7 +433,7 @@ class SymbolicPolynomialOperator:
         cache_transitions :
             Whether to pre-compute transitions.
         output :
-            Polynomial representation — ``"rank_decomposition"`` or
+            Polynomial representation - ``"rank_decomposition"`` or
             ``"low_rank_factors"``.
         var_order :
             Optional BDD variable order.

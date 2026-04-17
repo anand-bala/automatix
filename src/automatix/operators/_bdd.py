@@ -303,7 +303,7 @@ def bdd_to_poly_dict(
 
         \\text{ite}(x_i, H, L) = (x_i \\cdot H) + L
 
-    which is exact for **monotone** boolean functions — those where every
+    which is exact for **monotone** boolean functions - those where every
     internal BDD node satisfies ``H \\geq L`` pointwise (guaranteed when the
     BDD was built from a positive sum-of-products polynomial via
     :func:`rank_decomp_to_bdd` or :func:`boolexpr_to_bdd`).  For

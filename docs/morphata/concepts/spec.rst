@@ -55,7 +55,7 @@ can be passed to :class:`~morphata.spec.Automaton`.
 Boolean Expressions
 ^^^^^^^^^^^^^^^^^^^
 
-Alternating transitions return a :data:`~morphata.spec.BoolExpr` — a positive
+Alternating transitions return a :data:`~morphata.spec.BoolExpr` - a positive
 boolean formula over state variables built from the ``logic_asts`` library:
 
 .. code-block:: python
@@ -86,7 +86,7 @@ The :class:`~morphata.spec.Automaton` class ties everything together:
 The initial configuration can be:
 
 - A single state (deterministic)
-- An iterable of states (nondeterministic — stored as ``frozenset``)
+- An iterable of states (nondeterministic - stored as ``frozenset``)
 - A :data:`~morphata.spec.BoolExpr` (alternating only)
 
 Initial State
@@ -108,12 +108,12 @@ relations backed by nested mappings:
 
    import morphata
 
-   # Deterministic: state × symbol → state
+   # Deterministic: state x symbol -> state
    delta = morphata.DeterministicTransitionRelation(
        data={0: {"a": 1, "b": 0}, 1: {"a": 1, "b": 0}}
    )
 
-   # Nondeterministic: state × symbol → set of states
+   # Nondeterministic: state x symbol -> set of states
    delta = morphata.NonDeterministicTransitionRelation(
        data={0: {"a": {0, 1}, "b": {0}}, 1: {"a": set(), "b": set()}}
    )

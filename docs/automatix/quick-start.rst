@@ -50,7 +50,7 @@ Monitor an LTL property using alternating automata and Boolean polynomials:
    from automatix.operators.polynomial import from_ltl
    import logic_asts as logic
 
-   # Define LTL formula: F(a) — "eventually a"
+   # Define LTL formula: F(a) - "eventually a"
    algebra = algebraic.semirings.boolean_algebra()
    formula = logic.Eventually(logic.Variable("a"))
 

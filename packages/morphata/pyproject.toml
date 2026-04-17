@@ -1,7 +1,7 @@
 [project]
 name = "morphata"
 version = "1.0.2"
-description = "Flexible automata representations for regular and ω-regular languages."
+description = "Flexible automata representations for regular and omega-regular languages."
 authors = [{ name = "Anand Balakrishnan" }]
 readme = "README.md"
 requires-python = ">=3.12"

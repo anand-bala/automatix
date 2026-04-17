@@ -297,7 +297,7 @@ Logging online monitoring performance.
 In the output, there are three fields for each ego location. 
 
 * The trace length.
-* The repetition count (‘best of 5’) which tells you how many times the trace was monitored.
+* The repetition count ('best of 5') which tells you how many times the trace was monitored.
 * The time monitoring took on average per step on within the best repetition. That is, the average per step performance for the best trace performance.
 
 Finally, the average best per step time is reported across all ego locations
@@ -358,7 +358,7 @@ Logging offline monitoring performance.
 In the output, there are three fields. 
 
 * The loop count, which is number of times the trace was monitored per timing loop repition
-* The repetition count (‘best of 5’) which tells you how many times the timing loop was repeated
+* The repetition count ('best of 5') which tells you how many times the timing loop was repeated
 * Time the monitoring took on average within the best repetition of the timing loop. That is, the time the fastest repetition took divided by the loop count.
 
 Monitoring for ego locations: {list(ego_locs.keys())}

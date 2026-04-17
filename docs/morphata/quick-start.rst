@@ -26,7 +26,7 @@ nondeterministic finite automaton with guard-labelled transitions:
    nfa.add_location(0, initial=True)
    nfa.add_location(1, final=True)
 
-   # Add a guarded transition: 0 → 1 when "a" holds
+   # Add a guarded transition: 0 -> 1 when "a" holds
    nfa.add_transition(0, 1, logic.Variable("a"))
 
    # Convert to an Automaton
@@ -42,7 +42,7 @@ Convert an LTL formula to an alternating finite automaton:
    from morphata.examples.ltl import ltl_to_automaton
    import logic_asts as logic
 
-   # F(a & b) — "eventually a and b"
+   # F(a & b) - "eventually a and b"
    a = logic.Variable("a")
    b = logic.Variable("b")
    formula = logic.Eventually(logic.And(a, b))

@@ -651,7 +651,7 @@ class TestTorchBackendRegressions:
 
         Regression for the _set_at_index torch broadcast bug: when padding a factor of
         shape (1, 2, 3) up to (2, 3, 3), the index [:, :2, :] produces torchy aranges of
-        shapes (2,), (2,), (3,) — previously torch.broadcast_shapes raised RuntimeError
+        shapes (2,), (2,), (3,) - previously torch.broadcast_shapes raised RuntimeError
         because 2 != 3 and neither is 1 in the degree/n_plus_1 positions.
         """
         import algebraic as alg
@@ -664,8 +664,8 @@ class TestTorchBackendRegressions:
         data = torch.randn(1, 2, 3)
         factors = alg.array(data, semiring=bool_alg, backend="torch")
 
-        # Padding rank 1→2, degree 2→3 forces [:, :2, :] assignment on a (2, 3, 3) base,
-        # producing torchy shapes (2,), (2,), (3,) — incompatible under the old code.
+        # Padding rank 1->2, degree 2->3 forces [:, :2, :] assignment on a (2, 3, 3) base,
+        # producing torchy shapes (2,), (2,), (3,) - incompatible under the old code.
         padded = pad_upto(factors, max_rank=2, max_degree=3, algebra=bool_alg)
 
         assert padded.shape == (2, 3, 3)
@@ -709,7 +709,7 @@ class TestTorchBackendRegressions:
         """Semantically identical residuals must produce identical factor bytes.
 
         Stepping a fixed-point polynomial (one that maps to itself) with the same symbol
-        repeatedly must yield the same factor bytes on every step — demonstrating that
+        repeatedly must yield the same factor bytes on every step - demonstrating that
         normalize() produces a canonical representation.
         """
         import algebraic as alg
@@ -737,7 +737,7 @@ class TestToSparseHighDegree:
     The old implementation enumerated ``(num_vars+1)^degree`` assignments in
     a Python loop.  After ``compose()`` the internal degree grows to
     ``1 + degree_current * degree_transition``, so step 2 of an AFA run could
-    trigger ``O(4^10) ≈ 1 M`` iterations — effectively hanging.
+    trigger ``O(4^10) ~= 1 M`` iterations - effectively hanging.
 
     The replacement is an ``O(R * D * 2^n * n)`` subset DP whose cost is
     independent of ``degree``.
@@ -786,7 +786,7 @@ class TestToSparseHighDegree:
     def test_to_sparse_roundtrip_conjunction_high_degree(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
         """to_sparse on x_0 & x_1 padded to degree 8 round-trips correctly.
 
-        Before the fix, (3+1)^8 = 65 536 iterations — the slowest case tested here.
+        Before the fix, (3+1)^8 = 65 536 iterations - the slowest case tested here.
         After the fix, 1 * 8 * 8 * 3 = 192 subset-DP steps.
         """
         from algebraic.polynomials.rank_decomp import pad_upto
@@ -824,8 +824,8 @@ class TestToSparseHighDegree:
           T2 = x_2          (state 2 self-loop)
         initial = x_0
 
-        step 1: compose x_0 with [T0,T1,T2] → x_1*x_2  (degree inflated, normalized)
-        step 2: compose result with [T0,T1,T2] → x_1*x_2 (degree inflated again)
+        step 1: compose x_0 with [T0,T1,T2] -> x_1*x_2  (degree inflated, normalized)
+        step 2: compose result with [T0,T1,T2] -> x_1*x_2 (degree inflated again)
 
         Step 2 is the one that previously hung (to_sparse called with degree 10).
         """
@@ -856,7 +856,7 @@ class TestToSparseHighDegree:
         """LowRankFactors.compose also keeps degree bounded after degree-inflating steps.
 
         LowRankFactors.normalize() delegates to RankDecomposition.normalize() which
-        calls to_sparse — so the same fix applies.
+        calls to_sparse - so the same fix applies.
         """
         from algebraic.polynomials.rank_decomp import LowRankFactors
 

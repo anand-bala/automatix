@@ -1,7 +1,7 @@
 """Conversion of :class:`Guard` expressions to :class:`WeightFunction`\\ s.
 
 Provides composable predicate classes that evaluate boolean guard expressions
-using semiring operations (AND → multiply, OR → add). These are plain Python
+using semiring operations (AND -> multiply, OR -> add). These are plain Python
 dataclasses; users who want JIT compilation or gradient support should wrap
 their predicates via ``jaxify()`` or ``torchify()`` from ``algebraic.utils``.
 """
@@ -67,7 +67,7 @@ class Predicate(AbstractPredicate):
     algebra :
         The semiring algebra.
     fn :
-        The predicate function mapping input → semiring weight.
+        The predicate function mapping input -> semiring weight.
     """
 
     fn: Callable[[object], object]
@@ -128,7 +128,7 @@ class ExprWeightFn[AtomicPredicate: Hashable]:
 
     1. Converting the guard to NNF (negation normal form).
     2. Recursively evaluating atoms and their negations.
-    3. Composing results with semiring operations (AND → multiply, OR → add).
+    3. Composing results with semiring operations (AND -> multiply, OR -> add).
 
     Results are memoised in ``cache`` for efficiency.
 

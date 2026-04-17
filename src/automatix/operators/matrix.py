@@ -56,7 +56,7 @@ class MatrixOperator:
     _transition_graph: tuple[tuple[int, int, Guard[Any]], ...]
 
     def cost_transitions(self, x: object) -> AlgebraicArray:
-        """Compute the ``q × q`` transition matrix for input *x*.
+        """Compute the ``q x q`` transition matrix for input *x*.
 
         Parameters
         ----------

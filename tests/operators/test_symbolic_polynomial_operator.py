@@ -163,7 +163,7 @@ class TestBoolExprToBDD:
 
     def test_structural_sharing(self) -> None:
         """BDD has fewer internal nodes than raw AST subtree count for shared expr."""
-        # (a & b) | (a & c) | (a & b & d)  — 'a' appears in every branch
+        # (a & b) | (a & c) | (a & b & d) - 'a' appears in every branch
         a, b, c, d = (logic.Variable(i) for i in range(4))
         expr = typing.cast(
             logic.BoolExpr[int],
@@ -471,7 +471,7 @@ class TestSymbolicPolynomialOperatorStep:
     Before the fix, ``SymbolicPolynomialOperator.step()`` called
     ``compose()`` which could grow the CP degree to ``1 + D_old * D_trans``.
     On step 2 this reached degree 10 for the ``F(a)&F(b)`` formula, causing
-    ``normalize()`` (via ``to_sparse``) to loop ``4^10 ≈ 1 M`` times and hang.
+    ``normalize()`` (via ``to_sparse``) to loop ``4^10 ~= 1 M`` times and hang.
     """
 
     @pytest.fixture
@@ -491,7 +491,7 @@ class TestSymbolicPolynomialOperatorStep:
         Both output modes exercise the same to_sparse path via normalize().
 
         Regression: the second step inflates the CP degree to 10, triggering
-        normalize() -> to_sparse() with 4^10 ≈ 1 M Python iterations (~100 s).
+        normalize() -> to_sparse() with 4^10 ~= 1 M Python iterations (~100 s).
         The timeout catches that regression within 10 s.
         """
         formula = ltl.Eventually(ltl.Variable("a")) & ltl.Eventually(ltl.Variable("b"))
@@ -502,7 +502,7 @@ class TestSymbolicPolynomialOperatorStep:
             finite=True,
             output=output,  # type: ignore[arg-type]
         )
-        sigma = frozenset()  # empty symbol — the case that previously hung
+        sigma = frozenset()  # empty symbol - the case that previously hung
 
         poly1 = op.step(op.initial_poly, sigma)
         poly2 = op.step(poly1, sigma)  # this was the hanging call

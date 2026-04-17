@@ -57,9 +57,9 @@ Evaluation
    import jax.numpy as jnp
 
    x = jnp.array([2.0])
-   M = op.cost_transitions(x)  # q × q AlgebraicArray
+   M = op.cost_transitions(x)  # q x q AlgebraicArray
 
-The returned ``M`` is an :class:`~algebraic.AlgebraicArray` — arithmetic on it
+The returned ``M`` is an :class:`~algebraic.AlgebraicArray` - arithmetic on it
 uses the semiring operations automatically.
 
 PolynomialOperator (Alternating Automata)
@@ -109,7 +109,7 @@ Check acceptance of a word:
 .. code-block:: python
 
    word = [{"a": False}, {"a": True}]
-   result = op.accepts(word)  # True — eventually "a" is satisfied
+   result = op.accepts(word)  # True - eventually "a" is satisfied
 
 Access intermediate representations:
 
@@ -134,12 +134,12 @@ The pipeline is:
 .. code-block:: text
 
    morphata.Automaton (AlternatingTransitions)
-       → BoolExpr[int]
-       → reduced ordered BDD (dd)
-       → tensorised polynomial
-       → RankDecomposition or LowRankFactors
+       -> BoolExpr[int]
+       -> reduced ordered BDD (dd)
+       -> tensorised polynomial
+       -> RankDecomposition or LowRankFactors
 
-The runtime API mirrors ``PolynomialOperator`` — :meth:`accepts`,
+The runtime API mirrors ``PolynomialOperator`` - :meth:`accepts`,
 :meth:`run_polynomial`, :meth:`step`, and :meth:`evaluate_at_accepting` all
 work identically.
 
@@ -173,7 +173,7 @@ From an existing AFA:
        aut, algebra, backend="numpy", cache_transitions=True
    )
 
-The ``output`` parameter selects the polynomial representation —
+The ``output`` parameter selects the polynomial representation -
 ``"rank_decomposition"`` (default) or ``"low_rank_factors"``. An optional
 ``var_order`` controls the BDD variable ordering.
 
@@ -183,7 +183,7 @@ Evaluation
 .. code-block:: python
 
    word = [{"a": False}, {"a": True}]
-   result = op.accepts(word)  # True — eventually "a" is satisfied
+   result = op.accepts(word)  # True - eventually "a" is satisfied
 
    run_poly = op.run_polynomial(word)
    print(f"Rank: {run_poly.rank}")

@@ -366,8 +366,8 @@ class RankDecomposition(AlgebraicPyTree):
         result: dict[frozenbitarray, AlgebraicArray] = {}
 
         for r in range(self.rank):
-            # dp maps integer bitmask → accumulated coefficient.
-            # Bit i set ⟺ variable x_i is part of the monomial.
+            # dp maps integer bitmask -> accumulated coefficient.
+            # Bit i set <-> variable x_i is part of the monomial.
             # Starting state: empty monomial (bitmask 0) with coefficient 1.
             dp: dict[int, AlgebraicArray] = {0: one}
 
@@ -830,8 +830,8 @@ class LowRankFactors(AlgebraicPyTree):
     """CP decomposition with separated variable weights and constant bias.
 
     Like :class:`RankDecomposition`, but stores factors split into:
-        - ``weights``: shape ``(R, D, N)`` — variable-affiliated factors
-        - ``bias``: shape ``(R, D)`` — constant/bias factors
+        - ``weights``: shape ``(R, D, N)`` - variable-affiliated factors
+        - ``bias``: shape ``(R, D)`` - constant/bias factors
 
     This separation is analogous to an MLP's ``W @ x + b`` and is useful for
     training pipelines that need independent parameter groups (e.g., separate

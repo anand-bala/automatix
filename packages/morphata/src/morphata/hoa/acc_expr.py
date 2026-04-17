@@ -43,13 +43,13 @@ class AccExpr(ABC):
 
     Examples:
 
-    - ``Inf(0)&Inf(1)``: Generalized Buchi acceptance — accepting runs visit
+    - ``Inf(0)&Inf(1)``: Generalized Buchi acceptance - accepting runs visit
       both acceptance set 0 and set 1 infinitely often
-    - ``Fin(0)|Fin(1)``: Generalized co-Buchi acceptance — accepting runs visit
+    - ``Fin(0)|Fin(1)``: Generalized co-Buchi acceptance - accepting runs visit
       set 0 or set 1 finitely often
     - ``(Fin(0)&Inf(1)) | (Fin(2)&Inf(3)) | (Fin(4)&Inf(5))``: Rabin acceptance
       with 3 pairs
-    - ``Final(0)``: Finite-word acceptance — accepting runs end in states marked
+    - ``Final(0)``: Finite-word acceptance - accepting runs end in states marked
       with set 0
     """
 

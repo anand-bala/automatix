@@ -60,7 +60,7 @@ class TestTorchifyPolyDict:
         p = x0 + x1
         wrapped = torchify(p)
 
-        # p has two monomials, so two AlgebraicArray leaves → two parameters
+        # p has two monomials, so two AlgebraicArray leaves -> two parameters
         assert len(list(wrapped.parameters())) == len(p)
 
 

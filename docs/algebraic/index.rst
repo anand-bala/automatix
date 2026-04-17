@@ -18,7 +18,7 @@ This package provides abstract semiring interfaces and concrete implementations 
 Features
 --------
 
-- **AlgebraicArray**: Arrays with semiring semantics — override ``+``, ``*``, ``@`` to
+- **AlgebraicArray**: Arrays with semiring semantics - override ``+``, ``*``, ``@`` to
   use custom algebras
 - **Multi-Backend**: Supports NumPy, JAX, and PyTorch backends with a unified API
 - **Differentiable Kernels**: Smooth approximations of boolean and tropical operations

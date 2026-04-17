@@ -217,7 +217,7 @@ class TestBoolExprConversion:
 
 
 # ---------------------------------------------------------------------------
-# PolynomialOperator – construction
+# PolynomialOperator - construction
 # ---------------------------------------------------------------------------
 
 
@@ -355,13 +355,13 @@ class TestFromAfa:
         aut = self._make_simple_afa(transitions, frozenset({0}), ("a",))
         op = PolynomialOperator.from_afa(aut, algebra, backend="numpy", cache_transitions=False)
         assert op.num_states == 1
-        # Cache is empty — step should raise KeyError
+        # Cache is empty - step should raise KeyError
         with pytest.raises(KeyError):
             op.step(op.initial_poly, "a")
 
 
 # ---------------------------------------------------------------------------
-# PolynomialOperator – acceptance (end-to-end via from_ltl)
+# PolynomialOperator - acceptance (end-to-end via from_ltl)
 # ---------------------------------------------------------------------------
 
 
@@ -380,12 +380,12 @@ class TestAccepts:
         assert_accepts(op, [sym("a")], True, algebra)
 
     def test_eventually_accepts_delayed(self, algebra: algebraic.BooleanAlgebra) -> None:
-        """F(a): word [∅, ∅, a] is accepted."""
+        """F(a): word [{}, {}, a] is accepted."""
         op = PolynomialOperator.from_ltl(ltl.Eventually(ltl.Variable("a")), algebra, backend="numpy", finite=True)
         assert_accepts(op, [sym(), sym(), sym("a")], True, algebra)
 
     def test_eventually_rejects_never(self, algebra: algebraic.BooleanAlgebra) -> None:
-        """F(a): word [∅, ∅] is rejected."""
+        """F(a): word [{}, {}] is rejected."""
         op = PolynomialOperator.from_ltl(ltl.Eventually(ltl.Variable("a")), algebra, backend="numpy", finite=True)
         assert_accepts(op, [sym(), sym()], False, algebra)
 
@@ -402,7 +402,7 @@ class TestAccepts:
         assert_accepts(op, [sym("a"), sym("a"), sym("a")], True, algebra)
 
     def test_always_rejects_missing_a(self, algebra: algebraic.BooleanAlgebra) -> None:
-        """G(a): word [a, ∅, a] is rejected."""
+        """G(a): word [a, {}, a] is rejected."""
         op = PolynomialOperator.from_ltl(ltl.Always(ltl.Variable("a")), algebra, backend="numpy", finite=True)
         assert_accepts(op, [sym("a"), sym(), sym("a")], False, algebra)
 
@@ -437,7 +437,7 @@ class TestAccepts:
     # -- X(a): next ----------------------------------------------------------
 
     def test_next_accepts(self, algebra: algebraic.BooleanAlgebra) -> None:
-        """X(a): word [∅, a] is accepted."""
+        """X(a): word [{}, a] is accepted."""
         op = PolynomialOperator.from_ltl(ltl.Next(ltl.Variable("a")), algebra, backend="numpy", finite=True)
         assert_accepts(op, [sym(), sym("a")], True, algebra)
 
@@ -489,7 +489,7 @@ class TestAccepts:
 
 
 # ---------------------------------------------------------------------------
-# PolynomialOperator – run_polynomial
+# PolynomialOperator - run_polynomial
 # ---------------------------------------------------------------------------
 
 
@@ -523,7 +523,7 @@ class TestRunPolynomial:
 
 
 # ---------------------------------------------------------------------------
-# PolynomialOperator – step
+# PolynomialOperator - step
 # ---------------------------------------------------------------------------
 
 
@@ -567,7 +567,7 @@ class TestStep:
 
 
 # ---------------------------------------------------------------------------
-# PolynomialOperator – evaluate_at_accepting
+# PolynomialOperator - evaluate_at_accepting
 # ---------------------------------------------------------------------------
 
 
@@ -579,7 +579,7 @@ class TestEvaluateAtAccepting:
         return boolean_algebra()
 
     def test_accepting_state_gives_one(self, algebra: algebraic.BooleanAlgebra) -> None:
-        """Polynomial = x_q where q is accepting → evaluates to one."""
+        """Polynomial = x_q where q is accepting -> evaluates to one."""
         transitions: dict[int, dict[str, BoolExpr[int]]] = {
             0: {"a": logic.Literal(True)},
         }
@@ -594,7 +594,7 @@ class TestEvaluateAtAccepting:
         assert_close(result, algebra.one)
 
     def test_non_accepting_state_gives_zero(self, algebra: algebraic.BooleanAlgebra) -> None:
-        """Polynomial = x_q where q is NOT accepting → evaluates to zero."""
+        """Polynomial = x_q where q is NOT accepting -> evaluates to zero."""
         transitions: dict[int, dict[str, BoolExpr[int]]] = {
             0: {"a": logic.Variable(1)},
             1: {"a": logic.Literal(True)},
@@ -606,7 +606,7 @@ class TestEvaluateAtAccepting:
         aut = morphata.Automaton(domain=domain, initial=0, delta=delta, acceptance=acceptance)
         op = PolynomialOperator.from_afa(aut, algebra, backend="numpy")
 
-        # initial_poly = x_0, but only state 1 is accepting → zero
+        # initial_poly = x_0, but only state 1 is accepting -> zero
         result = op.evaluate_at_accepting(op.initial_poly)
         assert_close(result, algebra.zero)
 
