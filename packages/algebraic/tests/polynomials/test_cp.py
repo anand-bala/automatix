@@ -725,6 +725,7 @@ class TestTorchBackendRegressions:
         results = []
         for _ in range(4):
             p = p.compose([x0])
+            assert is_torch_array(p.factors.data)
             results.append(p.factors.data.detach().cpu().numpy().tobytes())
 
         assert len(set(results)) == 1, "compose() of fixed-point polynomial must produce identical bytes on every call"
