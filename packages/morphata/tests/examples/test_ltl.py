@@ -331,3 +331,114 @@ def test_multiple_atomic_propositions() -> None:
     symbols = list(aut.domain.symbols) if aut.domain.symbols is not None else []
     # For 4 atomic propositions, powerset has 2^4 = 16 elements
     assert len(symbols) == 16
+
+
+# ---------------------------------------------------------------------------
+# Semantic acceptance tests via step_run
+# ---------------------------------------------------------------------------
+
+
+def _evaluate_word(
+    aut: logic_asts.ltl.LTLExpr[str],
+    word: list[frozenset[str]],
+    *,
+    finite: bool = True,
+) -> bool:
+    """Evaluate whether *aut* (as AFA) accepts *word* via step_run.
+
+    For finite acceptance: a word is accepted when the run tree formula,
+    after processing the entire word, simplifies to True when all
+    accepting states are True and non-accepting states are False.
+    """
+    automaton = ltl_to_automaton(aut, finite=finite)
+    assert isinstance(automaton.initial, int)
+    assert isinstance(automaton.acceptance, Finite)
+
+    accepting = automaton.acceptance.accepting
+    run: logic_asts.base.BaseExpr[int] = logic_asts.Variable(automaton.initial)
+
+    delta = automaton.delta
+    assert isinstance(delta, AlternatingTransitions)
+    for sym in word:
+        run = delta.step_run(run, sym)
+
+    # Evaluate: substitute True for accepting states, False for non-accepting
+    def _eval_at_accepting(expr: logic_asts.base.BaseExpr[int]) -> bool:
+        match expr:
+            case logic_asts.Literal(val):
+                return val
+            case logic_asts.Variable(q):
+                return q in accepting
+            case logic_asts.And(args):
+                return all(_eval_at_accepting(a) for a in args)  # type: ignore[arg-type]
+            case logic_asts.Or(args):
+                return any(_eval_at_accepting(a) for a in args)  # type: ignore[arg-type]
+            case _:
+                raise TypeError(f"Unexpected expression type: {type(expr)}")
+
+    return _eval_at_accepting(run)
+
+
+class TestLtlSemantics:
+    """Semantic acceptance tests for the LTL-to-AFA translation."""
+
+    def test_eventually_accepts_immediate(self) -> None:
+        """F(p): word [{p}] is accepted."""
+        f = logic_asts.parse_expr("F p", syntax="ltl")
+        assert _evaluate_word(f, [frozenset({"p"})])
+
+    def test_eventually_accepts_delayed(self) -> None:
+        """F(p): word [{}, {}, {p}] is accepted."""
+        f = logic_asts.parse_expr("F p", syntax="ltl")
+        assert _evaluate_word(f, [frozenset(), frozenset(), frozenset({"p"})])
+
+    def test_eventually_rejects_never(self) -> None:
+        """F(p): word [{}, {}] is rejected."""
+        f = logic_asts.parse_expr("F p", syntax="ltl")
+        assert not _evaluate_word(f, [frozenset(), frozenset()])
+
+    def test_always_accepts_all(self) -> None:
+        """G(p): word [{p}, {p}, {p}] is accepted."""
+        f = logic_asts.parse_expr("G p", syntax="ltl")
+        assert _evaluate_word(f, [frozenset({"p"})] * 3)
+
+    def test_always_rejects_gap(self) -> None:
+        """G(p): word [{p}, {}, {p}] is rejected."""
+        f = logic_asts.parse_expr("G p", syntax="ltl")
+        assert not _evaluate_word(f, [frozenset({"p"}), frozenset(), frozenset({"p"})])
+
+    def test_always_accepts_empty(self) -> None:
+        """G(p): empty word is vacuously true."""
+        f = logic_asts.parse_expr("G p", syntax="ltl")
+        assert _evaluate_word(f, [])
+
+    def test_until_immediate(self) -> None:
+        """p U q: word [{q}] is accepted."""
+        f = logic_asts.parse_expr("p U q", syntax="ltl")
+        assert _evaluate_word(f, [frozenset({"q"})])
+
+    def test_until_delayed(self) -> None:
+        """p U q: word [{p}, {p}, {q}] is accepted."""
+        f = logic_asts.parse_expr("p U q", syntax="ltl")
+        assert _evaluate_word(f, [frozenset({"p"}), frozenset({"p"}), frozenset({"q"})])
+
+    def test_until_no_q(self) -> None:
+        """p U q: word [{p}, {p}] is rejected (q never appears)."""
+        f = logic_asts.parse_expr("p U q", syntax="ltl")
+        assert not _evaluate_word(f, [frozenset({"p"}), frozenset({"p"})])
+
+    def test_next_accepts(self) -> None:
+        """X(p): word [{}, {p}] is accepted."""
+        f = logic_asts.parse_expr("X p", syntax="ltl")
+        assert _evaluate_word(f, [frozenset(), frozenset({"p"})])
+
+    def test_next_rejects_immediate(self) -> None:
+        """X(p): word [{p}] is rejected."""
+        f = logic_asts.parse_expr("X p", syntax="ltl")
+        assert not _evaluate_word(f, [frozenset({"p"})])
+
+    def test_negation_semantics(self) -> None:
+        """!p: word [{p}] is rejected, word [{}] is accepted."""
+        f = logic_asts.parse_expr("! p", syntax="ltl")
+        assert not _evaluate_word(f, [frozenset({"p"})])
+        assert _evaluate_word(f, [frozenset()])

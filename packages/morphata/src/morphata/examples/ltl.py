@@ -7,7 +7,6 @@ The translation supports
 
 from __future__ import annotations
 
-import dataclasses
 import functools
 import typing as ty
 from collections import deque
@@ -57,14 +56,19 @@ def ltl_to_automaton(formula: LTLExpr[AP], *, finite: bool = False) -> morphata.
             case logic.Variable():
                 return logic.Variable(mappings.setdefault(node, len(mappings)))
             case logic.Not(arg):
-                # Assumes that the input node was coverted to NNF
+                if isinstance(arg, logic.Literal):
+                    # Not(Literal(x)) simplifies to Literal(not x)
+                    return logic.Literal(not arg.value)
+                # Assumes that the input node was converted to NNF
                 assert isinstance(arg, logic.Variable)
                 # Make a new variable for Not(var)
                 return logic.Variable(mappings.setdefault(node, len(mappings)))
-            case logic.And(args) | logic.Or(args) as nary_node:
-                return dataclasses.replace(  # type: ignore[type-var]
-                    nary_node, args=tuple(_remap_bool_expr(ty.cast(BoolExpr[LTLExpr[AP]], arg)) for arg in args)
-                )
+            case logic.And(args):
+                remapped = tuple(_remap_bool_expr(ty.cast(BoolExpr[LTLExpr[AP]], arg)) for arg in args)
+                return logic.And(remapped)
+            case logic.Or(args):
+                remapped = tuple(_remap_bool_expr(ty.cast(BoolExpr[LTLExpr[AP]], arg)) for arg in args)
+                return logic.Or(remapped)
             case _:
                 raise RuntimeError("unreachable")
 
@@ -88,12 +92,20 @@ def ltl_to_automaton(formula: LTLExpr[AP], *, finite: bool = False) -> morphata.
             node_is_final = _is_accepting_node_expr(ty.cast(LTLExpr[AP], node.arg.name))
         if node_is_final:
             final_states.add(node_id)
+        # Unwrap the queue node to get the raw LTL expression for expansion.
+        # Queue nodes are logic.Variable(ltl_expr) or logic.Not(logic.Variable(ltl_expr)),
+        # but _aut_expansion_rule expects the LTL expression itself.
+        if isinstance(node, logic.Variable):
+            ltl_expr: LTLExpr[AP] = node.name
+        else:
+            assert isinstance(node, logic.Not) and isinstance(node.arg, logic.Variable)
+            ltl_expr = ty.cast(LTLExpr[AP], ltl.Not(node.arg.name))
         # Add the reachable nodes in the next step (Variables/Not(Variable)) if they are not already mapped
         reachable: dict[Input[AP], BoolExpr[int]] = dict()
         sym: Input[AP]
         for sym in _powerset(atomic_predicates):
             # Compute the possible successor polynomial
-            successor = _aut_expansion_rule(node, sym)  # type: ignore[misc]  # pyrefly: ignore[bad-argument-type]
+            successor = _aut_expansion_rule(ltl_expr, sym)
             # We want to add the NNF leaf nodes to the queue, i.e., Not(var) is a leaf node, iff they are not already visited
             reachable_nodes: Iterable[logic.Variable[LTLExpr[AP]] | logic.Not] = successor.atomic_predicates(assume_nnf=True)
             queue.extend(e for e in reachable_nodes if e not in mappings)
