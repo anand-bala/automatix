@@ -19,6 +19,22 @@ if typing.TYPE_CHECKING:
     from algebraic.utils.indexing import _IndexUpdateHelper
 
 
+def _resolve_device(dev_a: object, dev_b: object) -> object:
+    """Return the higher-precedence device.
+
+    Precedence: explicit (e.g. ``cuda``) > ``'cpu'`` > ``None``.
+    """
+    if dev_a is None:
+        return dev_b
+    if dev_b is None:
+        return dev_a
+    if str(dev_a).lower() == "cpu":
+        return dev_b
+    if str(dev_b).lower() == "cpu":
+        return dev_a
+    return dev_a
+
+
 @dataclass
 class AlgebraicArray:
     """A multidimensional array with elements from a semiring.
@@ -56,13 +72,32 @@ class AlgebraicArray:
             data = typing.cast(Array, array_ns.asarray(data))
         return AlgebraicArray(data, self.semiring, self._vdot, self._matmul)
 
+    def _coerce_other_device(self, other_data: "Array | Number") -> "tuple[Array, Array | Number]":
+        """Return ``(self_data, other_data)`` both on the higher-precedence device.
+
+        Scalars (non-arrays) are returned unchanged alongside ``self.data``.
+        """
+        if not is_array(other_data):
+            return self.data, other_data
+        other_arr = typing.cast(Array, other_data)
+        self_dev = array_api_compat.device(self.data)
+        other_dev = array_api_compat.device(other_arr)
+        target = _resolve_device(self_dev, other_dev)
+        if target is None:
+            return self.data, other_arr
+        self_out = self.data if str(self_dev) == str(target) else array_api_compat.to_device(self.data, target)
+        other_out = other_arr if str(other_dev) == str(target) else array_api_compat.to_device(other_arr, target)
+        return self_out, other_out
+
     def __add__(self, other: Self | Scalar) -> "AlgebraicArray":
         other_data = other.data if isinstance(other, AlgebraicArray) else other
-        return self._wrap(self.semiring.add(self.data, other_data))
+        self_data, other_data = self._coerce_other_device(other_data)
+        return self._wrap(self.semiring.add(self_data, other_data))
 
     def __mul__(self, other: Self | Scalar) -> "AlgebraicArray":
         other_data = other.data if isinstance(other, AlgebraicArray) else other
-        return self._wrap(self.semiring.mul(self.data, other_data))
+        self_data, other_data = self._coerce_other_device(other_data)
+        return self._wrap(self.semiring.mul(self_data, other_data))
 
     def __sub__(self, other: Self | Scalar) -> "AlgebraicArray":
         other_data, _other_semiring = (
@@ -74,8 +109,9 @@ class AlgebraicArray:
                 f"Subtraction requires a Ring with additive_inverse. "
                 f"Semiring {type(self.semiring).__name__} does not support subtraction."
             )
+        self_data, other_data = self._coerce_other_device(other_data)
         neg_rhs = self.semiring.additive_inverse(other_data)
-        return self._wrap(self.semiring.add(self.data, neg_rhs))
+        return self._wrap(self.semiring.add(self_data, neg_rhs))
 
     def __neg__(self) -> "AlgebraicArray":
         semiring = self.semiring
@@ -107,7 +143,17 @@ class AlgebraicArray:
         """
         from algebraic.ops._semiring_ops import dot_general
 
-        ndim = self.ndim
+        self_data, other_arr_data = self._coerce_other_device(other.data)
+        lhs: AlgebraicArray = (
+            self if self_data is self.data else AlgebraicArray(self_data, self.semiring, self._vdot, self._matmul)
+        )
+        rhs: AlgebraicArray = (
+            other
+            if other_arr_data is other.data
+            else AlgebraicArray(typing.cast(Array, other_arr_data), other.semiring, other._vdot, other._matmul)
+        )
+
+        ndim = lhs.ndim
         if ndim == 2:
             dimension_numbers: tuple[
                 tuple[tuple[int, ...], tuple[int, ...]],
@@ -116,20 +162,26 @@ class AlgebraicArray:
         else:
             batch = tuple(range(ndim - 2))
             dimension_numbers = (((ndim - 1,), (ndim - 2,)), (batch, batch))
-        return typing.cast(Self, dot_general(self, other, dimension_numbers))
+        return typing.cast(Self, dot_general(lhs, rhs, dimension_numbers))
 
     def __eq__(self, other: object) -> Array:  # type: ignore[override]
         """Element-wise equality; returns a raw bool array (not wrapped)."""
-        xp = array_api_compat.array_namespace(self.data)
-        other_data: object = other.data if isinstance(other, AlgebraicArray) else other
-        result: Array = xp.equal(self.data, other_data)
+        if isinstance(other, AlgebraicArray):
+            self_data, other_data = self._coerce_other_device(other.data)
+        else:
+            self_data, other_data = self.data, other
+        xp = array_api_compat.array_namespace(self_data)
+        result: Array = xp.equal(self_data, other_data)
         return result
 
     def __ne__(self, other: object) -> Array:  # type: ignore[override]
         """Element-wise inequality; returns a raw bool array (not wrapped)."""
-        xp = array_api_compat.array_namespace(self.data)
-        other_data: object = other.data if isinstance(other, AlgebraicArray) else other
-        result: Array = xp.not_equal(self.data, other_data)
+        if isinstance(other, AlgebraicArray):
+            self_data, other_data = self._coerce_other_device(other.data)
+        else:
+            self_data, other_data = self.data, other
+        xp = array_api_compat.array_namespace(self_data)
+        result: Array = xp.not_equal(self_data, other_data)
         return result
 
     # Python sets __hash__ = None when __eq__ is defined; declare it explicitly

@@ -4,6 +4,7 @@ import typing
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
+import array_api_compat
 from bitarray import frozenbitarray
 from typing_extensions import Self
 
@@ -722,6 +723,8 @@ def deduplicate_rank_dim(factors: AlgebraicArray) -> AlgebraicArray:
     rank = factors.shape[0]
     arange = xp.arange(rank)
     earlier = arange[:, None] < arange[None, :]  # (rank, rank)
+    # convert `earlier` to the right device
+    earlier = array_api_compat.to_device(earlier, factors.device)
 
     # is_dup[j] = True if some earlier row i (i < j) is identical to row j
     is_dup = (eq & earlier).any(0)
@@ -756,6 +759,8 @@ def idempotence_pruning(factors: AlgebraicArray) -> AlgebraicArray:
     rank = factors.shape[0]
     arange = xp.arange(rank)
     off_diag = arange[:, None] != arange[None, :]  # True where i != j
+    off_diag = array_api_compat.to_device(off_diag, factors.device)
+
     check = check & off_diag
 
     # keep[i] = True iff no other j dominates i
