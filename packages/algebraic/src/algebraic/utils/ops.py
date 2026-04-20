@@ -46,15 +46,16 @@ def reduce_axes(
         import jax
         import jax.numpy as jnp
 
-        identity = jnp.asarray(identity, dtype=data.dtype)
+        identity = jnp.asarray(identity, dtype=data.dtype, device=data.device)
         result = jax.lax.reduce(data, identity, semiring_op, dimensions=axis)
     elif is_torch_array(data) or is_numpy_array(data):
         import numpy.typing as npt
         import torch
 
         acc: torch.Tensor | npt.NDArray[Any]
+        device = array_api_compat.device(data)
 
-        identity = xp.asarray(identity, dtype=data.dtype)
+        identity = xp.asarray(identity, dtype=data.dtype, device=device)
 
         result = data
         for dim in sorted(axis, reverse=True):
@@ -114,17 +115,17 @@ def prefix_scan_axis(
         outputs: list[Any] = []
 
         acc: torch.Tensor | np.ndarray
-        init: torch.Tensor | np.ndarray
+        initial: torch.Tensor | np.ndarray
 
-        init = xp.asarray(identity)
+        device = array_api_compat.device(data)
+        initial = xp.asarray(identity, dtype=data.dtype, device=device)
 
-        acc = xp.broadcast_to(init, slices[0].shape) if n > 0 else init
+        acc = xp.broadcast_to(initial, slices[0].shape) if n > 0 else initial
         for s in slices:
             acc = typing.cast(torch.Tensor | np.ndarray, semiring_op(acc, s))
             outputs.append(acc)
 
         scanned = xp.stack(outputs, axis=axis) if outputs else data
-        identity = init
     elif is_jax_array(data):
         import jax
 
