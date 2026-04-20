@@ -95,6 +95,7 @@ class RankDecomposition(AlgebraicPyTree):
         max_replacement_degree: int | None = None,
         *,
         backend: str | Backend,
+        device: object | None = None,
     ) -> Self:
         r"""Create rank-1 polynomial representing variable :math:`x_i`.
 
@@ -114,6 +115,8 @@ class RankDecomposition(AlgebraicPyTree):
             Maximum degree for replacement polynomials in :meth:`compose`.
         backend : str or Backend or None, optional
             Backend to use.
+        device : object or None, optional
+            Target device for the underlying arrays.
 
         Returns
         -------
@@ -129,7 +132,7 @@ class RankDecomposition(AlgebraicPyTree):
         >>> x0.rank
         1
         """
-        factors = algebraic.zeros((1, 1, num_vars + 1), semiring=algebra, backend=backend)
+        factors = algebraic.zeros((1, 1, num_vars + 1), semiring=algebra, backend=backend, device=device)
         factors = factors.at[(0, 0, i + 1)].set(algebra.one)
 
         return cls(
@@ -151,6 +154,7 @@ class RankDecomposition(AlgebraicPyTree):
         max_replacement_degree: int | None = None,
         *,
         backend: str | Backend,
+        device: object | None = None,
     ) -> Self:
         """Create a rank-1 constant polynomial.
 
@@ -170,6 +174,8 @@ class RankDecomposition(AlgebraicPyTree):
             Maximum degree for replacement polynomials in :meth:`compose`.
         backend : str or Backend or None, optional
             Backend to use.
+        device : object or None, optional
+            Target device for the underlying arrays.
 
         Returns
         -------
@@ -185,7 +191,9 @@ class RankDecomposition(AlgebraicPyTree):
         >>> c.rank
         1
         """
-        factors = algebraic.zeros((1, 1, num_vars + 1), semiring=algebra, backend=backend).at[(0, 0, 0)].set(value)
+        factors = (
+            algebraic.zeros((1, 1, num_vars + 1), semiring=algebra, backend=backend, device=device).at[(0, 0, 0)].set(value)
+        )
 
         return cls(
             factors,
@@ -205,8 +213,11 @@ class RankDecomposition(AlgebraicPyTree):
         max_replacement_degree: int | None = None,
         *,
         backend: str | Backend,
+        device: object | None = None,
     ) -> Self:
-        return cls.constant(algebra.zero, num_vars, algebra, max_rank, max_degree, max_replacement_degree, backend=backend)
+        return cls.constant(
+            algebra.zero, num_vars, algebra, max_rank, max_degree, max_replacement_degree, backend=backend, device=device
+        )
 
     @classmethod
     def one(
@@ -218,8 +229,11 @@ class RankDecomposition(AlgebraicPyTree):
         max_replacement_degree: int | None = None,
         *,
         backend: str | Backend,
+        device: object | None = None,
     ) -> Self:
-        return cls.constant(algebra.one, num_vars, algebra, max_rank, max_degree, max_replacement_degree, backend=backend)
+        return cls.constant(
+            algebra.one, num_vars, algebra, max_rank, max_degree, max_replacement_degree, backend=backend, device=device
+        )
 
     def _var_at(self, idx: int) -> Self:
         cls = type(self)
@@ -231,6 +245,7 @@ class RankDecomposition(AlgebraicPyTree):
             self.max_degree,
             self.max_replacement_degree,
             backend=self.backend,
+            device=self.factors.device,
         )
 
     def _make_const(self, val: Scalar) -> Self:
@@ -243,6 +258,7 @@ class RankDecomposition(AlgebraicPyTree):
             self.max_degree,
             self.max_replacement_degree,
             backend=self.backend,
+            device=self.factors.device,
         )
 
     def normalize(self) -> "RankDecomposition":
@@ -358,8 +374,9 @@ class RankDecomposition(AlgebraicPyTree):
         which holds for multilinear polynomials over bounded distributive lattices.
         """
         backend = Backend(self.backend)
-        zero = algebraic.zeros((), semiring=self.algebra, backend=self.backend)
-        one = algebraic.ones((), semiring=self.algebra, backend=self.backend)
+        device = self.factors.device
+        zero = algebraic.zeros((), semiring=self.algebra, backend=self.backend, device=device)
+        one = algebraic.ones((), semiring=self.algebra, backend=self.backend, device=device)
         n = self.num_vars
 
         # result[bits] accumulates the coefficient for monomial prod_{i: bits[i]} x_i
@@ -409,6 +426,7 @@ class RankDecomposition(AlgebraicPyTree):
         max_replacement_degree: int | None = None,
         *,
         backend: str | Backend | None = None,
+        device: object | None = None,
     ) -> Self:
         """Convert sparse to CP form (each monomial becomes rank-1 component).
 
@@ -424,6 +442,8 @@ class RankDecomposition(AlgebraicPyTree):
             Maximum degree for replacement polynomials in :meth:`compose`.
         backend : str or Backend or None, optional
             Backend to use.
+        device : object or None, optional
+            Target device for the underlying arrays.
 
         Returns
         -------
@@ -444,6 +464,7 @@ class RankDecomposition(AlgebraicPyTree):
             max_degree,
             max_replacement_degree,
             backend=backend,
+            device=device,
         )
         max_rank = zero_poly.max_rank
         max_degree = zero_poly.max_degree
@@ -453,7 +474,7 @@ class RankDecomposition(AlgebraicPyTree):
             return zero_poly
 
         rank = len(sparse)
-        factors = algebraic.zeros((rank, max_degree, num_vars + 1), semiring=algebra, backend=backend)
+        factors = algebraic.zeros((rank, max_degree, num_vars + 1), semiring=algebra, backend=backend, device=device)
 
         for r, (monomial, coeff) in enumerate(sparse.items()):
             vars_in_monomial = [i for i, bit in enumerate(monomial) if bit]
@@ -506,18 +527,19 @@ def evaluate_factors(
     rank, d, n_plus_1 = factors.shape
     num_vars = n_plus_1 - 1
 
-    one_array = algebraic.ones((1,), semiring=algebra, backend=backend)
+    device = factors.device
+    one_array = algebraic.ones((1,), semiring=algebra, backend=backend, device=device)
     if is_array(points):
-        points_array = algebraic.array(points, semiring=algebra, backend=backend)
+        points_array = algebraic.array(points, semiring=algebra, backend=backend, device=device)
     else:
         points_array = points
     selector = algebraic.concat([one_array, points_array])
 
-    result = algebraic.zeros((), semiring=algebra, backend=backend)
+    result = algebraic.zeros((), semiring=algebra, backend=backend, device=device)
     for r in range(rank):
-        component_value = algebraic.ones((), semiring=algebra, backend=backend)
+        component_value = algebraic.ones((), semiring=algebra, backend=backend, device=device)
         for k in range(d):
-            dim_value = algebraic.zeros((), semiring=algebra, backend=backend)
+            dim_value = algebraic.zeros((), semiring=algebra, backend=backend, device=device)
             for i in range(num_vars + 1):
                 term = factors[r, k, i] * selector[i]
                 dim_value = dim_value + term
@@ -589,8 +611,9 @@ def prepare_replacement_factors(replacement_factors: Sequence[AlgebraicArray], a
     )
     num_vars = n_plus_1 - 1
     backend = Backend.from_array(replacement_factors[0].data)
+    device = replacement_factors[0].device
     one_factors = pad_upto(
-        RankDecomposition.one(num_vars, algebra, backend=backend).factors,
+        RankDecomposition.one(num_vars, algebra, backend=backend, device=device).factors,
         max_rank=target_rank,
         max_degree=target_degree,
         algebra=algebra,
@@ -606,7 +629,13 @@ def prepare_replacement_factors(replacement_factors: Sequence[AlgebraicArray], a
     return new_replacements
 
 
-def pad_upto(factors: AlgebraicArray, *, max_rank: int, max_degree: int, algebra: Lattice) -> AlgebraicArray:
+def pad_upto(
+    factors: AlgebraicArray,
+    *,
+    max_rank: int,
+    max_degree: int,
+    algebra: Lattice,
+) -> AlgebraicArray:
     """Modify the factors of a :class:`RankDecomposition` such that the rank and degree are padded with identity elements up to the given maximum"""
     rank, degree, n_plus_1 = factors.shape
 
@@ -614,6 +643,7 @@ def pad_upto(factors: AlgebraicArray, *, max_rank: int, max_degree: int, algebra
         return factors
 
     backend = Backend.from_array(factors.data)
+    device = factors.device
 
     new_rank = max(rank, max_rank)
     new_degree = max(degree, max_degree)
@@ -625,12 +655,12 @@ def pad_upto(factors: AlgebraicArray, *, max_rank: int, max_degree: int, algebra
     # Then, we will pad the rank axis with polynomial.zero elements
 
     one_terms = algebraic.broadcast_to(
-        algebraic.eye(1, n_plus_1, semiring=algebra, backend=backend),
+        algebraic.eye(1, n_plus_1, semiring=algebra, backend=backend, device=device),
         (rank, new_degree, n_plus_1),
     )
     degree_padded = one_terms.at[:, :degree, :].set(factors)
 
-    zero_terms = algebraic.zeros((new_rank - rank, new_degree, n_plus_1), semiring=algebra, backend=backend)
+    zero_terms = algebraic.zeros((new_rank - rank, new_degree, n_plus_1), semiring=algebra, backend=backend, device=device)
 
     rank_padded = algebraic.concat((degree_padded, zero_terms), axis=0)
 
@@ -655,7 +685,10 @@ def contraction_compression(contracted: AlgebraicArray, max_rank: int, algebra: 
     candidates = algebraic.reshape(candidates, (degree1, rank1 * rank2, degree2, n_plus_1))
 
     # Start with the multiplicative identity polynomial
-    identity = algebraic.broadcast_to(algebraic.eye(1, n_plus_1, semiring=algebra, backend=backend), (1, 1, n_plus_1))
+    device = contracted.device
+    identity = algebraic.broadcast_to(
+        algebraic.eye(1, n_plus_1, semiring=algebra, backend=backend, device=device), (1, 1, n_plus_1)
+    )
 
     # Initialize beam storage with the identity element
     # beam shape: (beam_rank, beam_degree, n+1)
@@ -925,6 +958,7 @@ class LowRankFactors(AlgebraicPyTree):
         max_replacement_degree: int | None = None,
         *,
         backend: str | Backend,
+        device: object | None = None,
     ) -> "LowRankFactors":
         r"""Create rank-1 polynomial representing variable :math:`x_i`.
 
@@ -944,15 +978,17 @@ class LowRankFactors(AlgebraicPyTree):
             Maximum degree for replacement polynomials in :meth:`compose`.
         backend : str or Backend
             Backend to use.
+        device : object or None, optional
+            Target device for the underlying arrays.
 
         Returns
         -------
         LowRankFactors
             A rank-1 polynomial with degree 1.
         """
-        weights = algebraic.zeros((1, 1, num_vars), semiring=algebra, backend=backend)
+        weights = algebraic.zeros((1, 1, num_vars), semiring=algebra, backend=backend, device=device)
         weights = weights.at[(0, 0, i)].set(algebra.one)
-        bias = algebraic.zeros((1, 1), semiring=algebra, backend=backend)
+        bias = algebraic.zeros((1, 1), semiring=algebra, backend=backend, device=device)
         return cls(weights, bias, max_rank, max_degree, max_replacement_degree, backend=backend)
 
     @classmethod
@@ -966,6 +1002,7 @@ class LowRankFactors(AlgebraicPyTree):
         max_replacement_degree: int | None = None,
         *,
         backend: str | Backend,
+        device: object | None = None,
     ) -> "LowRankFactors":
         """Create a rank-1 constant polynomial.
 
@@ -985,14 +1022,16 @@ class LowRankFactors(AlgebraicPyTree):
             Maximum degree for replacement polynomials in :meth:`compose`.
         backend : str or Backend
             Backend to use.
+        device : object or None, optional
+            Target device for the underlying arrays.
 
         Returns
         -------
         LowRankFactors
             A rank-1 constant polynomial.
         """
-        weights = algebraic.zeros((1, 1, num_vars), semiring=algebra, backend=backend)
-        bias = algebraic.zeros((1, 1), semiring=algebra, backend=backend).at[(0, 0)].set(value)
+        weights = algebraic.zeros((1, 1, num_vars), semiring=algebra, backend=backend, device=device)
+        bias = algebraic.zeros((1, 1), semiring=algebra, backend=backend, device=device).at[(0, 0)].set(value)
         return cls(weights, bias, max_rank, max_degree, max_replacement_degree, backend=backend)
 
     @classmethod
@@ -1005,8 +1044,11 @@ class LowRankFactors(AlgebraicPyTree):
         max_replacement_degree: int | None = None,
         *,
         backend: str | Backend,
+        device: object | None = None,
     ) -> "LowRankFactors":
-        return cls.constant(algebra.zero, num_vars, algebra, max_rank, max_degree, max_replacement_degree, backend=backend)
+        return cls.constant(
+            algebra.zero, num_vars, algebra, max_rank, max_degree, max_replacement_degree, backend=backend, device=device
+        )
 
     @classmethod
     def one(
@@ -1018,8 +1060,11 @@ class LowRankFactors(AlgebraicPyTree):
         max_replacement_degree: int | None = None,
         *,
         backend: str | Backend,
+        device: object | None = None,
     ) -> "LowRankFactors":
-        return cls.constant(algebra.one, num_vars, algebra, max_rank, max_degree, max_replacement_degree, backend=backend)
+        return cls.constant(
+            algebra.one, num_vars, algebra, max_rank, max_degree, max_replacement_degree, backend=backend, device=device
+        )
 
     def _var_at(self, idx: int) -> "LowRankFactors":
         return LowRankFactors.variable(
@@ -1030,6 +1075,7 @@ class LowRankFactors(AlgebraicPyTree):
             self.max_degree,
             self.max_replacement_degree,
             backend=self.backend,
+            device=self.weights.device,
         )
 
     def _make_const(self, val: Scalar) -> "LowRankFactors":
@@ -1041,6 +1087,7 @@ class LowRankFactors(AlgebraicPyTree):
             self.max_degree,
             self.max_replacement_degree,
             backend=self.backend,
+            device=self.weights.device,
         )
 
     def normalize(self) -> "LowRankFactors":

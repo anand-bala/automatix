@@ -62,7 +62,15 @@ class PolyDict(AlgebraicPyTree):
         return self.data.items()
 
     @classmethod
-    def constant(cls, value: Scalar, num_vars: int, *, algebra: Lattice, backend: str | Backend = Backend.NUMPY) -> "PolyDict":
+    def constant(
+        cls,
+        value: Scalar,
+        num_vars: int,
+        *,
+        algebra: Lattice,
+        backend: str | Backend = Backend.NUMPY,
+        device: object | None = None,
+    ) -> "PolyDict":
         """Create a constant polynomial with the given *value*.
 
         Parameters
@@ -92,19 +100,27 @@ class PolyDict(AlgebraicPyTree):
         array(1., dtype=float32)
         """
         zeros_idx = frozenbitarray(ba_util.zeros(num_vars))
-        coeff = alge.array(value, semiring=algebra, backend=backend)
+        coeff = alge.array(value, semiring=algebra, backend=backend, device=device)
         return cls(algebra, num_vars, {zeros_idx: coeff}, backend=backend)
 
     @classmethod
-    def zero(cls, num_vars: int, *, algebra: Lattice, backend: str | Backend) -> "PolyDict":
-        return cls.constant(algebra.zero, num_vars, algebra=algebra, backend=backend)
+    def zero(cls, num_vars: int, *, algebra: Lattice, backend: str | Backend, device: object | None = None) -> "PolyDict":
+        return cls.constant(algebra.zero, num_vars, algebra=algebra, backend=backend, device=device)
 
     @classmethod
-    def one(cls, num_vars: int, *, algebra: Lattice, backend: str | Backend) -> "PolyDict":
-        return cls.constant(algebra.one, num_vars, algebra=algebra, backend=backend)
+    def one(cls, num_vars: int, *, algebra: Lattice, backend: str | Backend, device: object | None = None) -> "PolyDict":
+        return cls.constant(algebra.one, num_vars, algebra=algebra, backend=backend, device=device)
 
     @classmethod
-    def variable(cls, index: int, num_vars: int, *, algebra: Lattice, backend: str | Backend = Backend.NUMPY) -> "PolyDict":
+    def variable(
+        cls,
+        index: int,
+        num_vars: int,
+        *,
+        algebra: Lattice,
+        backend: str | Backend = Backend.NUMPY,
+        device: object | None = None,
+    ) -> "PolyDict":
         r"""Create a polynomial representing a single variable :math:`x_i`.
 
         Parameters
@@ -125,7 +141,7 @@ class PolyDict(AlgebraicPyTree):
         """
         monomial = ba_util.zeros(num_vars)
         monomial[index] = 1
-        coefficient = alge.ones((), semiring=algebra, backend=backend)
+        coefficient = alge.ones((), semiring=algebra, backend=backend, device=device)
         return cls(algebra, num_vars, {frozenbitarray(monomial): coefficient}, backend=backend)
 
     def _wrap(self, data: Mapping[frozenbitarray, AlgebraicArray]) -> "PolyDict":

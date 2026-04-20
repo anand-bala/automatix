@@ -14,7 +14,11 @@ from algebraic.types import Array, Backend, Number, is_array, is_scalar
 
 
 def array(
-    data: Array | Number | Iterable[Array | Number], *, semiring: Semiring, backend: str | Backend | None = None
+    data: Array | Number | Iterable[Array | Number],
+    *,
+    semiring: Semiring,
+    backend: str | Backend | None = None,
+    device: object | None = None,
 ) -> AlgebraicArray:
     """Create an :class:`AlgebraicArray` from an existing backend array.
 
@@ -28,6 +32,9 @@ def array(
         Semiring for the algebraic structure.
     backend : str or Backend or None, optional
         Backend to use. If ``None``, auto-detected from *data*.
+    device : object or None, optional
+        Target device for the array (e.g. ``torch.device("cuda:0")``).
+        If ``None``, the backend's default device is used.
 
     Returns
     -------
@@ -53,13 +60,19 @@ def array(
     if backend == Backend.JAX:
         import jax.numpy as jnp
 
-        return AlgebraicArray(jnp.asarray(data, dtype=jnp.float32), semiring)
+        result = AlgebraicArray(jnp.asarray(data, dtype=jnp.float32), semiring)
+        if device is not None:
+            result = result.to_device(device)
+        return result
     elif backend == Backend.TORCH:
         import torch
 
-        if isinstance(data, torch.Tensor):
-            return AlgebraicArray(data.to(dtype=torch.float32), semiring)
-        return AlgebraicArray(torch.tensor(data, dtype=torch.float32), semiring)
+        kwarg: dict[str, object] = dict(dtype=torch.float32)
+        if device is not None:
+            kwarg["device"] = device
+
+        t = torch.as_tensor(data, **kwarg)  # type: ignore[arg-type]
+        return AlgebraicArray(t, semiring)
     elif backend == Backend.NUMPY:
         import numpy as np
 
@@ -67,7 +80,9 @@ def array(
     raise ValueError(f"Unsupported backend: {backend!r}")
 
 
-def zeros(shape: tuple[int, ...], *, semiring: Semiring, backend: str | Backend) -> AlgebraicArray:
+def zeros(
+    shape: tuple[int, ...], *, semiring: Semiring, backend: str | Backend, device: object | None = None
+) -> AlgebraicArray:
     """Create an :class:`AlgebraicArray` filled with the semiring's additive identity.
 
     Parameters
@@ -78,6 +93,8 @@ def zeros(shape: tuple[int, ...], *, semiring: Semiring, backend: str | Backend)
         Semiring for the algebraic structure.
     backend : str or Backend
         Backend to use (``"jax"``, ``"torch"``, or ``"numpy"``).
+    device : object or None, optional
+        Target device for the array.  If ``None``, uses the backend default.
 
     Returns
     -------
@@ -109,10 +126,12 @@ def zeros(shape: tuple[int, ...], *, semiring: Semiring, backend: str | Backend)
             data = np.full(shape, semiring.zero)
         case _:
             raise ValueError(f"Unsupported backend: {b!r}")
-    return array(data, semiring=semiring, backend=b)
+    return array(data, semiring=semiring, backend=b, device=device)
 
 
-def ones(shape: tuple[int, ...], *, semiring: Semiring, backend: str | Backend) -> AlgebraicArray:
+def ones(
+    shape: tuple[int, ...], *, semiring: Semiring, backend: str | Backend, device: object | None = None
+) -> AlgebraicArray:
     """Create an :class:`AlgebraicArray` filled with the semiring's multiplicative identity.
 
     Parameters
@@ -123,6 +142,8 @@ def ones(shape: tuple[int, ...], *, semiring: Semiring, backend: str | Backend) 
         Semiring for the algebraic structure.
     backend : str or Backend
         Backend to use (``"jax"``, ``"torch"``, or ``"numpy"``).
+    device : object or None, optional
+        Target device for the array.  If ``None``, uses the backend default.
 
     Returns
     -------
@@ -155,7 +176,7 @@ def ones(shape: tuple[int, ...], *, semiring: Semiring, backend: str | Backend) 
             data = np.full(shape, semiring.one)
         case _:
             raise ValueError(f"Unsupported backend: {b!r}")
-    return array(data, semiring=semiring, backend=b)
+    return array(data, semiring=semiring, backend=b, device=device)
 
 
 def zeros_like(arr: AlgebraicArray) -> AlgebraicArray:
@@ -175,7 +196,7 @@ def zeros_like(arr: AlgebraicArray) -> AlgebraicArray:
 
     assert isinstance(arr, BaseAlgebraicArray)
     backend = Backend.from_array(arr.data)
-    return zeros(arr.shape, semiring=arr.semiring, backend=backend)
+    return zeros(arr.shape, semiring=arr.semiring, backend=backend, device=arr.device)
 
 
 def ones_like(arr: AlgebraicArray) -> AlgebraicArray:
@@ -195,10 +216,17 @@ def ones_like(arr: AlgebraicArray) -> AlgebraicArray:
 
     assert isinstance(arr, BaseAlgebraicArray)
     backend = Backend.from_array(arr.data)
-    return ones(arr.shape, semiring=arr.semiring, backend=backend)
+    return ones(arr.shape, semiring=arr.semiring, backend=backend, device=arr.device)
 
 
-def full(shape: tuple[int, ...], fill_value: Number, *, semiring: Semiring, backend: str | Backend) -> AlgebraicArray:
+def full(
+    shape: tuple[int, ...],
+    fill_value: Number,
+    *,
+    semiring: Semiring,
+    backend: str | Backend,
+    device: object | None = None,
+) -> AlgebraicArray:
     """Create an :class:`AlgebraicArray` filled with *fill_value*.
 
     Parameters
@@ -211,6 +239,8 @@ def full(shape: tuple[int, ...], fill_value: Number, *, semiring: Semiring, back
         Semiring for the algebraic structure.
     backend : str or Backend
         Backend to use (``"jax"``, ``"torch"``, or ``"numpy"``).
+    device : object or None, optional
+        Target device for the array.  If ``None``, uses the backend default.
 
     Returns
     -------
@@ -235,11 +265,18 @@ def full(shape: tuple[int, ...], fill_value: Number, *, semiring: Semiring, back
         data = np.full(shape, fill_value)
     else:
         raise ValueError(f"Unsupported backend: {b!r}")
-    return array(data, semiring=semiring, backend=b)
+    return array(data, semiring=semiring, backend=b, device=device)
 
 
 def eye(
-    n_rows: int, n_cols: int | None = None, /, *, semiring: Semiring, backend: str | Backend, k: int = 0
+    n_rows: int,
+    n_cols: int | None = None,
+    /,
+    *,
+    semiring: Semiring,
+    backend: str | Backend,
+    k: int = 0,
+    device: object | None = None,
 ) -> AlgebraicArray:
     """Returns a two-dimensional array with ones on the ``k``th diagonal and zeros elsewhere.
 
@@ -257,6 +294,8 @@ def eye(
         Semiring for the algebraic structure.
     backend : str or Backend
         Backend to use (``"jax"``, ``"torch"``, or ``"numpy"``).
+    device : object or None, optional
+        Target device for the array.  If ``None``, uses the backend default.
 
     """
     backend = Backend(backend)
@@ -265,4 +304,4 @@ def eye(
     mask: Array = xp.eye(n_rows, n_cols, k=k)
 
     result: Array = xp.where(mask > 0, xp.asarray(semiring.one), xp.asarray(semiring.zero))
-    return array(result, semiring=semiring, backend=backend)
+    return array(result, semiring=semiring, backend=backend, device=device)

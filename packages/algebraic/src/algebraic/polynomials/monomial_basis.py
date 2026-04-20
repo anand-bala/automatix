@@ -58,9 +58,10 @@ class MonomialBasis(AlgebraicPyTree):
         value: Scalar,
         algebra: Lattice,
         backend: str | Backend,
+        device: object | None = None,
     ) -> AlgebraicArray:
         """Build a zero tensor with a single element set to ``value``."""
-        coeffs = alge.zeros(shape, semiring=algebra, backend=backend)
+        coeffs = alge.zeros(shape, semiring=algebra, backend=backend, device=device)
         new_data = coeffs.at[idx].set(value)
         return new_data
 
@@ -72,6 +73,7 @@ class MonomialBasis(AlgebraicPyTree):
         algebra: Lattice,
         *,
         backend: str | Backend = Backend.NUMPY,
+        device: object | None = None,
     ) -> "MonomialBasis":
         r"""Create polynomial representing a single variable :math:`x_i`.
 
@@ -102,7 +104,7 @@ class MonomialBasis(AlgebraicPyTree):
         """
         idx = tuple(1 if i == index else 0 for i in range(num_vars))
         return cls(
-            cls._build_coeffs_with_one_set((2,) * num_vars, idx, algebra.one, algebra, backend),
+            cls._build_coeffs_with_one_set((2,) * num_vars, idx, algebra.one, algebra, backend, device=device),
             algebra,
             backend=backend,
         )
@@ -115,6 +117,7 @@ class MonomialBasis(AlgebraicPyTree):
         algebra: Lattice,
         *,
         backend: str | Backend = Backend.NUMPY,
+        device: object | None = None,
     ) -> "MonomialBasis":
         """Create a constant polynomial.
 
@@ -145,7 +148,7 @@ class MonomialBasis(AlgebraicPyTree):
         """
         idx = (0,) * num_vars
         return cls(
-            cls._build_coeffs_with_one_set((2,) * num_vars, idx, value, algebra, backend),
+            cls._build_coeffs_with_one_set((2,) * num_vars, idx, value, algebra, backend, device=device),
             algebra,
             backend=backend,
         )
@@ -157,9 +160,10 @@ class MonomialBasis(AlgebraicPyTree):
         algebra: Lattice,
         *,
         backend: str | Backend,
+        device: object | None = None,
     ) -> "MonomialBasis":
         """Create the zero polynomial."""
-        return cls.constant(algebra.zero, num_vars, algebra, backend=backend)
+        return cls.constant(algebra.zero, num_vars, algebra, backend=backend, device=device)
 
     @classmethod
     def one(
@@ -168,9 +172,10 @@ class MonomialBasis(AlgebraicPyTree):
         algebra: Lattice,
         *,
         backend: str | Backend,
+        device: object | None = None,
     ) -> "MonomialBasis":
         """Create the one polynomial."""
-        return cls.constant(algebra.one, num_vars, algebra, backend=backend)
+        return cls.constant(algebra.one, num_vars, algebra, backend=backend, device=device)
 
     # -- Arithmetic ------------------------------------------------------------
 
@@ -329,6 +334,7 @@ class MonomialBasis(AlgebraicPyTree):
         poly: PolyDict,
         *,
         backend: str | Backend | None = None,
+        device: object | None = None,
     ) -> "MonomialBasis":
         """Convert from sparse (dictionary-of-keys) representation.
 
@@ -356,7 +362,7 @@ class MonomialBasis(AlgebraicPyTree):
         """
         backend = backend or poly.backend
         backend = Backend(backend)
-        coeffs = alge.zeros((2,) * poly.num_vars, semiring=poly.algebra, backend=backend)
+        coeffs = alge.zeros((2,) * poly.num_vars, semiring=poly.algebra, backend=backend, device=device)
         for monomial, coeff in poly.items():
             idx = tuple(int(bit) for bit in monomial)
             coeffs = coeffs.at[idx].set(coeff)
