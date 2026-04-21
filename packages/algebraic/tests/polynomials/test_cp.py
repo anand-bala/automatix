@@ -13,6 +13,7 @@ from algebraic.polynomials import PolyDict as SparsePolynomial
 from algebraic.polynomials import RankDecomposition
 from algebraic.polynomials.dok import PolyDict
 from algebraic.types import Array, Backend, is_torch_array
+from algebraic.utils.poly import pad_upto
 from algebraic.utils.testing import assert_close, assert_equal, make_array
 from bitarray import frozenbitarray
 from hypothesis import given, settings
@@ -628,7 +629,6 @@ class TestTorchBackendRegressions:
     def test_grad_flows_through_pad_upto_torch(self) -> None:
         """Gradients must flow through pad_upto (the Bug 2 fix) on the torch backend."""
         import algebraic as alg
-        from algebraic.polynomials.rank_decomp import pad_upto
 
         torch = pytest.importorskip("torch")
         bool_alg = alg.semirings.boolean_algebra(mode="soft")
@@ -655,7 +655,6 @@ class TestTorchBackendRegressions:
         because 2 != 3 and neither is 1 in the degree/n_plus_1 positions.
         """
         import algebraic as alg
-        from algebraic.polynomials.rank_decomp import pad_upto
 
         torch = pytest.importorskip("torch")
         bool_alg = alg.semirings.boolean_algebra(mode="soft")
@@ -758,7 +757,6 @@ class TestToSparseHighDegree:
         Before the fix, (num_vars+1)^7 = 4^7 = 16 K Python iterations would run
         for this case.
         """
-        from algebraic.polynomials.rank_decomp import pad_upto
 
         num_vars = 3
         x0 = RankDecomposition.variable(0, num_vars, bool_algebra, backend=backend)
@@ -789,7 +787,6 @@ class TestToSparseHighDegree:
         Before the fix, (3+1)^8 = 65 536 iterations - the slowest case tested here.
         After the fix, 1 * 8 * 8 * 3 = 192 subset-DP steps.
         """
-        from algebraic.polynomials.rank_decomp import pad_upto
 
         num_vars = 3
         x0 = RankDecomposition.variable(0, num_vars, bool_algebra, backend=backend)

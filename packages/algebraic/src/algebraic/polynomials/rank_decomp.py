@@ -4,7 +4,6 @@ import typing
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-import array_api_compat
 from bitarray import frozenbitarray
 from typing_extensions import Self
 
@@ -12,8 +11,17 @@ import algebraic.ops as algebraic
 from algebraic.array import AlgebraicArray
 from algebraic.polynomials.dok import PolyDict
 from algebraic.spec import BoundedDistributiveLattice as Lattice
-from algebraic.types import AlgebraicPyTree, AnyPyTree, Array, Backend, Scalar, is_array, is_scalar
+from algebraic.types import AlgebraicPyTree, AnyPyTree, Array, Backend, Scalar, is_scalar
 from algebraic.utils import validate_semiring
+from algebraic.utils.poly import (
+    _add_factors,
+    _merge_weights_bias,
+    _multiply_factors,
+    _split_merged_factors,
+    compose_factors,
+    evaluate_factors,
+    prune_factors,
+)
 
 
 @dataclass
@@ -292,7 +300,7 @@ class RankDecomposition(AlgebraicPyTree):
         validate_semiring(self.factors, other.factors)
 
         new_factors = _add_factors(self.factors, other.factors, self.algebra)
-        new_factors = prune_factors(new_factors, max_rank=self.max_rank)
+        new_factors = prune_factors(new_factors, self.max_rank, self.max_degree, self.algebra)
         result = self._replace_factors(new_factors)
         return result
 
@@ -303,7 +311,7 @@ class RankDecomposition(AlgebraicPyTree):
         simplification and compression.
         """
         new_factors = _multiply_factors(self.factors, other.factors)
-        new_factors = prune_factors(new_factors, self.max_rank)
+        new_factors = prune_factors(new_factors, self.max_rank, self.max_degree, self.algebra)
         result = self._replace_factors(new_factors)
 
         return result
@@ -342,7 +350,7 @@ class RankDecomposition(AlgebraicPyTree):
                 f"Cannot compose a sequence of {len(replacements)} replacements for a polynomial with {self.num_vars} variables"
             )
         replacement_factors = [r.factors for r in replacements]
-        result_factors = compose_factors(self.factors, replacement_factors, self.max_rank, self.algebra)
+        result_factors = compose_factors(self.factors, replacement_factors, self.max_rank, self.max_degree, self.algebra)
         result = self._replace_factors(result_factors)
         return result.normalize()
 
@@ -499,490 +507,6 @@ class RankDecomposition(AlgebraicPyTree):
             max_replacement_degree,
             backend=backend,
         )
-
-
-def evaluate_factors(
-    factors: AlgebraicArray,
-    points: Array | AlgebraicArray,
-    algebra: Lattice,
-    backend: str | Backend,
-) -> Scalar:
-    """Evaluate CP factors at a given point.
-
-    Parameters
-    ----------
-    factors : AlgebraicArray
-        CP factors of shape ``(R, D, N+1)``.
-    points : Array or AlgebraicArray
-        An array of shape ``(num_vars,)`` to replace each variable with.
-    algebra : BoundedDistributiveLattice
-        Lattice algebra governing operations.
-    backend : str or Backend
-        Backend to use.
-
-    Returns
-    -------
-    Scalar
-        The raw evaluated scalar value.
-    """
-    rank, d, n_plus_1 = factors.shape
-    num_vars = n_plus_1 - 1
-
-    device = factors.device
-    one_array = algebraic.ones((1,), semiring=algebra, backend=backend, device=device)
-    if is_array(points):
-        points_array = algebraic.array(points, semiring=algebra, backend=backend, device=device)
-    else:
-        points_array = points
-    selector = algebraic.concat([one_array, points_array])
-
-    result = algebraic.zeros((), semiring=algebra, backend=backend, device=device)
-    for r in range(rank):
-        component_value = algebraic.ones((), semiring=algebra, backend=backend, device=device)
-        for k in range(d):
-            dim_value = algebraic.zeros((), semiring=algebra, backend=backend, device=device)
-            for i in range(num_vars + 1):
-                term = factors[r, k, i] * selector[i]
-                dim_value = dim_value + term
-            component_value = component_value * dim_value
-        result = result + component_value
-
-    return result.data
-
-
-def compose_factors(
-    factors: AlgebraicArray,
-    replacement_factors: Sequence[AlgebraicArray],
-    max_rank: int,
-    algebra: Lattice,
-) -> AlgebraicArray:
-    """Compose CP factors with replacement factor arrays.
-
-    Parameters
-    ----------
-    factors : AlgebraicArray
-        CP factors of shape ``(R, D, N+1)``.
-    replacement_factors : Sequence[AlgebraicArray]
-        Sequence of N replacement factor arrays, each of shape ``(R_i, D_i, N+1)``.
-    max_rank : int
-        Maximum rank for pruning.
-    algebra : BoundedDistributiveLattice
-        Lattice algebra governing operations.
-
-    Returns
-    -------
-    AlgebraicArray
-        New CP factors of shape ``(R', D', N+1)``.
-    """
-    # shape: (N+1, R2, D2, N+1)
-    q_factors = prepare_replacement_factors(replacement_factors, algebra)
-
-    # n-mode contraction over variable axis
-    # result: (R, D, R2, D2, N+1)
-    contracted = algebraic.einsum("pdk,kqev->pdqev", factors, q_factors)
-
-    # Collapsing the additional dimensions in the `contracted` output can cause
-    # major explosion in the size of this polynomial.
-    # So, before we do the outer/Khatri-Rao product to collapse the additional
-    # dimensions, we will compress the contraction by essentially performing
-    # a version of beam search on `contracted`.
-
-    return contraction_compression(contracted, max_rank, algebra)
-
-
-def prepare_replacement_factors(replacement_factors: Sequence[AlgebraicArray], algebra: Lattice) -> AlgebraicArray:
-    """Prepare padded array of replacement factor arrays.
-
-    Parameters
-    ----------
-    replacement_factors : Sequence[AlgebraicArray]
-        Sequence of N replacement factor arrays, each of shape ``(R_i, D_i, N_i+1)``.
-    algebra : BoundedDistributiveLattice
-        Lattice algebra governing operations.
-
-    Returns
-    -------
-    AlgebraicArray
-        Padded array of shape ``[N+1, R_max, D_max, N+1]``.
-        Index 0: constant (identity: always 1).
-        Index i+1: replacement for variable ``x_i``.
-    """
-    target_rank, target_degree, n_plus_1 = tuple(
-        map(max, zip(*((q.shape[0], q.shape[1], q.shape[2]) for q in replacement_factors)))
-    )
-    num_vars = n_plus_1 - 1
-    backend = Backend.from_array(replacement_factors[0].data)
-    device = replacement_factors[0].device
-    one_factors = pad_upto(
-        RankDecomposition.one(num_vars, algebra, backend=backend, device=device).factors,
-        max_rank=target_rank,
-        max_degree=target_degree,
-        algebra=algebra,
-    )
-    new_replacements = algebraic.stack(
-        # Add the constant/bias term "replacement" to be the identity.
-        [one_factors]
-        + [pad_upto(q, max_rank=target_rank, max_degree=target_degree, algebra=algebra) for q in replacement_factors]
-    )
-
-    assert new_replacements.shape == (n_plus_1, target_rank, target_degree, n_plus_1)
-
-    return new_replacements
-
-
-def pad_upto(
-    factors: AlgebraicArray,
-    *,
-    max_rank: int,
-    max_degree: int,
-    algebra: Lattice,
-) -> AlgebraicArray:
-    """Modify the factors of a :class:`RankDecomposition` such that the rank and degree are padded with identity elements up to the given maximum"""
-    rank, degree, n_plus_1 = factors.shape
-
-    if max_rank <= rank and max_degree <= degree:
-        return factors
-
-    backend = Backend.from_array(factors.data)
-    device = factors.device
-
-    new_rank = max(rank, max_rank)
-    new_degree = max(degree, max_degree)
-
-    return_shape = (new_rank, new_degree, n_plus_1)
-
-    # First, we create a base with the padded degree axis, with every term being a polynomial.one
-    # This will be the base where the factors will be replaced into
-    # Then, we will pad the rank axis with polynomial.zero elements
-
-    one_terms = algebraic.broadcast_to(
-        algebraic.eye(1, n_plus_1, semiring=algebra, backend=backend, device=device),
-        (rank, new_degree, n_plus_1),
-    )
-    degree_padded = one_terms.at[:, :degree, :].set(factors)
-
-    zero_terms = algebraic.zeros((new_rank - rank, new_degree, n_plus_1), semiring=algebra, backend=backend, device=device)
-
-    rank_padded = algebraic.concat((degree_padded, zero_terms), axis=0)
-
-    assert rank_padded.shape == return_shape
-
-    return rank_padded
-
-
-def contraction_compression(contracted: AlgebraicArray, max_rank: int, algebra: Lattice) -> AlgebraicArray:
-    """
-    Replace exponential expansion with beam search over tensor contractions, replace norms with lattice idempotence rules.
-    """
-
-    rank1, degree1, rank2, degree2, n_plus_1 = contracted.shape
-    backend = Backend.from_array(contracted.data)
-
-    # Flatten substitution choices
-    # each (rank1,degree1) has rank2 choices
-    # So, we will merge the rank axes and move the degree1 axis to the front
-    # (rank1, degree1, rank2, degree2, n_plus_1) -> (degree1, rank1 * rank2, degree2, n_plus_1)
-    candidates = algebraic.permute_dims(contracted, (1, 0, 2, 3, 4))
-    candidates = algebraic.reshape(candidates, (degree1, rank1 * rank2, degree2, n_plus_1))
-
-    # Start with the multiplicative identity polynomial
-    device = contracted.device
-    identity = algebraic.broadcast_to(
-        algebraic.eye(1, n_plus_1, semiring=algebra, backend=backend, device=device), (1, 1, n_plus_1)
-    )
-
-    # Initialize beam storage with the identity element
-    # beam shape: (beam_rank, beam_degree, n+1)
-    beam = identity
-
-    for d in range(degree1):
-        # Slice candidates for this degree
-        candidate_d = candidates[d]  # (rank1 * rank2, degree2, n+1)
-
-        # shape: (beam_rank * rank1 * rank2, beam_degree + degree2, n+1)
-        beam = _multiply_factors(beam, candidate_d)
-
-        beam = prune_factors(beam, max_rank)
-
-    return beam
-
-
-def deduplicate_rank_dim(factors: AlgebraicArray) -> AlgebraicArray:
-    # factors shape: (rank, degree, num_vars + 1)
-    # Keep only the first occurrence of each unique row.
-
-    a = factors[:, None, :, :]  # (rank, 1, d, n+1)
-    b = factors[None, :, :, :]  # (1, rank, d, n+1)
-
-    # eq[i, j] = True iff row i equals row j (element-wise across d and n+1 axes)
-    eq = algebraic.equal(a, b).all((2, 3))  # (rank, rank) raw bool array
-
-    # earlier[i, j] = True iff i < j
-    backend = Backend.from_array(factors.data)
-    xp = backend.get_array_namespace()
-    rank = factors.shape[0]
-    arange = xp.arange(rank)
-    earlier = arange[:, None] < arange[None, :]  # (rank, rank)
-    # convert `earlier` to the right device
-    earlier = array_api_compat.to_device(earlier, factors.device)
-
-    # is_dup[j] = True if some earlier row i (i < j) is identical to row j
-    is_dup = (eq & earlier).any(0)
-    keep = ~is_dup
-
-    return factors[keep]
-
-
-def idempotence_pruning(factors: AlgebraicArray) -> AlgebraicArray:
-    """Remove terms that are dominated by lattice idempotence laws"""
-    # factors shape: (rank, d, n + 1)
-
-    # Lattice structure implies:
-    # p <= q if p + q == q  <- We will use this
-    # or
-    # p <= q if p * q == p
-
-    # expand for pairwise comparison
-    a = factors[:, None, :, :]  # (rank, 1, d, n+1)
-    b = factors[None, :, :, :]  # (1, rank, d, n+1)
-
-    added = a + b
-    # Check where a + b == b (i.e., a dominates b in the lattice order)
-    check = algebraic.equal(added, b).all((2, 3))
-    # shape: (rank, rank)
-
-    # check[i, j] = True means factors[i] <= factors[j] (i is dominated by j).
-    # Exclude self-comparisons (diagonal is always True due to idempotence).
-    # Prune i if some OTHER j (j != i) dominates i, i.e., check any j along axis 1.
-    backend = Backend.from_array(factors.data)
-    xp = backend.get_array_namespace()
-    rank = factors.shape[0]
-    arange = xp.arange(rank)
-    off_diag = arange[:, None] != arange[None, :]  # True where i != j
-    off_diag = array_api_compat.to_device(off_diag, factors.device)
-
-    check = check & off_diag
-
-    # keep[i] = True iff no other j dominates i
-    keep = ~check.any(1)
-
-    return factors[keep]
-
-
-def prune_factors(factors: AlgebraicArray, max_rank: int) -> AlgebraicArray:
-    factors = deduplicate_rank_dim(factors)
-    factors = idempotence_pruning(factors)
-    factors = factors[:max_rank]  # TODO: verify if this works...
-    return factors
-
-
-def _multiply_factors(p: AlgebraicArray, q: AlgebraicArray) -> AlgebraicArray:
-    """Core multiplication logic on raw arrays (no simplification/compression).
-
-    Parameters
-    ----------
-    p : AlgebraicArray
-        Shape ``[R_p, d_p, n+1]``.
-    q : AlgebraicArray
-        Shape ``[R_q, d_q, n+1]``.
-
-    Returns
-    -------
-    AlgebraicArray
-        Shape ``[R_p * R_q, d_p + d_q, n+1]``.
-    """
-    rank_p, degree_p, n_plus_1 = p.shape
-    rank_q, degree_q, _ = q.shape
-
-    p_expanded = algebraic.broadcast_to(
-        p[:, None, :, :],
-        (rank_p, rank_q, degree_p, n_plus_1),
-    )
-    q_expanded = algebraic.broadcast_to(
-        q[None, :, :, :],
-        (rank_p, rank_q, degree_q, n_plus_1),
-    )
-
-    result = algebraic.concat([p_expanded, q_expanded], axis=2)
-    result = algebraic.reshape(result, (rank_p * rank_q, degree_p + degree_q, n_plus_1))
-    return result
-
-
-def _add_factors(p: AlgebraicArray, q: AlgebraicArray, algebra: Lattice) -> AlgebraicArray:
-    """Add by concatenating rank-1 components.
-
-    For CP decomposition: ``p + q`` = sum of all components from both.
-    """
-    p_rank, p_degree, n_plus_1 = p.shape
-    q_rank, q_degree, _ = q.shape
-    d = max(p_degree, q_degree)
-
-    a_padded = pad_upto(p, max_rank=p_rank, max_degree=d, algebra=algebra)
-    b_padded = pad_upto(q, max_rank=q_rank, max_degree=d, algebra=algebra)
-
-    new_factors = algebraic.concat([a_padded, b_padded], axis=0)
-    return new_factors
-
-
-def _batched_multiply_factors(p: AlgebraicArray, q: AlgebraicArray) -> AlgebraicArray:
-    """Batched core multiplication on raw arrays (no simplification/compression).
-
-    Parameters
-    ----------
-    p : AlgebraicArray
-        Shape ``[B, R_p, d_p, n+1]``.
-    q : AlgebraicArray
-        Shape ``[B, R_q, d_q, n+1]``.
-
-    Returns
-    -------
-    AlgebraicArray
-        Shape ``[B, R_p * R_q, d_p + d_q, n+1]``.
-    """
-    batch, rank_p, degree_p, n_plus_1 = p.shape
-    _, rank_q, degree_q, _ = q.shape
-
-    p_expanded = algebraic.broadcast_to(
-        p[:, :, None, :, :],
-        (batch, rank_p, rank_q, degree_p, n_plus_1),
-    )
-    q_expanded = algebraic.broadcast_to(
-        q[:, None, :, :, :],
-        (batch, rank_p, rank_q, degree_q, n_plus_1),
-    )
-
-    result = algebraic.concat([p_expanded, q_expanded], axis=3)
-    result = algebraic.reshape(result, (batch, rank_p * rank_q, degree_p + degree_q, n_plus_1))
-    return result
-
-
-def batched_contraction_compression(
-    contracted: AlgebraicArray, max_rank: int, algebra: Lattice
-) -> AlgebraicArray:
-    """Batched beam search over tensor contractions.
-
-    Uses batched multiplication for efficiency, then per-element pruning
-    for correctness (pruning changes rank per element via boolean indexing,
-    results are padded back to uniform shape for the next step).
-
-    Parameters
-    ----------
-    contracted : AlgebraicArray
-        Shape ``[B, R, D, R_max, D_max, N+1]``.
-    max_rank : int
-        Maximum rank for pruning at each beam step.
-    algebra : BoundedDistributiveLattice
-        Lattice algebra governing operations.
-
-    Returns
-    -------
-    AlgebraicArray
-        Shape ``[B, R_out, D_out, N+1]``.
-    """
-    batch, rank1, degree1, rank2, degree2, n_plus_1 = contracted.shape
-    backend = Backend.from_array(contracted.data)
-
-    # (B, R, D, R_max, D_max, N+1) -> (B, D, R*R_max, D_max, N+1)
-    candidates = algebraic.permute_dims(contracted, (0, 2, 1, 3, 4, 5))
-    candidates = algebraic.reshape(candidates, (batch, degree1, rank1 * rank2, degree2, n_plus_1))
-
-    # Identity beam: (B, 1, 1, N+1)
-    device = contracted.device
-    identity = algebraic.broadcast_to(
-        algebraic.eye(1, n_plus_1, semiring=algebra, backend=backend, device=device),
-        (batch, 1, 1, n_plus_1),
-    )
-    beam = identity
-
-    for d in range(degree1):
-        candidate_d = candidates[:, d]  # (B, R*R_max, D_max, N+1)
-
-        # Batched multiply (the expensive operation)
-        beam = _batched_multiply_factors(beam, candidate_d)
-
-        # Per-element prune (correct boolean indexing), then re-stack
-        pruned = [prune_factors(beam[b], max_rank) for b in range(batch)]
-        max_pruned_rank = max(p.shape[0] for p in pruned)
-        max_pruned_degree = max(p.shape[1] for p in pruned)
-        padded = [
-            pad_upto(p, max_rank=max_pruned_rank, max_degree=max_pruned_degree, algebra=algebra) for p in pruned
-        ]
-        beam = algebraic.stack(padded)
-
-    return beam
-
-
-def batched_compose_factors(
-    factors: AlgebraicArray,
-    replacement_factors: AlgebraicArray,
-    max_rank: int,
-    algebra: Lattice,
-) -> AlgebraicArray:
-    """Batched composition of CP factors with prepared replacement factor arrays.
-
-    Composes B polynomials with B replacement sets in parallel.
-
-    Parameters
-    ----------
-    factors : AlgebraicArray
-        Batch of CP factors, shape ``[B, R, D, N+1]``.
-    replacement_factors : AlgebraicArray
-        Batch of prepared replacement arrays, shape ``[B, N+1, R_max, D_max, N+1]``.
-        Each element should be the output of :func:`prepare_replacement_factors`.
-    max_rank : int
-        Maximum rank for pruning at each beam step.
-    algebra : BoundedDistributiveLattice
-        Lattice algebra governing operations.
-
-    Returns
-    -------
-    AlgebraicArray
-        Batch of composed CP factors, shape ``[B, R_out, D_out, N+1]``.
-    """
-    # Batched einsum: contract over variable axis
-    # (B, R, D, N+1) x (B, N+1, R_max, D_max, N+1) -> (B, R, D, R_max, D_max, N+1)
-    contracted = algebraic.einsum("bpdk,bkqev->bpdqev", factors, replacement_factors)
-
-    return batched_contraction_compression(contracted, max_rank, algebra)
-
-
-def _merge_weights_bias(weights: AlgebraicArray, bias: AlgebraicArray) -> AlgebraicArray:
-    """Merge split weights and bias into merged factors of shape ``(R, D, N+1)``.
-
-    Parameters
-    ----------
-    weights : AlgebraicArray
-        Variable factors of shape ``(R, D, N)``.
-    bias : AlgebraicArray
-        Constant factors of shape ``(R, D)``.
-
-    Returns
-    -------
-    AlgebraicArray
-        Merged factors of shape ``(R, D, N+1)`` with bias as column 0.
-    """
-    # bias: (R, D) -> (R, D, 1)
-    bias_col = algebraic.reshape(bias, (*bias.shape, 1))
-    return algebraic.concat([bias_col, weights], axis=2)
-
-
-def _split_merged_factors(factors: AlgebraicArray) -> tuple[AlgebraicArray, AlgebraicArray]:
-    """Split merged factors of shape ``(R, D, N+1)`` into weights and bias.
-
-    Parameters
-    ----------
-    factors : AlgebraicArray
-        Merged factors of shape ``(R, D, N+1)``.
-
-    Returns
-    -------
-    tuple[AlgebraicArray, AlgebraicArray]
-        ``(weights, bias)`` where weights has shape ``(R, D, N)`` and bias has shape ``(R, D)``.
-    """
-    bias_col = factors[:, :, :1]  # (R, D, 1)
-    weights = factors[:, :, 1:]  # (R, D, N)
-    bias = algebraic.reshape(bias_col, bias_col.shape[:2])  # (R, D)
-    return weights, bias
 
 
 @dataclass
@@ -1238,7 +762,7 @@ class LowRankFactors(AlgebraicPyTree):
         merged_self = self.to_merged()
         merged_other = other.to_merged()
         new_factors = _add_factors(merged_self, merged_other, self.algebra)
-        new_factors = prune_factors(new_factors, max_rank=self.max_rank)
+        new_factors = prune_factors(new_factors, self.max_rank, self.max_degree, self.algebra)
         return self._replace_merged(new_factors)
 
     def __mul__(self, other: "LowRankFactors") -> "LowRankFactors":
@@ -1246,7 +770,7 @@ class LowRankFactors(AlgebraicPyTree):
         merged_self = self.to_merged()
         merged_other = other.to_merged()
         new_factors = _multiply_factors(merged_self, merged_other)
-        new_factors = prune_factors(new_factors, self.max_rank)
+        new_factors = prune_factors(new_factors, self.max_rank, self.max_degree, self.algebra)
         return self._replace_merged(new_factors)
 
     def evaluate(self, points: Array | AlgebraicArray) -> "LowRankFactors":
@@ -1285,7 +809,7 @@ class LowRankFactors(AlgebraicPyTree):
             )
         merged_self = self.to_merged()
         replacement_merged = [r.to_merged() for r in replacements]
-        result_factors = compose_factors(merged_self, replacement_merged, self.max_rank, self.algebra)
+        result_factors = compose_factors(merged_self, replacement_merged, self.max_rank, self.max_degree, self.algebra)
         result = self._replace_merged(result_factors)
         return result.normalize()
 
