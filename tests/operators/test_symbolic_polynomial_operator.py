@@ -494,7 +494,10 @@ class TestSymbolicPolynomialOperatorStep:
         normalize() -> to_sparse() with 4^10 ~= 1 M Python iterations (~100 s).
         The timeout catches that regression within 10 s.
         """
-        formula = ltl.Eventually(ltl.Variable("a")) & ltl.Eventually(ltl.Variable("b"))
+        formula = typing.cast(
+            ltl.LTLExpr[str],
+            ltl.Eventually(ltl.Variable("a")) & ltl.Eventually(ltl.Variable("b")),
+        )
         op = SymbolicPolynomialOperator.from_ltl(
             formula,
             algebra,
@@ -502,7 +505,7 @@ class TestSymbolicPolynomialOperatorStep:
             finite=True,
             output=output,  # type: ignore[arg-type]
         )
-        sigma = frozenset()  # empty symbol - the case that previously hung
+        sigma: frozenset[str] = frozenset()  # empty symbol - the case that previously hung
 
         poly1 = op.step(op.initial_poly, sigma)
         poly2 = op.step(poly1, sigma)  # this was the hanging call
@@ -520,17 +523,18 @@ class TestSymbolicPolynomialOperatorStep:
 
         Regression: same degree-10 path as test_step_two_eventualities_terminates.
         """
-        formula = ltl.Eventually(ltl.Variable("a")) & ltl.Eventually(ltl.Variable("b"))
-        op = SymbolicPolynomialOperator.from_ltl(
-            formula, algebra, backend="numpy", finite=True
+        formula = typing.cast(
+            ltl.LTLExpr[str],
+            ltl.Eventually(ltl.Variable("a")) & ltl.Eventually(ltl.Variable("b")),
         )
-        sigma = frozenset()
+        op = SymbolicPolynomialOperator.from_ltl(formula, algebra, backend="numpy", finite=True)
+        sigma: frozenset[str] = frozenset()
 
         # Manual two-step
-        poly_via_step = op.step(op.step(op.initial_poly, sigma), sigma)
+        poly_via_step = typing.cast(RankDecomposition, op.step(op.step(op.initial_poly, sigma), sigma))
 
         # run_polynomial on a 2-symbol word
-        poly_via_run = op.run_polynomial([sigma, sigma])
+        poly_via_run = typing.cast(RankDecomposition, op.run_polynomial([sigma, sigma]))
 
         # Both must evaluate identically at all boolean points
         num_vars = op.num_states
