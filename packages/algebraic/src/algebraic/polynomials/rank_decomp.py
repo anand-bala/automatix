@@ -824,6 +824,128 @@ def _add_factors(p: AlgebraicArray, q: AlgebraicArray, algebra: Lattice) -> Alge
     return new_factors
 
 
+def _batched_multiply_factors(p: AlgebraicArray, q: AlgebraicArray) -> AlgebraicArray:
+    """Batched core multiplication on raw arrays (no simplification/compression).
+
+    Parameters
+    ----------
+    p : AlgebraicArray
+        Shape ``[B, R_p, d_p, n+1]``.
+    q : AlgebraicArray
+        Shape ``[B, R_q, d_q, n+1]``.
+
+    Returns
+    -------
+    AlgebraicArray
+        Shape ``[B, R_p * R_q, d_p + d_q, n+1]``.
+    """
+    batch, rank_p, degree_p, n_plus_1 = p.shape
+    _, rank_q, degree_q, _ = q.shape
+
+    p_expanded = algebraic.broadcast_to(
+        p[:, :, None, :, :],
+        (batch, rank_p, rank_q, degree_p, n_plus_1),
+    )
+    q_expanded = algebraic.broadcast_to(
+        q[:, None, :, :, :],
+        (batch, rank_p, rank_q, degree_q, n_plus_1),
+    )
+
+    result = algebraic.concat([p_expanded, q_expanded], axis=3)
+    result = algebraic.reshape(result, (batch, rank_p * rank_q, degree_p + degree_q, n_plus_1))
+    return result
+
+
+def batched_contraction_compression(
+    contracted: AlgebraicArray, max_rank: int, algebra: Lattice
+) -> AlgebraicArray:
+    """Batched beam search over tensor contractions.
+
+    Uses batched multiplication for efficiency, then per-element pruning
+    for correctness (pruning changes rank per element via boolean indexing,
+    results are padded back to uniform shape for the next step).
+
+    Parameters
+    ----------
+    contracted : AlgebraicArray
+        Shape ``[B, R, D, R_max, D_max, N+1]``.
+    max_rank : int
+        Maximum rank for pruning at each beam step.
+    algebra : BoundedDistributiveLattice
+        Lattice algebra governing operations.
+
+    Returns
+    -------
+    AlgebraicArray
+        Shape ``[B, R_out, D_out, N+1]``.
+    """
+    batch, rank1, degree1, rank2, degree2, n_plus_1 = contracted.shape
+    backend = Backend.from_array(contracted.data)
+
+    # (B, R, D, R_max, D_max, N+1) -> (B, D, R*R_max, D_max, N+1)
+    candidates = algebraic.permute_dims(contracted, (0, 2, 1, 3, 4, 5))
+    candidates = algebraic.reshape(candidates, (batch, degree1, rank1 * rank2, degree2, n_plus_1))
+
+    # Identity beam: (B, 1, 1, N+1)
+    device = contracted.device
+    identity = algebraic.broadcast_to(
+        algebraic.eye(1, n_plus_1, semiring=algebra, backend=backend, device=device),
+        (batch, 1, 1, n_plus_1),
+    )
+    beam = identity
+
+    for d in range(degree1):
+        candidate_d = candidates[:, d]  # (B, R*R_max, D_max, N+1)
+
+        # Batched multiply (the expensive operation)
+        beam = _batched_multiply_factors(beam, candidate_d)
+
+        # Per-element prune (correct boolean indexing), then re-stack
+        pruned = [prune_factors(beam[b], max_rank) for b in range(batch)]
+        max_pruned_rank = max(p.shape[0] for p in pruned)
+        max_pruned_degree = max(p.shape[1] for p in pruned)
+        padded = [
+            pad_upto(p, max_rank=max_pruned_rank, max_degree=max_pruned_degree, algebra=algebra) for p in pruned
+        ]
+        beam = algebraic.stack(padded)
+
+    return beam
+
+
+def batched_compose_factors(
+    factors: AlgebraicArray,
+    replacement_factors: AlgebraicArray,
+    max_rank: int,
+    algebra: Lattice,
+) -> AlgebraicArray:
+    """Batched composition of CP factors with prepared replacement factor arrays.
+
+    Composes B polynomials with B replacement sets in parallel.
+
+    Parameters
+    ----------
+    factors : AlgebraicArray
+        Batch of CP factors, shape ``[B, R, D, N+1]``.
+    replacement_factors : AlgebraicArray
+        Batch of prepared replacement arrays, shape ``[B, N+1, R_max, D_max, N+1]``.
+        Each element should be the output of :func:`prepare_replacement_factors`.
+    max_rank : int
+        Maximum rank for pruning at each beam step.
+    algebra : BoundedDistributiveLattice
+        Lattice algebra governing operations.
+
+    Returns
+    -------
+    AlgebraicArray
+        Batch of composed CP factors, shape ``[B, R_out, D_out, N+1]``.
+    """
+    # Batched einsum: contract over variable axis
+    # (B, R, D, N+1) x (B, N+1, R_max, D_max, N+1) -> (B, R, D, R_max, D_max, N+1)
+    contracted = algebraic.einsum("bpdk,bkqev->bpdqev", factors, replacement_factors)
+
+    return batched_contraction_compression(contracted, max_rank, algebra)
+
+
 def _merge_weights_bias(weights: AlgebraicArray, bias: AlgebraicArray) -> AlgebraicArray:
     """Merge split weights and bias into merged factors of shape ``(R, D, N+1)``.
 
