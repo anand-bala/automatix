@@ -7,6 +7,7 @@ package, including array types, backend selection, and callable protocols.
 from __future__ import annotations
 
 import enum
+import sys
 import typing
 from collections.abc import Callable, Hashable, Sequence
 from types import ModuleType
@@ -26,6 +27,7 @@ if typing.TYPE_CHECKING:
     from algebraic import AlgebraicArray
 
     Array: TypeAlias = npt.NDArray[typing.Any] | jax.Array | torch.Tensor
+    Device: TypeAlias = jax.Device | torch.device | str
     type DType = Incomplete
 
 else:
@@ -67,8 +69,17 @@ def is_numpy_array(x: object) -> TypeIs[npt.NDArray[typing.Any]]:
     return array_api_compat.is_numpy_array(x)
 
 
+def is_numpy_device(x: object) -> TypeIs[typing.Literal["cpu"]]:
+    return isinstance(x, str) and x == "cpu"
+
+
 def is_torch_array(x: object) -> TypeIs[torch.Tensor]:
     return array_api_compat.is_torch_array(x)
+
+
+def is_torch_device(dev: object) -> TypeIs[torch.device]:
+    dev_type = typing.cast(Hashable, type(dev))
+    return array_helpers._issubclass_fast(dev_type, "torch", "device")
 
 
 def is_jax_array(x: object) -> TypeIs[jax.Array]:
@@ -79,9 +90,43 @@ def is_jax_array(x: object) -> TypeIs[jax.Array]:
     )
 
 
+def is_jax_device(dev: object) -> TypeIs[jax.Device]:
+    dev_type = typing.cast(Hashable, type(dev))
+    return array_helpers._issubclass_fast(dev_type, "jax", "Device")
+
+
 def is_array(x: object) -> TypeIs[Array]:
     """Test if an object is an array"""
     return is_numpy_array(x) or is_jax_array(x) or is_torch_array(x)
+
+
+def is_a_device(dev: object) -> TypeIs[Device]:
+    if is_jax_device(dev) or is_torch_device(dev):
+        return True
+    if not isinstance(dev, str):
+        return False
+    if dev in ["cpu", "cuda"]:
+        return True
+    if "jax" in sys.modules:
+        import jax
+
+        try:
+            return is_jax_device(jax.devices(dev)[0])
+        except Exception:
+            pass
+    if "torch" in sys.modules:
+        import torch
+
+        try:
+            return is_torch_device(torch.device(dev))
+        except Exception:
+            pass
+    return False
+
+
+def is_cpu_device(dev: Device) -> bool:
+    """Return ``True`` if *dev* represents a CPU device (string or native)."""
+    return str(dev).lower().startswith("cpu")
 
 
 class Backend(enum.StrEnum):

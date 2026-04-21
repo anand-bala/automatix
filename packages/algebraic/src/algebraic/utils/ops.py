@@ -40,20 +40,20 @@ def reduce_axes(
         Reduced array.
     """
     xp = array_api_compat.array_namespace(data)
+    device = array_api_compat.device(data)
 
     result: Array
     if is_jax_array(data):
         import jax
         import jax.numpy as jnp
 
-        identity = jnp.asarray(identity, dtype=data.dtype, device=data.device)
+        identity = jnp.asarray(identity, dtype=data.dtype, device=device)
         result = jax.lax.reduce(data, identity, semiring_op, dimensions=axis)
     elif is_torch_array(data) or is_numpy_array(data):
         import numpy.typing as npt
         import torch
 
         acc: torch.Tensor | npt.NDArray[Any]
-        device = array_api_compat.device(data)
 
         identity = xp.asarray(identity, dtype=data.dtype, device=device)
 
