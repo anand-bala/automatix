@@ -14,8 +14,10 @@ import algebraic.ops as alge
 from algebraic.array import AlgebraicArray
 from algebraic.spec import BoundedDistributiveLattice as Lattice
 from algebraic.types import AlgebraicPyTree, AnyPyTree, Array, Backend, Scalar, is_array
+from algebraic.utils import pytree
 
 
+@pytree.register_node_class  # type: ignore[arg-type]
 @dataclass
 class PolyDict(AlgebraicPyTree):
     """Sparse polynomial represented as monomial -> coefficient mapping."""

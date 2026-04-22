@@ -14,8 +14,10 @@ from algebraic.array import AlgebraicArray
 from algebraic.polynomials.dok import PolyDict
 from algebraic.spec import BoundedDistributiveLattice as Lattice
 from algebraic.types import AlgebraicPyTree, AnyPyTree, Array, Backend, Scalar, is_array, is_scalar
+from algebraic.utils import pytree
 
 
+@pytree.register_node_class  # type: ignore[arg-type]
 @dataclass
 class MonomialBasis(AlgebraicPyTree):
     """Dense, monomial basis decomposition of a multilinear polynomial.

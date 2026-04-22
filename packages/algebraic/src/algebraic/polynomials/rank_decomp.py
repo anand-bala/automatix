@@ -12,7 +12,7 @@ from algebraic.array import AlgebraicArray
 from algebraic.polynomials.dok import PolyDict
 from algebraic.spec import BoundedDistributiveLattice as Lattice
 from algebraic.types import AlgebraicPyTree, AnyPyTree, Array, Backend, Scalar, is_scalar
-from algebraic.utils import validate_semiring
+from algebraic.utils import pytree, validate_semiring
 from algebraic.utils.poly import (
     _add_factors,
     _merge_weights_bias,
@@ -24,6 +24,7 @@ from algebraic.utils.poly import (
 )
 
 
+@pytree.register_node_class  # type: ignore[arg-type]
 @dataclass
 class RankDecomposition(AlgebraicPyTree):
     """CP (CANDECOMP/PARAFAC) decomposition of multilinear polynomial.
@@ -509,6 +510,7 @@ class RankDecomposition(AlgebraicPyTree):
         )
 
 
+@pytree.register_node_class  # type: ignore[arg-type]
 @dataclass
 class LowRankFactors(AlgebraicPyTree):
     """CP decomposition with separated variable weights and constant bias.

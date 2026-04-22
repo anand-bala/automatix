@@ -14,7 +14,7 @@ from typing_extensions import Self
 
 from algebraic.spec import Semiring, has_complement, is_ring
 from algebraic.types import AnyPyTree, Array, DType, MatmulFn, Number, Scalar, VdotFn, is_array, is_scalar, is_torch_array
-from algebraic.utils import to_common_device, validate_semiring
+from algebraic.utils import pytree, to_common_device, validate_semiring
 
 if typing.TYPE_CHECKING:
     from algebraic.utils.indexing import _IndexUpdateHelper
@@ -36,6 +36,7 @@ def _resolve_device(dev_a: object, dev_b: object) -> object:
     return dev_a
 
 
+@pytree.register_node_class  # type: ignore[arg-type]
 @dataclass
 class AlgebraicArray:
     """A multidimensional array with elements from a semiring.
