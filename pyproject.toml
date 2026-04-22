@@ -2,7 +2,7 @@
 name = "argus-automatix"
 authors = [{ name = "Anand Balakrishnan", email = "anandbala1597@gmail.com" }]
 description = "A package for manipulating automata via algebraic representation theory"
-version = "0.7.1"
+version = "0.7.2"
 requires-python = ">=3.12"
 classifiers = [
   "Intended Audience :: Science/Research",

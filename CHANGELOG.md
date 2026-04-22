@@ -1,13 +1,20 @@
-## [unreleased]
+## [0.7.2] - 2026-04-22
 
 ### Documentation
 
 - remove non-ASCII characters that I did not type
+- add changelogs to the sphinx documentation
 
 ### Testing
 
 - add pytest-timeout to dev dependencies
 - added regression tests for the step operator
+
+### Build
+
+- add git-cliff support for CHANGELOG generation
+- add a `make-release` script for the lazy
+- handle releasing multiple packages in one commit
 
 ### Miscellaneous
 
@@ -25,7 +32,12 @@
 
 ### Documentation
 
+- add documentation for SymbolicPolynomialOperator
 - remove French spacing from all documentation
+
+### Build
+
+- add mypy config for `dd` BDD library
 ## [0.7.0] - 2026-04-17
 
 ### Features
@@ -35,6 +47,7 @@
 
 ### Documentation
 
+- initial documentation
 - update the urls for all packages
 
 ### Testing
@@ -44,7 +57,22 @@
 ### Build
 
 - add linters for restructured text
+
+### CI
+
+- make sure uv is installing all extras
+- only use `mypy` for type checking
+
+### Miscellaneous
+
+- ensure mypy doesn't error out due to missing imports
 ## [0.6.0] - 2026-04-09
+
+### Features
+
+- clean out the justfile and add feature to upload to HF
+- torch and jax as soft/optional dependencies
+- new tests and port old tests for the new API
 
 ### Bug Fixes
 
@@ -52,15 +80,18 @@
 
 ### Other
 
+- add a CONTRIBUTING.md file
 - add a default cooldown period for all dependncies
 
 ### Refactor
 
 - rename packages and use hatchling build backend instead
+- README
 
 ### Documentation
 
 - add sphinx-based documentation
+- update README and add the missing LICENSE file
 
 ### Build
 
@@ -115,6 +146,7 @@
 - compare BooleanPolynomial.eval against top and bot
 - don't treat aliases as new states
 - error in selecting top and bottom for boolean polynomials
+- restore READMEs and examples from history
 - correctly parse state conjunctions and make State hashable
 - lints reported by basedpyright
 - update uv.lock
@@ -141,9 +173,11 @@
 - remove cuda as an extra and allow end-user to install using pip
 - Add tests and fixes for tensor polynomials
 - refresh uv.lock
+- make sure pytest picks all package tests and source files
 - mypy "packages" refer to module names by the looks of it
 - use just instead of make as a task runner
 - remove `sparx` from this repository
+- update justfile to be less strict
 - clean up the dev dependencies and type checker configs
 
 ### Refactor
@@ -198,6 +232,13 @@
 - add dd and optree dependencies
 - clean up dependencies
 - don't handle Semiring matrices of size 1000...
+
+### CI
+
+- add split Github Actions pipelines for each package
+- change the working directory for each package
+- don't just call just, make CI verbose
+- make sure uv installs dependencies for all packages
 
 ### Miscellaneous
 
