@@ -65,4 +65,23 @@ sort_commits = "oldest"
 recurse_submodules = false
 
 tag_pattern = "morphata-v.*"
-include_paths = ["packages/morphata/**"]
+include_paths = [
+  "packages/morphata/**",
+  "docs/morphata/**",
+  # Shared root configs and guidelines
+  "pyproject.toml",
+  "ruff.toml",
+  "mypy.ini",
+  "pyrightconfig.json",
+  "pytest.toml",
+  "ty.toml",
+  ".editorconfig",
+  ".rstcheck.cfg",
+  "justfile",
+  "Dockerfile",
+  ".github/workflows/morphata.yml",
+  "ci/**",
+  "CONTRIBUTING.md",
+  "README.md",
+  "LICENSE",
+]

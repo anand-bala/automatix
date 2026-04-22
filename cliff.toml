@@ -83,4 +83,24 @@ recurse_submodules = false
 
 # Root package: only automatix sources + top-level files
 tag_pattern = "automatix-v.*"
-include_paths = ["src/automatix/**", "tests/**", "pyproject.toml"]
+include_paths = [
+  "src/automatix/**",
+  "tests/**",
+  "docs/automatix/**",
+  # Shared root configs and guidelines
+  "pyproject.toml",
+  "ruff.toml",
+  "mypy.ini",
+  "pyrightconfig.json",
+  "pytest.toml",
+  "ty.toml",
+  ".editorconfig",
+  ".rstcheck.cfg",
+  "justfile",
+  "Dockerfile",
+  ".github/workflows/automatix.yml",
+  "ci/**",
+  "CONTRIBUTING.md",
+  "README.md",
+  "LICENSE",
+]

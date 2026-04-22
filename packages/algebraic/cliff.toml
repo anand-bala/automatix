@@ -65,4 +65,23 @@ sort_commits = "oldest"
 recurse_submodules = false
 
 tag_pattern = "algebraic-v.*"
-include_paths = ["packages/algebraic/**"]
+include_paths = [
+  "packages/algebraic/**",
+  "docs/algebraic/**",
+  # Shared root configs and guidelines
+  "pyproject.toml",
+  "ruff.toml",
+  "mypy.ini",
+  "pyrightconfig.json",
+  "pytest.toml",
+  "ty.toml",
+  ".editorconfig",
+  ".rstcheck.cfg",
+  "justfile",
+  "Dockerfile",
+  ".github/workflows/algebraic.yml",
+  "ci/**",
+  "CONTRIBUTING.md",
+  "README.md",
+  "LICENSE",
+]
