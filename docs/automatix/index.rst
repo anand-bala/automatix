@@ -77,3 +77,4 @@ If you are using alternating weighted automata for multi-agent systems:
    quick-start
    concepts/index
    api/modules
+   changelog

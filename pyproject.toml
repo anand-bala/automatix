@@ -28,6 +28,7 @@ torch = ["torch>=2.0"]
 [project.urls]
 Documentation = "https://docs.anandb.dev/automatix"
 Repository = "https://git.anandb.dev/automatix.git"
+Changelog = "https://docs.anandb.dev/automatix/changelog.html"
 
 [dependency-groups]
 dev = [
@@ -46,7 +47,7 @@ dev = [
   "ty",
   "zuban",
 ]
-docs = ["sphinx>=9.1.0"]
+docs = ["sphinx>=9.1.0", "myst-parser>=4.0"]
 
 [build-system]
 requires = ["hatchling"]

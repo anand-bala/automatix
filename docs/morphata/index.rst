@@ -48,3 +48,4 @@ Features
    quick-start
    concepts/index
    api/modules
+   changelog

@@ -19,6 +19,7 @@ dependencies = [
 [project.urls]
 Documentation = "https://docs.anandb.dev/algebraic"
 Repository = "https://git.anandb.dev/automatix.git"
+Changelog = "https://docs.anandb.dev/algebraic/changelog.html"
 
 [dependency-groups]
 dev = ["scipy-stubs>=1.17"]

@@ -16,6 +16,7 @@ dependencies = [
 [project.urls]
 Documentation = "https://docs.anandb.dev/morphata"
 Repository = "https://git.anandb.dev/automatix.git"
+Changelog = "https://docs.anandb.dev/morphata/changelog.html"
 
 [build-system]
 requires = ["hatchling"]
