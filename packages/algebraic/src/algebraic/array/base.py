@@ -287,8 +287,16 @@ class AlgebraicArray:
         """Batch matrix transpose (same as `T`; alias for Array-API compatibility)."""
         return self.T
 
+    def clone(self) -> "AlgebraicArray":
+        if is_torch_array(self.data):
+            return AlgebraicArray(self.data.clone(), self.semiring, self._vdot, self._matmul)
+        else:
+            return self
+
     def tree_flatten(self) -> tuple[list[Array], tuple[typing.Any, ...]]:
         return [self.data], (self.semiring, self._vdot, self._matmul)
+
+    __tree_flatten__ = tree_flatten
 
     @classmethod
     def tree_unflatten(cls, aux_data: tuple[typing.Any, ...], children: Sequence[AnyPyTree]) -> "AlgebraicArray":
@@ -297,8 +305,9 @@ class AlgebraicArray:
         assert is_array(data)
         return cls(data, semiring, _vdot, _matmul)
 
-    def clone(self) -> "AlgebraicArray":
-        if is_torch_array(self.data):
-            return AlgebraicArray(self.data.clone(), self.semiring, self._vdot, self._matmul)
-        else:
-            return self
+    __tree_unflatten__ = tree_unflatten
+
+    def __repr__(self) -> str:
+        import wadler_lindig as wl
+
+        return str(wl.pformat(self))

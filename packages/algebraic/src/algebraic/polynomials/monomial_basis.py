@@ -370,6 +370,11 @@ class MonomialBasis(AlgebraicPyTree):
             coeffs = coeffs.at[idx].set(coeff)
         return cls(coeffs, poly.algebra, backend=backend)
 
+    def __repr__(self) -> str:
+        import wadler_lindig as wl
+
+        return str(wl.pformat(self))
+
 
 def _multiply_recursive(lhs: AlgebraicArray, rhs: AlgebraicArray) -> AlgebraicArray:
     """A recursive function to compute the Horner's expansion multiplication."""

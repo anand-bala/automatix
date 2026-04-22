@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-03-23T16:01:11.631040888Z"
+exclude-newer = "2026-03-23T20:51:37.20247447Z"
 exclude-newer-span = "P30D"
 
 [options.exclude-newer-package]
@@ -48,6 +48,7 @@ dependencies = [
     { name = "optree" },
     { name = "plum-dispatch" },
     { name = "scipy" },
+    { name = "wadler-lindig" },
 ]
 
 [package.optional-dependencies]
@@ -77,6 +78,7 @@ requires-dist = [
     { name = "plum-dispatch", specifier = ">=2.6.1" },
     { name = "scipy", specifier = ">=1.17.1" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.0" },
+    { name = "wadler-lindig", specifier = ">=0.1.7" },
 ]
 provides-extras = ["jax", "torch"]
 

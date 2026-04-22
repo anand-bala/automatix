@@ -509,6 +509,11 @@ class RankDecomposition(AlgebraicPyTree):
             backend=backend,
         )
 
+    def __repr__(self) -> str:
+        import wadler_lindig as wl
+
+        return str(wl.pformat(self))
+
 
 @pytree.register_node_class  # type: ignore[arg-type]
 @dataclass
@@ -843,3 +848,8 @@ class LowRankFactors(AlgebraicPyTree):
         assert isinstance(weights, AlgebraicArray)
         assert isinstance(bias, AlgebraicArray)
         return cls(weights, bias, max_rank, max_degree, max_replacement_degree, backend=backend)
+
+    def __repr__(self) -> str:
+        import wadler_lindig as wl
+
+        return str(wl.pformat(self))

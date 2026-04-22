@@ -294,3 +294,8 @@ class PolyDict(AlgebraicPyTree):
         algebra, num_vars, keys, backend = aux_data
         children = typing.cast(Sequence[AlgebraicArray], children)
         return cls(algebra, num_vars, dict(zip(keys, children)), backend=backend)
+
+    def __repr__(self) -> str:
+        import wadler_lindig as wl
+
+        return str(wl.pformat(self))
