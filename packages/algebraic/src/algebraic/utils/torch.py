@@ -1,34 +1,88 @@
-import typing
-from collections.abc import Mapping, Sequence
+"""PyTorch integration for algebraic types.
 
+Provides:
+- PyTree registration with ``optree`` for ``torch.func`` transforms.
+- ``PyTreeModule[T]``: an ``nn.Module`` that stores tensor leaves as
+  ``nn.Parameter`` instances while reconstructing the full algebraic object
+  (with all ops) in ``forward()``.
+- ``torchify(obj)`` factory with ``@overload`` signatures.
+"""
+
+from __future__ import annotations
+
+import typing
+from typing import Generic, TypeVar, overload
+
+import optree
 import torch
 import torch.nn as nn
 
-from algebraic.array import AlgebraicArray
+from algebraic.array.base import AlgebraicArray
+from algebraic.polynomials.dok import PolyDict
+from algebraic.polynomials.monomial_basis import MonomialBasis
+from algebraic.polynomials.rank_decomp import LowRankFactors, RankDecomposition
 from algebraic.types import AlgebraicPyTree, AnyPyTree
+from algebraic.utils import pytree
+
+T = TypeVar("T", bound=AnyPyTree)
 
 
-class TorchWrapper(nn.Module):
-    def __init__(self, wrapped: AnyPyTree) -> None:
+class PyTreeModule(nn.Module, Generic[T]):
+    """``nn.Module`` wrapper that stores algebraic pytree leaves as ``nn.Parameter``.
+
+    On :meth:`forward`, the original algebraic object is reconstructed via
+    ``pytree.unflatten`` so the caller gets back a fully functional
+    instance (``RankDecomposition``, ``LowRankFactors``, ``AlgebraicArray``, …)
+    with all algebraic operations available and autograd flowing through the
+    parameters.
+
+    Parameters
+    ----------
+    obj : T
+        The algebraic pytree to wrap. Must be backed by torch tensors.
+    """
+
+    def __init__(self, obj: T) -> None:
         super().__init__()
-        self.wrapped = wrapped
-        self._register(wrapped)
+        leaves, self._spec = pytree.flatten(typing.cast(optree.PyTree[torch.Tensor], obj))
+        for i, tensor in enumerate(leaves):
+            self.register_parameter(f"leaf_{i}", nn.Parameter(tensor))
 
-    def _register(self, wrapped: AnyPyTree, prefix: str | None = None) -> None:
-        if prefix is None:
-            prefix = ""
-        if isinstance(wrapped, AlgebraicArray):
-            self.register_parameter(prefix + "algebraic_array", nn.Parameter(typing.cast(torch.Tensor, wrapped.data)))
-        elif isinstance(wrapped, AlgebraicPyTree):
-            for i, c in enumerate(wrapped.tree_flatten()[0]):
-                self._register(c, f"{prefix}{i}_")
-        elif isinstance(wrapped, Mapping):
-            for k, v in wrapped.items():
-                self._register(v, prefix=f"{prefix}{str(k)}_")
-        elif isinstance(wrapped, Sequence):
-            for i, c in enumerate(wrapped):
-                self._register(c, f"{prefix}{i}_")
+    def forward(self) -> T:
+        """Reconstruct the algebraic object from the current parameter values."""
+        params = list(self.parameters())
+        return typing.cast(T, pytree.unflatten(self._spec, params))
 
 
-def torchify(obj: AnyPyTree) -> TorchWrapper:
-    return TorchWrapper(obj)
+@overload
+def torchify(obj: AlgebraicArray) -> PyTreeModule[AlgebraicArray]: ...
+
+
+@overload
+def torchify(obj: RankDecomposition) -> PyTreeModule[RankDecomposition]: ...
+
+
+@overload
+def torchify(obj: LowRankFactors) -> PyTreeModule[LowRankFactors]: ...
+
+
+@overload
+def torchify(obj: PolyDict) -> PyTreeModule[PolyDict]: ...
+
+
+@overload
+def torchify(obj: MonomialBasis) -> PyTreeModule[MonomialBasis]: ...
+
+
+@overload
+def torchify(obj: AlgebraicPyTree) -> PyTreeModule[AlgebraicPyTree]: ...
+
+
+def torchify(obj: AnyPyTree) -> PyTreeModule[typing.Any]:
+    """Wrap an algebraic pytree in a :class:`PyTreeModule`.
+
+    The returned module stores all tensor leaves as ``nn.Parameter`` instances
+    (for optimizers, ``state_dict``, ``model.to(device)``, DDP, etc.) and
+    reconstructs the full algebraic object in ``forward()``.
+    """
+    return PyTreeModule(obj)
