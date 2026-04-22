@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-03-21T22:16:22.668198656Z"
+exclude-newer = "2026-03-23T05:24:50.27093173Z"
 exclude-newer-span = "P30D"
 
 [options.exclude-newer-package]
@@ -37,7 +37,7 @@ wheels = [
 
 [[package]]
 name = "algebraic-arrays"
-version = "1.2.8"
+version = "1.3.0"
 source = { editable = "packages/algebraic" }
 dependencies = [
     { name = "array-api-compat" },
