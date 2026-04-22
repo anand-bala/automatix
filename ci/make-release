@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage ------------------------------------------------------------------
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") <package> <bump>
+
+  package   One of: automatix, algebraic, morphata
+  bump      Version bump kind passed to 'uv version --bump'
+            (patch, minor, major, etc.)
+
+Example:
+  $(basename "$0") algebraic patch
+EOF
+  exit 1
+}
+
+if [[ $# -ne 2 ]]; then
+  usage
+fi
+
+PROJECT_DIR="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/.." && pwd)"
+cd "$PROJECT_DIR"
+
+PACKAGE="$1"
+BUMP="$2"
+
+# Package mapping -------------------------------------------------------
+# Maps the release key to: uv package name, pyproject path, cliff config,
+# changelog output path, and tag prefix.
+case "$PACKAGE" in
+automatix)
+  UV_PKG="argus-automatix"
+  PYPROJECT="pyproject.toml"
+  CLIFF_CONFIG="cliff.toml"
+  CHANGELOG="CHANGELOG.md"
+  TAG_PREFIX="automatix"
+  ;;
+algebraic)
+  UV_PKG="algebraic-arrays"
+  PYPROJECT="packages/algebraic/pyproject.toml"
+  CLIFF_CONFIG="packages/algebraic/cliff.toml"
+  CHANGELOG="packages/algebraic/CHANGELOG.md"
+  TAG_PREFIX="algebraic"
+  ;;
+morphata)
+  UV_PKG="morphata"
+  PYPROJECT="packages/morphata/pyproject.toml"
+  CLIFF_CONFIG="packages/morphata/cliff.toml"
+  CHANGELOG="packages/morphata/CHANGELOG.md"
+  TAG_PREFIX="morphata"
+  ;;
+*)
+  echo "error: unknown package '$PACKAGE'" >&2
+  echo "       must be one of: automatix, algebraic, morphata" >&2
+  exit 1
+  ;;
+esac
+
+# Helpers ----------------------------------------------------------------
+is_jj() { [[ -d "$PROJECT_DIR/.jj" ]]; }
+
+check_clean() {
+  if is_jj; then
+    # jj: the working copy (@) should have no file changes
+    if [[ -n "$(jj diff --summary 2>/dev/null)" ]]; then
+      echo "error: working copy is not clean (jj diff shows changes)" >&2
+      exit 1
+    fi
+  else
+    if [[ -n "$(git status --porcelain)" ]]; then
+      echo "error: working copy is not clean (git status shows changes)" >&2
+      exit 1
+    fi
+  fi
+}
+
+read_version() {
+  uv version --short --package "$1"
+}
+
+# 1. Lint & type-check ---------------------------------------------------
+echo "==> Running linters and type checkers..."
+just lint
+
+# 2. Ensure working copy is clean -----------------------------------------
+# Re-check after lint since ruff format/fix may have mutated files.
+echo "==> Checking working copy is clean..."
+check_clean
+
+# 3. Check that the tag doesn't already exist ----------------------------
+OLD_VERSION="$(read_version "$UV_PKG")"
+echo "    current version: $OLD_VERSION"
+
+# 4. Bump version --------------------------------------------------------
+echo "==> Bumping $PACKAGE version ($BUMP)..."
+uv version --bump "$BUMP" --package "$UV_PKG"
+
+NEW_VERSION="$(read_version "$UV_PKG")"
+TAG="${TAG_PREFIX}-v${NEW_VERSION}"
+echo "    new version: $NEW_VERSION"
+echo "    tag:         $TAG"
+
+# Abort if this tag already exists
+if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+  echo "error: tag '$TAG' already exists" >&2
+  exit 1
+fi
+
+# 5. Generate changelog --------------------------------------------------
+echo "==> Generating changelog..."
+git cliff --config "$CLIFF_CONFIG" --tag "$TAG" -o "$CHANGELOG"
+
+# 6. Commit ---------------------------------------------------------------
+COMMIT_MSG="chore(${PACKAGE}): release ${NEW_VERSION}"
+echo "==> Committing: $COMMIT_MSG"
+
+if is_jj; then
+  # jj automatically tracks new/modified files in the working copy
+  jj commit -m "$COMMIT_MSG"
+else
+  git add "$PYPROJECT" "$CHANGELOG"
+  git commit -m "$COMMIT_MSG"
+fi
+
+# 7. Tag ------------------------------------------------------------------
+# Use the changelog for this release as the tag annotation.
+TAG_MESSAGE="$(git cliff --config "$CLIFF_CONFIG" --tag "$TAG" --unreleased --strip all)"
+if [[ -z "$TAG_MESSAGE" ]]; then
+  TAG_MESSAGE="Release ${TAG}"
+fi
+
+echo "==> Tagging $TAG"
+if is_jj; then
+  # jj repos still use underlying git for tags
+  jj git import 2>/dev/null || true
+  git tag -a "$TAG" -m "$TAG_MESSAGE"
+  jj git import 2>/dev/null || true
+else
+  git tag -a "$TAG" -m "$TAG_MESSAGE"
+fi
+
+echo ""
+echo "Done! Release $TAG created."
+echo "To publish, push the tag:  git push origin $TAG"
