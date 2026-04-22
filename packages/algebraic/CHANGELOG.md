@@ -1,3 +1,8 @@
+## [unreleased]
+
+### Build
+
+- update cliff settings to process some older conventions
 ## [1.3.0] - 2026-04-22
 
 ### Features
