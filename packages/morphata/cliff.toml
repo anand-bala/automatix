@@ -40,6 +40,7 @@ commit_preprocessors = [
 ]
 protect_breaking_commits = true
 commit_parsers = [
+  { message = "^chore\\(release\\):", skip = true },
   { message = "^chore\\(.*\\): release", skip = true },
   { message = "^feat", group = "<!-- 0 -->Features" },
   { message = "^fix", group = "<!-- 1 -->Bug Fixes" },

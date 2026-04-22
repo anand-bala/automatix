@@ -4,66 +4,69 @@ set -euo pipefail
 # Usage ------------------------------------------------------------------
 usage() {
   cat <<EOF
-Usage: $(basename "$0") <package> <bump>
+Usage: $(basename "$0") <bump> <package> [package …]
 
-  package   One of: automatix, algebraic, morphata
   bump      Version bump kind passed to 'uv version --bump'
             (patch, minor, major, etc.)
+  package   One or more of: automatix, algebraic, morphata
 
-Example:
-  $(basename "$0") algebraic patch
+Examples:
+  $(basename "$0") patch algebraic
+  $(basename "$0") minor automatix algebraic morphata
 EOF
   exit 1
 }
 
-if [[ $# -ne 2 ]]; then
+if [[ $# -lt 2 ]]; then
   usage
 fi
 
 PROJECT_DIR="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/.." && pwd)"
 cd "$PROJECT_DIR"
 
-PACKAGE="$1"
-BUMP="$2"
+BUMP="$1"
+shift
+PACKAGES=("$@")
 
 # Package mapping -------------------------------------------------------
-# Maps the release key to: uv package name, pyproject path, cliff config,
-# changelog output path, and tag prefix.
-case "$PACKAGE" in
-automatix)
-  UV_PKG="argus-automatix"
-  PYPROJECT="pyproject.toml"
-  CLIFF_CONFIG="cliff.toml"
-  CHANGELOG="CHANGELOG.md"
-  TAG_PREFIX="automatix"
-  ;;
-algebraic)
-  UV_PKG="algebraic-arrays"
-  PYPROJECT="packages/algebraic/pyproject.toml"
-  CLIFF_CONFIG="packages/algebraic/cliff.toml"
-  CHANGELOG="packages/algebraic/CHANGELOG.md"
-  TAG_PREFIX="algebraic"
-  ;;
-morphata)
-  UV_PKG="morphata"
-  PYPROJECT="packages/morphata/pyproject.toml"
-  CLIFF_CONFIG="packages/morphata/cliff.toml"
-  CHANGELOG="packages/morphata/CHANGELOG.md"
-  TAG_PREFIX="morphata"
-  ;;
-*)
-  echo "error: unknown package '$PACKAGE'" >&2
-  echo "       must be one of: automatix, algebraic, morphata" >&2
-  exit 1
-  ;;
-esac
+# Resolves a release key to its metadata.
+resolve_package() {
+  local pkg="$1"
+  case "$pkg" in
+  automatix)
+    UV_PKG="argus-automatix"
+    PYPROJECT="pyproject.toml"
+    CLIFF_CONFIG="cliff.toml"
+    CHANGELOG="CHANGELOG.md"
+    TAG_PREFIX="automatix"
+    ;;
+  algebraic)
+    UV_PKG="algebraic-arrays"
+    PYPROJECT="packages/algebraic/pyproject.toml"
+    CLIFF_CONFIG="packages/algebraic/cliff.toml"
+    CHANGELOG="packages/algebraic/CHANGELOG.md"
+    TAG_PREFIX="algebraic"
+    ;;
+  morphata)
+    UV_PKG="morphata"
+    PYPROJECT="packages/morphata/pyproject.toml"
+    CLIFF_CONFIG="packages/morphata/cliff.toml"
+    CHANGELOG="packages/morphata/CHANGELOG.md"
+    TAG_PREFIX="morphata"
+    ;;
+  *)
+    echo "error: unknown package '$pkg'" >&2
+    echo "       must be one of: automatix, algebraic, morphata" >&2
+    exit 1
+    ;;
+  esac
+}
 
 # Helpers ----------------------------------------------------------------
 is_jj() { [[ -d "$PROJECT_DIR/.jj" ]]; }
 
 check_clean() {
   if is_jj; then
-    # jj: the working copy (@) should have no file changes
     if [[ -n "$(jj diff --summary 2>/dev/null)" ]]; then
       echo "error: working copy is not clean (jj diff shows changes)" >&2
       exit 1
@@ -85,62 +88,83 @@ echo "==> Running linters and type checkers..."
 just lint
 
 # 2. Ensure working copy is clean -----------------------------------------
-# Re-check after lint since ruff format/fix may have mutated files.
 echo "==> Checking working copy is clean..."
 check_clean
 
-# 3. Check that the tag doesn't already exist ----------------------------
-OLD_VERSION="$(read_version "$UV_PKG")"
-echo "    current version: $OLD_VERSION"
+# 3. Process each package: bump, check tag, generate changelog -----------
+# Parallel arrays to collect per-package info for commit/tag steps.
+declare -a TAGS=()
+declare -a TAG_PREFIXES=()
+declare -a CLIFF_CONFIGS=()
+declare -a CHANGELOGS=()
+declare -a PYPROJECTS=()
+declare -a COMMIT_PARTS=()
 
-# 4. Bump version --------------------------------------------------------
-echo "==> Bumping $PACKAGE version ($BUMP)..."
-uv version --bump "$BUMP" --package "$UV_PKG"
+for pkg in "${PACKAGES[@]}"; do
+  resolve_package "$pkg"
 
-NEW_VERSION="$(read_version "$UV_PKG")"
-TAG="${TAG_PREFIX}-v${NEW_VERSION}"
-echo "    new version: $NEW_VERSION"
-echo "    tag:         $TAG"
+  OLD_VERSION="$(read_version "$UV_PKG")"
+  echo "==> [$pkg] current version: $OLD_VERSION"
 
-# Abort if this tag already exists
-if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
-  echo "error: tag '$TAG' already exists" >&2
-  exit 1
-fi
+  echo "==> [$pkg] Bumping version ($BUMP)..."
+  uv version --bump "$BUMP" --package "$UV_PKG"
 
-# 5. Generate changelog --------------------------------------------------
-echo "==> Generating changelog..."
-git cliff --config "$CLIFF_CONFIG" --tag "$TAG" -o "$CHANGELOG"
+  NEW_VERSION="$(read_version "$UV_PKG")"
+  TAG="${TAG_PREFIX}-v${NEW_VERSION}"
+  echo "    [$pkg] new version: $NEW_VERSION"
+  echo "    [$pkg] tag:         $TAG"
 
-# 6. Commit ---------------------------------------------------------------
-COMMIT_MSG="chore(${PACKAGE}): release ${NEW_VERSION}"
+  if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+    echo "error: tag '$TAG' already exists" >&2
+    exit 1
+  fi
+
+  echo "==> [$pkg] Generating changelog..."
+  git cliff --config "$CLIFF_CONFIG" --tag "$TAG" -o "$CHANGELOG"
+
+  TAGS+=("$TAG")
+  TAG_PREFIXES+=("$TAG_PREFIX")
+  CLIFF_CONFIGS+=("$CLIFF_CONFIG")
+  CHANGELOGS+=("$CHANGELOG")
+  PYPROJECTS+=("$PYPROJECT")
+  COMMIT_PARTS+=("${pkg} ${NEW_VERSION}")
+done
+
+# 4. Commit ---------------------------------------------------------------
+# Build a single commit message listing all released packages.
+COMMIT_MSG="chore(release): $(
+  IFS=', '
+  echo "${COMMIT_PARTS[*]}"
+)"
 echo "==> Committing: $COMMIT_MSG"
 
 if is_jj; then
-  # jj automatically tracks new/modified files in the working copy
   jj commit -m "$COMMIT_MSG"
 else
-  git add "$PYPROJECT" "$CHANGELOG"
+  git add "${PYPROJECTS[@]}" "${CHANGELOGS[@]}"
   git commit -m "$COMMIT_MSG"
 fi
 
-# 7. Tag ------------------------------------------------------------------
-# Use the changelog for this release as the tag annotation.
-TAG_MESSAGE="$(git cliff --config "$CLIFF_CONFIG" --tag "$TAG" --unreleased --strip all)"
-if [[ -z "$TAG_MESSAGE" ]]; then
-  TAG_MESSAGE="Release ${TAG}"
-fi
+# 5. Tag each package -----------------------------------------------------
+for i in "${!TAGS[@]}"; do
+  TAG="${TAGS[$i]}"
+  CLIFF_CONFIG="${CLIFF_CONFIGS[$i]}"
 
-echo "==> Tagging $TAG"
-if is_jj; then
-  # jj repos still use underlying git for tags
-  jj git import 2>/dev/null || true
-  git tag -a "$TAG" -m "$TAG_MESSAGE"
-  jj git import 2>/dev/null || true
-else
-  git tag -a "$TAG" -m "$TAG_MESSAGE"
-fi
+  TAG_MESSAGE="$(git cliff --config "$CLIFF_CONFIG" --tag "$TAG" --unreleased --strip all)"
+  if [[ -z "$TAG_MESSAGE" ]]; then
+    TAG_MESSAGE="Release ${TAG}"
+  fi
+
+  echo "==> Tagging $TAG"
+  if is_jj; then
+    jj git import 2>/dev/null || true
+    git tag -a "$TAG" -m "$TAG_MESSAGE"
+    jj git import 2>/dev/null || true
+  else
+    git tag -a "$TAG" -m "$TAG_MESSAGE"
+  fi
+done
 
 echo ""
-echo "Done! Release $TAG created."
-echo "To publish, push the tag:  git push origin $TAG"
+echo "Done! Created tags: ${TAGS[*]}"
+echo "To publish, push the tags:  git push origin ${TAGS[*]}"
