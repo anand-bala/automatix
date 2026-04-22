@@ -67,6 +67,21 @@ all-docs format="html": (docs "algebraic" format) (docs "morphata" format) (docs
 # Usage: just upload-dataset <dataset_path> <hf_repo_id> [path_in_repo]
 # Example: just upload-dataset data/trivial-21k.hdf5 myuser/afa-dataset
 
+# Generate changelogs for all packages (or one: just changelog algebraic)
+[no-cd]
+changelog *package:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{ package }}" ] || [ "{{ package }}" = "all" ]; then
+        git cliff --config cliff.toml -o CHANGELOG.md
+        git cliff --config packages/algebraic/cliff.toml -o packages/algebraic/CHANGELOG.md
+        git cliff --config packages/morphata/cliff.toml -o packages/morphata/CHANGELOG.md
+    elif [ "{{ package }}" = "automatix" ]; then
+        git cliff --config cliff.toml -o CHANGELOG.md
+    else
+        git cliff --config "packages/{{ package }}/cliff.toml" -o "packages/{{ package }}/CHANGELOG.md"
+    fi
+
 [no-cd]
 upload-dataset dataset_path hf_repo_id="anand-bala/automata-embeddings" path_in_repo=(shell("basename $1", dataset_path)):
     uv run --dev --frozen hf upload "{{ hf_repo_id }}" "{{ dataset_path }}" "{{ path_in_repo }}" --type dataset

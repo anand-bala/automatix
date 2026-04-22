@@ -1,0 +1,67 @@
+# git-cliff ~ morphata package
+# Inherits preprocessors/parsers from root; scoped by path + tag.
+
+[changelog]
+body = """
+{% if version %}\
+    ## [{{ version | trim_start_matches(pat="morphata-v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+    ## [unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | striptags | trim | upper_first }}
+    {% for commit in commits %}
+        - {% if commit.breaking %}[**breaking**] {% endif %}\
+            {{ commit.message }}\
+    {% endfor %}
+{% endfor %}
+"""
+trim = true
+render_always = true
+postprocessors = []
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+require_conventional = false
+split_commits = false
+commit_preprocessors = [
+  { pattern = '^(algebraic|morphata|automatix)\((\w+!?)\):', replace = "${2}(${1}):" },
+  { pattern = '^(algebraic|morphata|automatix)!:', replace = "chore(${1})!:" },
+  { pattern = '^(algebraic|morphata|automatix): release', replace = "chore(${1}): release" },
+  { pattern = '^(algebraic|morphata|automatix): (fix|patch)\b', replace = "fix(${1}):" },
+  { pattern = '^(algebraic|morphata|automatix): (add|implement|create)\b', replace = "feat(${1}):" },
+  { pattern = '^(algebraic|morphata|automatix): (update|bump|port|adapt|minimize|upgrade)\b', replace = "refactor(${1}):" },
+  { pattern = '^(algebraic|morphata|automatix):', replace = "chore(${1}):" },
+  { pattern = '^lint:', replace = "chore:" },
+  { pattern = '^lint\(', replace = "chore(" },
+  { pattern = '^deps:', replace = "build:" },
+]
+protect_breaking_commits = true
+commit_parsers = [
+  { message = "^chore\\(.*\\): release", skip = true },
+  { message = "^feat", group = "<!-- 0 -->Features" },
+  { message = "^fix", group = "<!-- 1 -->Bug Fixes" },
+  { message = "^refactor", group = "<!-- 2 -->Refactor" },
+  { message = "^doc", group = "<!-- 3 -->Documentation" },
+  { message = "^perf", group = "<!-- 4 -->Performance" },
+  { message = "^style", group = "<!-- 5 -->Styling" },
+  { message = "^test", group = "<!-- 6 -->Testing" },
+  { message = "^build|^deps", group = "<!-- 7 -->Build" },
+  { message = "^ci", group = "<!-- 8 -->CI" },
+  { message = "^chore", group = "<!-- 9 -->Miscellaneous" },
+  { body = ".*security", group = "<!-- 10 -->Security" },
+  { message = "^revert", group = "<!-- 9 -->Revert" },
+  { message = ".*", group = "<!-- 11 -->Other" },
+]
+filter_commits = false
+fail_on_unmatched_commit = false
+link_parsers = []
+use_branch_tags = false
+topo_order = false
+topo_order_commits = true
+sort_commits = "oldest"
+recurse_submodules = false
+
+tag_pattern = "morphata-v.*"
+include_paths = ["packages/morphata/**"]
