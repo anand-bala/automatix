@@ -12,6 +12,13 @@ JAX-specific
    :members:
    :show-inheritance:
 
+PyTree Utilities
+----------------
+
+.. automodule:: algebraic.utils.pytree
+   :members:
+   :show-inheritance:
+
 Testing Utilities
 -----------------
 

@@ -258,3 +258,21 @@ def to_common_device(*xs: "AlgebraicArray | Array | Number") -> tuple["Algebraic
             results.append(to_device(x, target))
 
     return tuple(results)
+
+
+import optree  # noqa: E402
+
+pytree = optree.pytree.reexport(namespace="algebraic", module="algebraic.utils.pytree")
+pytree.__doc__ = """Re-export of ``optree`` bound to the ``"algebraic"`` namespace.
+
+Import this module instead of ``optree`` directly to get pytree utilities
+that default to the ``"algebraic"`` namespace::
+
+    from algebraic.utils import pytree
+
+    pytree.flatten(obj)                 # uses namespace="algebraic"
+    pytree.tree_map(f, obj)             # uses namespace="algebraic"
+
+"""
+
+del optree
