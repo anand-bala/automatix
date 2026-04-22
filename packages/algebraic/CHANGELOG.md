@@ -1,3 +1,16 @@
+## [1.3.2] - 2026-04-22
+
+### Features
+
+- reexport namespaced optree API as `algebraic.utils.pytree`
+- register existing AlgebraicPyTree via `algebraic.utils.pytree`
+- `algebraic.utils.torch` exports modules with easy `algebraic` interface
+- add wadler-lindig-based repr methods
+
+### Build
+
+- handle markdown headings parsing as comments in release
+- ignore typing for `wadler_lindig`
 ## [1.3.1] - 2026-04-22
 
 ### Documentation
