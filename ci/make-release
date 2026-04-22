@@ -158,10 +158,10 @@ for i in "${!TAGS[@]}"; do
   echo "==> Tagging $TAG"
   if is_jj; then
     jj git import 2>/dev/null || true
-    git tag -a "$TAG" -m "$TAG_MESSAGE"
+    git tag -a "$TAG" --cleanup=verbatim -m "$TAG_MESSAGE"
     jj git import 2>/dev/null || true
   else
-    git tag -a "$TAG" -m "$TAG_MESSAGE"
+    git tag -a "$TAG" --cleanup=verbatim -m "$TAG_MESSAGE"
   fi
 done
 
