@@ -33,6 +33,9 @@ commit_preprocessors = [
   # Normalise inverted "package(type): msg" -> "type(package): msg"
   { pattern = '^(algebraic|morphata|automatix)\((\w+!?)\):', replace = "${2}(${1}):" },
 
+  # Normalise bare "package!: release ..." -> strip the breaking marker so it can be skipped
+  { pattern = '^(algebraic|morphata|automatix)!: release', replace = "chore(${1}): release" },
+
   # Normalise bare "package!: msg" -> "chore(package)!: msg"  (breaking)
   { pattern = '^(algebraic|morphata|automatix)!:', replace = "chore(${1})!:" },
 

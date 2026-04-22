@@ -27,6 +27,7 @@ require_conventional = false
 split_commits = false
 commit_preprocessors = [
   { pattern = '^(algebraic|morphata|automatix)\((\w+!?)\):', replace = "${2}(${1}):" },
+  { pattern = '^(algebraic|morphata|automatix)!: release', replace = "chore(${1}): release" },
   { pattern = '^(algebraic|morphata|automatix)!:', replace = "chore(${1})!:" },
   { pattern = '^(algebraic|morphata|automatix): release', replace = "chore(${1}): release" },
   { pattern = '^(algebraic|morphata|automatix): (fix|patch)\b', replace = "fix(${1}):" },
