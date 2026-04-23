@@ -29,7 +29,7 @@ class AlgebraicStructure(metaclass=BetterABCMeta):
         ``"simple"``, and ``"complemented"``.
     """
 
-    properties: set[Property] = dataclasses.field(default_factory=set, kw_only=True)
+    properties: frozenset[Property] = dataclasses.field(default_factory=frozenset, kw_only=True)
 
     def is_idempotent_add(self) -> bool:
         r"""Check whether :math:`a \oplus a = a` (additive idempotence).

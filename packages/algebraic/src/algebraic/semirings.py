@@ -241,7 +241,7 @@ def tropical_semiring(*, minplus: bool = True, smooth: bool = False, temperature
         mul=multiply,
         zero=zero,
         one=one,
-        properties={"idempotent_add", "commutative", "simple"},
+        properties=frozenset({"idempotent_add", "commutative", "simple"}),
     )
 
 
