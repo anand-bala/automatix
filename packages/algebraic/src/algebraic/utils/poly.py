@@ -23,7 +23,6 @@ from algebraic.types import Array, Backend, Scalar, is_array
 def evaluate_factors(
     factors: AlgebraicArray,
     points: Array | AlgebraicArray,
-    algebra: Lattice,
     backend: str | Backend,
 ) -> Scalar:
     """Evaluate CP factors at a given point.
@@ -34,8 +33,6 @@ def evaluate_factors(
         CP factors of shape ``(R, D, N+1)``.
     points : Array or AlgebraicArray
         An array of shape ``(num_vars,)`` to replace each variable with.
-    algebra : BoundedDistributiveLattice
-        Lattice algebra governing operations.
     backend : str or Backend
         Backend to use.
 
@@ -45,6 +42,7 @@ def evaluate_factors(
         The raw evaluated scalar value.
     """
     device = factors.device
+    algebra = factors.semiring
     one_array = algebraic.ones((1,), semiring=algebra, backend=backend, device=device)
     if is_array(points):
         points_array = algebraic.array(points, semiring=algebra, backend=backend, device=device)
@@ -65,7 +63,6 @@ def evaluate_factors(
 def batched_evaluate_factors(
     factors: AlgebraicArray,
     points: Array | AlgebraicArray,
-    algebra: Lattice,
     backend: str | Backend,
 ) -> Array:
     """Evaluate a batch of CP factors at corresponding points.
@@ -88,6 +85,7 @@ def batched_evaluate_factors(
     """
     batch = factors.shape[0]
     device = factors.device
+    algebra = factors.semiring
     one_col = algebraic.ones((batch, 1), semiring=algebra, backend=backend, device=device)
     if is_array(points):
         points_array = algebraic.array(points, semiring=algebra, backend=backend, device=device)
@@ -110,7 +108,6 @@ def compose_factors(
     replacement_factors: Sequence[AlgebraicArray],
     max_rank: int,
     max_degree: int | None,
-    algebra: Lattice,
 ) -> AlgebraicArray:
     """Compose CP factors with replacement factor arrays.
 
@@ -132,6 +129,8 @@ def compose_factors(
     AlgebraicArray
         New CP factors of shape ``(R', D', N+1)``.
     """
+    algebra = factors.semiring
+    assert isinstance(algebra, Lattice)
     # shape: (N+1, R2, D2, N+1)
     q_factors = prepare_replacement_factors(replacement_factors, algebra)
 
@@ -139,7 +138,7 @@ def compose_factors(
     # result: (R, D, R2, D2, N+1)
     contracted = algebraic.einsum("pdk,kqev->pdqev", factors, q_factors)
 
-    return contraction_compression(contracted, max_rank, max_degree, algebra)
+    return contraction_compression(contracted, max_rank, max_degree)
 
 
 def prepare_replacement_factors(replacement_factors: Sequence[AlgebraicArray], algebra: Lattice) -> AlgebraicArray:
@@ -160,7 +159,10 @@ def prepare_replacement_factors(replacement_factors: Sequence[AlgebraicArray], a
         Index i+1: replacement for variable ``x_i``.
     """
     target_rank, target_degree, n_plus_1 = tuple(
-        map(max, zip(*((q.shape[0], q.shape[1], q.shape[2]) for q in replacement_factors)))
+        map(  # pyrefly: ignore[bad-specialization]
+            max,
+            zip(*((q.shape[0], q.shape[1], q.shape[2]) for q in replacement_factors)),
+        )
     )
     backend = Backend.from_array(replacement_factors[0].data)
     device = replacement_factors[0].device
@@ -172,11 +174,9 @@ def prepare_replacement_factors(replacement_factors: Sequence[AlgebraicArray], a
         one_factors_base,
         max_rank=target_rank,
         max_degree=target_degree,
-        algebra=algebra,
     )
     new_replacements = algebraic.stack(
-        [one_factors]
-        + [pad_upto(q, max_rank=target_rank, max_degree=target_degree, algebra=algebra) for q in replacement_factors]
+        [one_factors] + [pad_upto(q, max_rank=target_rank, max_degree=target_degree) for q in replacement_factors]
     )
 
     assert new_replacements.shape == (n_plus_1, target_rank, target_degree, n_plus_1)
@@ -188,7 +188,6 @@ def pad_upto(
     *,
     max_rank: int,
     max_degree: int,
-    algebra: Lattice,
 ) -> AlgebraicArray:
     """Pad rank/degree axes with identity elements up to the given maximum."""
     rank, degree, n_plus_1 = factors.shape
@@ -198,6 +197,7 @@ def pad_upto(
 
     backend = Backend.from_array(factors.data)
     device = factors.device
+    algebra = factors.semiring
 
     new_rank = max(rank, max_rank)
     new_degree = max(degree, max_degree)
@@ -221,7 +221,6 @@ def contraction_compression(
     contracted: AlgebraicArray,
     max_rank: int,
     max_degree: int | None,
-    algebra: Lattice,
 ) -> AlgebraicArray:
     """Beam search over tensor contractions.
 
@@ -243,6 +242,7 @@ def contraction_compression(
     """
     rank1, degree1, rank2, degree2, n_plus_1 = contracted.shape
     backend = Backend.from_array(contracted.data)
+    algebra = contracted.semiring
 
     # (R, D, R_max, D_max, N+1) -> (D, R*R_max, D_max, N+1)
     candidates = algebraic.permute_dims(contracted, (1, 0, 2, 3, 4))
@@ -257,7 +257,7 @@ def contraction_compression(
     for d in range(degree1):
         candidate_d = candidates[d]  # (rank1 * rank2, degree2, n+1)
         beam = _multiply_factors(beam, candidate_d)
-        beam = prune_factors(beam, max_rank, max_degree, algebra)
+        beam = prune_factors(beam, max_rank, max_degree)
 
     return beam
 
@@ -314,7 +314,7 @@ def idempotence_pruning(factors: AlgebraicArray) -> AlgebraicArray:
 # -- New pruning strategies --------------------------------------------------
 
 
-def strip_identity_slots(factors: AlgebraicArray, algebra: Lattice) -> AlgebraicArray:
+def strip_identity_slots(factors: AlgebraicArray) -> AlgebraicArray:
     """Strip trailing degree slots that are multiplicative identity across all rank components.
 
     A slot ``factors[r, k, :]`` is identity when it equals
@@ -329,8 +329,6 @@ def strip_identity_slots(factors: AlgebraicArray, algebra: Lattice) -> Algebraic
     ----------
     factors : AlgebraicArray
         CP factors of shape ``(R, D, N+1)``.
-    algebra : BoundedDistributiveLattice
-        Lattice algebra used to determine the identity element pattern.
 
     Returns
     -------
@@ -343,6 +341,7 @@ def strip_identity_slots(factors: AlgebraicArray, algebra: Lattice) -> Algebraic
 
     backend = Backend.from_array(factors.data)
     device = factors.device
+    algebra = factors.semiring
 
     # Identity row pattern: [one, zero, ..., zero] of shape (1, 1, N+1) for broadcasting
     identity_row = algebraic.zeros((1, 1, n_plus_1), semiring=algebra, backend=backend, device=device)
@@ -362,7 +361,7 @@ def strip_identity_slots(factors: AlgebraicArray, algebra: Lattice) -> Algebraic
     return factors[:, :new_degree, :]
 
 
-def merge_compatible_components(factors: AlgebraicArray, algebra: Lattice) -> AlgebraicArray:
+def merge_compatible_components(factors: AlgebraicArray) -> AlgebraicArray:
     """Merge rank-1 component pairs that differ at exactly one slot.
 
     Uses distributivity: ``(common * f_j) + (common * g_j) = common * (f_j + g_j)``.
@@ -374,8 +373,6 @@ def merge_compatible_components(factors: AlgebraicArray, algebra: Lattice) -> Al
     ----------
     factors : AlgebraicArray
         CP factors of shape ``(R, D, N+1)``.
-    algebra : BoundedDistributiveLattice
-        Lattice algebra governing operations.
 
     Returns
     -------
@@ -447,7 +444,6 @@ def merge_compatible_components(factors: AlgebraicArray, algebra: Lattice) -> Al
 
 def _component_to_monomials(
     component: AlgebraicArray,
-    algebra: Lattice,
     num_vars: int,
     backend: str | Backend,
 ) -> dict[frozenbitarray, AlgebraicArray]:
@@ -470,6 +466,7 @@ def _component_to_monomials(
         Mapping from ``frozenbitarray`` monomial masks to coefficient ``AlgebraicArray``.
     """
     device = component.device
+    algebra = component.semiring
     zero = algebraic.zeros((), semiring=algebra, backend=backend, device=device)
     one = algebraic.ones((), semiring=algebra, backend=backend, device=device)
     degree = component.shape[0]
@@ -554,7 +551,6 @@ def _monomials_to_factors(
 
 def _pack_component(
     component: AlgebraicArray,
-    algebra: Lattice,
     max_degree: int,
 ) -> AlgebraicArray:
     """Pack a single rank-1 component's non-identity slots to the front.
@@ -580,6 +576,7 @@ def _pack_component(
     degree, n_plus_1 = component.shape
     backend = Backend.from_array(component.data)
     device = component.device
+    algebra = component.semiring
 
     identity_row = algebraic.zeros((1, n_plus_1), semiring=algebra, backend=backend, device=device)
     identity_row = identity_row.at[(0, 0)].set(algebra.one)
@@ -598,12 +595,7 @@ def _pack_component(
     return algebraic.concat(parts, axis=0)  # (max_degree, N+1)
 
 
-def reduce_degree(
-    factors: AlgebraicArray,
-    max_degree: int,
-    max_rank: int,
-    algebra: Lattice,
-) -> AlgebraicArray:
+def reduce_degree(factors: AlgebraicArray, max_degree: int, max_rank: int) -> AlgebraicArray:
     """Reduce degree by decomposing over-degree components via monomial expansion.
 
     For each component whose effective degree (number of non-identity slots)
@@ -623,8 +615,6 @@ def reduce_degree(
         Target maximum degree.
     max_rank : int
         Maximum rank for dedup/idempotence pruning after reconstruction.
-    algebra : BoundedDistributiveLattice
-        Lattice algebra governing operations.
 
     Returns
     -------
@@ -635,6 +625,8 @@ def reduce_degree(
     num_vars = n_plus_1 - 1
     backend = Backend.from_array(factors.data)
     device = factors.device
+    algebra = factors.semiring
+    assert isinstance(algebra, Lattice)
 
     if degree <= max_degree:
         return factors
@@ -657,11 +649,11 @@ def reduce_degree(
 
         if eff_degree <= max_degree:
             # Good component: pack non-identity slots to front, shape (max_degree, N+1)
-            packed = _pack_component(component, algebra, max_degree)
+            packed = _pack_component(component, max_degree)
             good_packed.append(packed[None, :, :])  # (1, max_degree, N+1)
         else:
             # Bad component: run subset-DP and merge monomials
-            comp_monomials = _component_to_monomials(component, algebra, num_vars, backend)
+            comp_monomials = _component_to_monomials(component, num_vars, backend)
             for bits, coeff in comp_monomials.items():
                 bad_monomials[bits] = (bad_monomials[bits] + coeff) if bits in bad_monomials else coeff
 
@@ -691,7 +683,6 @@ def prune_factors(
     factors: AlgebraicArray,
     max_rank: int,
     max_degree: int | None = None,
-    algebra: Lattice | None = None,
 ) -> AlgebraicArray:
     """Reduce rank/degree of CP factors via a sequence of cheap-to-expensive strategies.
 
@@ -724,8 +715,7 @@ def prune_factors(
         Pruned factors of shape ``(R', D', N+1)`` with ``R' <= max_rank``.
     """
     # 1. Strip trailing identity slots (free degree reduction)
-    if algebra is not None:
-        factors = strip_identity_slots(factors, algebra)
+    factors = strip_identity_slots(factors)
 
     # 2. Remove duplicate rank components
     factors = deduplicate_rank_dim(factors)
@@ -734,12 +724,11 @@ def prune_factors(
     factors = idempotence_pruning(factors)
 
     # 4. Merge components that differ in exactly one slot (free rank reduction)
-    if algebra is not None:
-        factors = merge_compatible_components(factors, algebra)
+    factors = merge_compatible_components(factors)
 
     # 5. Selective degree reduction (degree reduction at rank cost)
-    if max_degree is not None and algebra is not None and factors.shape[1] > max_degree:
-        factors = reduce_degree(factors, max_degree, max_rank, algebra)
+    if max_degree is not None and factors.shape[1] > max_degree:
+        factors = reduce_degree(factors, max_degree, max_rank)
         # 6. Re-apply dedup + idempotence after degree reduction
         if factors.shape[0] > 1:
             factors = deduplicate_rank_dim(factors)
@@ -780,7 +769,7 @@ def _multiply_factors(p: AlgebraicArray, q: AlgebraicArray) -> AlgebraicArray:
     return result
 
 
-def _add_factors(p: AlgebraicArray, q: AlgebraicArray, algebra: Lattice) -> AlgebraicArray:
+def _add_factors(p: AlgebraicArray, q: AlgebraicArray) -> AlgebraicArray:
     """Add by concatenating rank-1 components.
 
     For CP decomposition: ``p + q`` = sum of all components from both.
@@ -789,8 +778,8 @@ def _add_factors(p: AlgebraicArray, q: AlgebraicArray, algebra: Lattice) -> Alge
     q_rank, q_degree, _ = q.shape
     d = max(p_degree, q_degree)
 
-    a_padded = pad_upto(p, max_rank=p_rank, max_degree=d, algebra=algebra)
-    b_padded = pad_upto(q, max_rank=q_rank, max_degree=d, algebra=algebra)
+    a_padded = pad_upto(p, max_rank=p_rank, max_degree=d)
+    b_padded = pad_upto(q, max_rank=q_rank, max_degree=d)
 
     return algebraic.concat([a_padded, b_padded], axis=0)
 
@@ -798,7 +787,6 @@ def _add_factors(p: AlgebraicArray, q: AlgebraicArray, algebra: Lattice) -> Alge
 def _batched_add_factors(
     p: AlgebraicArray,
     q: AlgebraicArray,
-    algebra: Lattice,
     max_rank: int,
     max_degree: int | None,
 ) -> AlgebraicArray:
@@ -831,14 +819,14 @@ def _batched_add_factors(
     for b in range(batch):
         p_b = p[b]  # (R_p, D_p, N+1)
         q_b = q[b]  # (R_q, D_q, N+1)
-        a_padded = pad_upto(p_b, max_rank=p_rank, max_degree=d, algebra=algebra)
-        b_padded = pad_upto(q_b, max_rank=q_rank, max_degree=d, algebra=algebra)
+        a_padded = pad_upto(p_b, max_rank=p_rank, max_degree=d)
+        b_padded = pad_upto(q_b, max_rank=q_rank, max_degree=d)
         combined = algebraic.concat([a_padded, b_padded], axis=0)
-        pruned.append(prune_factors(combined, max_rank, max_degree, algebra))
+        pruned.append(prune_factors(combined, max_rank, max_degree))
 
     max_r = max(pf.shape[0] for pf in pruned)
     max_d = max(pf.shape[1] for pf in pruned)
-    padded = [pad_upto(pf, max_rank=max_r, max_degree=max_d, algebra=algebra) for pf in pruned]
+    padded = [pad_upto(pf, max_rank=max_r, max_degree=max_d) for pf in pruned]
     return algebraic.stack(padded)
 
 
@@ -872,7 +860,6 @@ def batched_contraction_compression(
     contracted: AlgebraicArray,
     max_rank: int,
     max_degree: int | None,
-    algebra: Lattice,
 ) -> AlgebraicArray:
     """Batched beam search over tensor contractions.
 
@@ -898,6 +885,7 @@ def batched_contraction_compression(
     """
     batch, rank1, degree1, rank2, degree2, n_plus_1 = contracted.shape
     backend = Backend.from_array(contracted.data)
+    algebra = contracted.semiring
 
     # (B, R, D, R_max, D_max, N+1) -> (B, D, R*R_max, D_max, N+1)
     candidates = algebraic.permute_dims(contracted, (0, 2, 1, 3, 4, 5))
@@ -914,10 +902,10 @@ def batched_contraction_compression(
         candidate_d = candidates[:, d]  # (B, R*R_max, D_max, N+1)
         beam = _batched_multiply_factors(beam, candidate_d)
 
-        pruned = [prune_factors(beam[b], max_rank, max_degree, algebra) for b in range(batch)]
+        pruned = [prune_factors(beam[b], max_rank, max_degree) for b in range(batch)]
         max_pruned_rank = max(p.shape[0] for p in pruned)
         max_pruned_degree = max(p.shape[1] for p in pruned)
-        padded = [pad_upto(p, max_rank=max_pruned_rank, max_degree=max_pruned_degree, algebra=algebra) for p in pruned]
+        padded = [pad_upto(p, max_rank=max_pruned_rank, max_degree=max_pruned_degree) for p in pruned]
         beam = algebraic.stack(padded)
 
     return beam
@@ -928,7 +916,6 @@ def batched_compose_factors(
     replacement_factors: AlgebraicArray,
     max_rank: int,
     max_degree: int | None,
-    algebra: Lattice,
 ) -> AlgebraicArray:
     """Batched composition of CP factors with prepared replacement factor arrays.
 
@@ -956,7 +943,7 @@ def batched_compose_factors(
     # Batched einsum: contract over variable axis
     # (B, R, D, N+1) x (B, N+1, R_max, D_max, N+1) -> (B, R, D, R_max, D_max, N+1)
     contracted = algebraic.einsum("bpdk,bkqev->bpdqev", factors, replacement_factors)
-    return batched_contraction_compression(contracted, max_rank, max_degree, algebra)
+    return batched_contraction_compression(contracted, max_rank, max_degree)
 
 
 # -- Weight/bias helpers -------------------------------------------------------
@@ -996,6 +983,6 @@ def _split_merged_factors(factors: AlgebraicArray) -> tuple[AlgebraicArray, Alge
         and bias has shape ``(*batch, R, D)``.
     """
     bias_col = factors[..., :1]  # (*batch, R, D, 1)
-    weights = factors[..., 1:]   # (*batch, R, D, N)
+    weights = factors[..., 1:]  # (*batch, R, D, N)
     bias = algebraic.reshape(bias_col, bias_col.shape[:-1])  # (*batch, R, D)
     return weights, bias

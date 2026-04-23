@@ -340,12 +340,10 @@ class RankDecomposition(AlgebraicPyTree):
         validate_semiring(self.factors, other.factors)
 
         if self.batch_shape:
-            new_factors = _batched_add_factors(
-                self.factors, other.factors, self.algebra, self.max_rank, self.max_degree
-            )
+            new_factors = _batched_add_factors(self.factors, other.factors, self.max_rank, self.max_degree)
         else:
-            new_factors = _add_factors(self.factors, other.factors, self.algebra)
-            new_factors = prune_factors(new_factors, self.max_rank, self.max_degree, self.algebra)
+            new_factors = _add_factors(self.factors, other.factors)
+            new_factors = prune_factors(new_factors, self.max_rank, self.max_degree)
         result = self._replace_factors(new_factors)
         return result
 
@@ -357,16 +355,16 @@ class RankDecomposition(AlgebraicPyTree):
         For batched polynomials each batch element is multiplied independently.
         """
         if self.batch_shape:
-            B = self.batch_shape[0]
+            batch_size = self.batch_shape[0]
             new_factors = _batched_multiply_factors(self.factors, other.factors)
-            pruned = [prune_factors(new_factors[b], self.max_rank, self.max_degree, self.algebra) for b in range(B)]
+            pruned = [prune_factors(new_factors[b], self.max_rank, self.max_degree) for b in range(batch_size)]
             max_r = max(pf.shape[0] for pf in pruned)
             max_d = max(pf.shape[1] for pf in pruned)
-            padded = [pad_upto(pf, max_rank=max_r, max_degree=max_d, algebra=self.algebra) for pf in pruned]
+            padded = [pad_upto(pf, max_rank=max_r, max_degree=max_d) for pf in pruned]
             new_factors = algebraic.stack(padded)
         else:
             new_factors = _multiply_factors(self.factors, other.factors)
-            new_factors = prune_factors(new_factors, self.max_rank, self.max_degree, self.algebra)
+            new_factors = prune_factors(new_factors, self.max_rank, self.max_degree)
         result = self._replace_factors(new_factors)
 
         return result
@@ -412,22 +410,19 @@ class RankDecomposition(AlgebraicPyTree):
                 f"Cannot compose a sequence of {len(replacements)} replacements for a polynomial with {self.num_vars} variables"
             )
         if self.batch_shape:
-            B = self.batch_shape[0]
+            batch_size = self.batch_shape[0]
             results: list[RankDecomposition] = []
-            for b in range(B):
+            for b in range(batch_size):
                 single_factors = self.factors[b]  # (R, D, N+1)
                 single_poly = self._replace_factors(single_factors)
-                single_replacements = [
-                    r._replace_factors(r.factors[b]) if r.batch_shape else r
-                    for r in replacements
-                ]
+                single_replacements = [r._replace_factors(r.factors[b]) if r.batch_shape else r for r in replacements]
                 results.append(single_poly.compose(single_replacements))
             max_r = max(r.factors.shape[0] for r in results)
             max_d = max(r.factors.shape[1] for r in results)
-            padded = [pad_upto(r.factors, max_rank=max_r, max_degree=max_d, algebra=self.algebra) for r in results]
+            padded = [pad_upto(r.factors, max_rank=max_r, max_degree=max_d) for r in results]
             return self._replace_factors(algebraic.stack(padded))
         replacement_factors = [r.factors for r in replacements]
-        result_factors = compose_factors(self.factors, replacement_factors, self.max_rank, self.max_degree, self.algebra)
+        result_factors = compose_factors(self.factors, replacement_factors, self.max_rank, self.max_degree)
         result = self._replace_factors(result_factors)
         return result.normalize()
 
@@ -467,8 +462,7 @@ class RankDecomposition(AlgebraicPyTree):
         """
         if self.batch_shape:
             raise ValueError(
-                "to_sparse() is not supported for batched RankDecomposition "
-                "(batch_shape != ()). Call element-wise instead."
+                "to_sparse() is not supported for batched RankDecomposition (batch_shape != ()). Call element-wise instead."
             )
         backend = Backend(self.backend)
         device = self.factors.device
@@ -890,12 +884,10 @@ class LowRankFactors(AlgebraicPyTree):
         merged_self = self.to_merged()
         merged_other = other.to_merged()
         if self.batch_shape:
-            new_factors = _batched_add_factors(
-                merged_self, merged_other, self.algebra, self.max_rank, self.max_degree
-            )
+            new_factors = _batched_add_factors(merged_self, merged_other, self.max_rank, self.max_degree)
         else:
-            new_factors = _add_factors(merged_self, merged_other, self.algebra)
-            new_factors = prune_factors(new_factors, self.max_rank, self.max_degree, self.algebra)
+            new_factors = _add_factors(merged_self, merged_other)
+            new_factors = prune_factors(new_factors, self.max_rank, self.max_degree)
         return self._replace_merged(new_factors)
 
     def __mul__(self, other: "LowRankFactors") -> "LowRankFactors":
@@ -906,16 +898,16 @@ class LowRankFactors(AlgebraicPyTree):
         merged_self = self.to_merged()
         merged_other = other.to_merged()
         if self.batch_shape:
-            B = self.batch_shape[0]
+            batch_size = self.batch_shape[0]
             new_factors = _batched_multiply_factors(merged_self, merged_other)
-            pruned = [prune_factors(new_factors[b], self.max_rank, self.max_degree, self.algebra) for b in range(B)]
+            pruned = [prune_factors(new_factors[b], self.max_rank, self.max_degree) for b in range(batch_size)]
             max_r = max(pf.shape[0] for pf in pruned)
             max_d = max(pf.shape[1] for pf in pruned)
-            padded = [pad_upto(pf, max_rank=max_r, max_degree=max_d, algebra=self.algebra) for pf in pruned]
+            padded = [pad_upto(pf, max_rank=max_r, max_degree=max_d) for pf in pruned]
             new_factors = algebraic.stack(padded)
         else:
             new_factors = _multiply_factors(merged_self, merged_other)
-            new_factors = prune_factors(new_factors, self.max_rank, self.max_degree, self.algebra)
+            new_factors = prune_factors(new_factors, self.max_rank, self.max_degree)
         return self._replace_merged(new_factors)
 
     def evaluate(self, points: Array | AlgebraicArray) -> "LowRankFactors | Array":
@@ -960,26 +952,20 @@ class LowRankFactors(AlgebraicPyTree):
                 f"Cannot compose a sequence of {len(replacements)} replacements for a polynomial with {self.num_vars} variables"
             )
         if self.batch_shape:
-            B = self.batch_shape[0]
+            batch_size = self.batch_shape[0]
             results: list[LowRankFactors] = []
-            for b in range(B):
+            for b in range(batch_size):
                 merged_b = self.to_merged()[b]  # (R, D, N+1)
                 single_poly = self._replace_merged(merged_b)
-                single_replacements = [
-                    r._replace_merged(r.to_merged()[b]) if r.batch_shape else r
-                    for r in replacements
-                ]
+                single_replacements = [r._replace_merged(r.to_merged()[b]) if r.batch_shape else r for r in replacements]
                 results.append(single_poly.compose(single_replacements))
             max_r = max(r.weights.shape[0] for r in results)
             max_d = max(r.weights.shape[1] for r in results)
-            padded = [
-                pad_upto(r.to_merged(), max_rank=max_r, max_degree=max_d, algebra=self.algebra)
-                for r in results
-            ]
+            padded = [pad_upto(r.to_merged(), max_rank=max_r, max_degree=max_d) for r in results]
             return self._replace_merged(algebraic.stack(padded))
         merged_self = self.to_merged()
         replacement_merged = [r.to_merged() for r in replacements]
-        result_factors = compose_factors(merged_self, replacement_merged, self.max_rank, self.max_degree, self.algebra)
+        result_factors = compose_factors(merged_self, replacement_merged, self.max_rank, self.max_degree)
         result = self._replace_merged(result_factors)
         return result.normalize()
 
