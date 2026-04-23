@@ -63,9 +63,7 @@ def assert_poly_equivalent(
         point = np.array([algebra.one if b else algebra.zero for b in bits])
         actual_val = actual.evaluate(point)
         expected_val = expected.evaluate(point)
-        a_scalar = np.asarray(actual_val.factors.data[0, 0, 0]).flat[0]
-        e_scalar = np.asarray(expected_val.factors.data[0, 0, 0]).flat[0]
-        np.testing.assert_allclose(a_scalar, e_scalar, err_msg=f"Mismatch at point {bits}")
+        assert_close(actual_val, expected_val)
 
 
 @dataclass
@@ -86,17 +84,6 @@ class SimpleDomain(morphata.Domain[int, str]):
         return iter(self._symbols)
 
 
-def extract_scalar(poly_result: RankDecomposition, algebra: algebraic.BoundedDistributiveLattice) -> np.generic:
-    """Extract scalar value from polynomial evaluation result.
-
-    RankDecomposition.evaluate() returns a constant RankDecomposition.
-    Extract the actual scalar value from factors[0, 0, 0].
-    """
-    assert poly_result.algebra == algebra
-    val: np.generic = np.asarray(poly_result.factors.data[0, 0, 0]).flat[0]
-    return val
-
-
 class TestBoolExprConversion:
     """Test boolean expression to polynomial conversion."""
 
@@ -112,8 +99,7 @@ class TestBoolExprConversion:
 
         point = np.array([algebra.zero, algebra.zero, algebra.zero])
         result = poly.evaluate(point)
-        scalar = extract_scalar(result, algebra)
-        assert np.allclose(scalar, np.asarray(algebra.one))
+        assert_close(result, algebra.one)
 
     def test_literal_false(self, algebra: algebraic.BooleanAlgebra) -> None:
         """Literal(False) -> zero polynomial."""
@@ -122,8 +108,7 @@ class TestBoolExprConversion:
 
         point = np.array([algebra.one, algebra.one, algebra.one])
         result = poly.evaluate(point)
-        scalar = extract_scalar(result, algebra)
-        assert np.allclose(scalar, np.asarray(algebra.zero))
+        assert_close(result, algebra.zero)
 
     def test_variable(self, algebra: algebraic.BooleanAlgebra) -> None:
         """Variable(q) -> x_q polynomial."""
@@ -132,13 +117,11 @@ class TestBoolExprConversion:
 
         point = np.array([algebra.zero, algebra.zero, algebra.one, algebra.zero, algebra.zero])
         result = poly.evaluate(point)
-        scalar = extract_scalar(result, algebra)
-        assert np.allclose(scalar, np.asarray(algebra.one))
+        assert_close(result, algebra.one)
 
         point2 = np.array([algebra.zero, algebra.zero, algebra.zero, algebra.zero, algebra.zero])
         result = poly.evaluate(point2)
-        scalar = extract_scalar(result, algebra)
-        assert np.allclose(scalar, np.asarray(algebra.zero))
+        assert_close(result, algebra.zero)
 
     def test_and_operation(self, algebra: algebraic.BooleanAlgebra) -> None:
         """And(x, y) -> x * y."""
@@ -155,9 +138,8 @@ class TestBoolExprConversion:
         for point_dict, expected in test_cases:
             point = np.array([algebra.one if point_dict.get(i, False) else algebra.zero for i in range(3)])
             result = poly.evaluate(point)
-            scalar = extract_scalar(result, algebra)
             expected_val = algebra.one if expected else algebra.zero
-            assert np.allclose(scalar, np.asarray(expected_val)), f"Failed for {point_dict}"
+            assert_close(result, expected_val)
 
     def test_or_operation(self, algebra: algebraic.BooleanAlgebra) -> None:
         """Or(x, y) -> x + y."""
@@ -174,9 +156,8 @@ class TestBoolExprConversion:
         for point_dict, expected in test_cases:
             point = np.array([algebra.one if point_dict.get(i, False) else algebra.zero for i in range(3)])
             result = poly.evaluate(point)
-            scalar = extract_scalar(result, algebra)
             expected_val = algebra.one if expected else algebra.zero
-            assert np.allclose(scalar, np.asarray(expected_val)), f"Failed for {point_dict}"
+            assert_close(result, expected_val)
 
     def test_not_operator_raises_assertion(self, algebra: algebraic.BooleanAlgebra) -> None:
         """Not operator should raise ValueError."""
@@ -195,18 +176,15 @@ class TestBoolExprConversion:
 
         point = np.array([algebra.zero, algebra.zero, algebra.zero])
         result = poly.evaluate(point)
-        scalar = extract_scalar(result, algebra)
-        assert np.allclose(scalar, np.asarray(algebra.zero))
+        assert_close(result, algebra.zero)
 
         point = np.array([algebra.one, algebra.one, algebra.zero])
         result = poly.evaluate(point)
-        scalar = extract_scalar(result, algebra)
-        assert np.allclose(scalar, np.asarray(algebra.one))
+        assert_close(result, algebra.one)
 
         point = np.array([algebra.zero, algebra.zero, algebra.one])
         result = poly.evaluate(point)
-        scalar = extract_scalar(result, algebra)
-        assert np.allclose(scalar, np.asarray(algebra.one))
+        assert_close(result, algebra.one)
 
     def test_invalid_state_index(self, algebra: algebraic.BooleanAlgebra) -> None:
         """Invalid state index should raise ValueError."""

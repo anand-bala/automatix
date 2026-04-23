@@ -31,7 +31,7 @@ from algebraic.utils.testing import assert_close, make_array
 def _eval_rd(rd: RankDecomposition, point: list[float]) -> float:
     """Evaluate a RankDecomposition at a boolean-valued point, return scalar."""
     result = rd.evaluate(make_array(point, rd.backend))
-    return float(np.asarray(result.factors.data[0, 0, 0]).flat[0])
+    return float(np.asarray(result.data).flat[0])
 
 
 def _truth_table(rd: RankDecomposition) -> list[float]:
@@ -57,7 +57,7 @@ class TestStripIdentitySlots:
         prod = x0 * x1  # degree 2, no trailing identity
 
         original_degree = prod.factors.shape[1]
-        stripped = strip_identity_slots(prod.factors, bool_algebra)
+        stripped = strip_identity_slots(prod.factors)
         assert stripped.shape[1] <= original_degree
 
     def test_strips_padded_identity(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
@@ -68,11 +68,11 @@ class TestStripIdentitySlots:
         prod = x0 * x1  # degree 2
 
         # Pad to degree 7
-        padded = pad_upto(prod.factors, max_rank=1, max_degree=7, algebra=bool_algebra)
+        padded = pad_upto(prod.factors, max_rank=1, max_degree=7)
         assert padded.shape[1] == 7
 
         # Strip should recover degree 2
-        stripped = strip_identity_slots(padded, bool_algebra)
+        stripped = strip_identity_slots(padded)
         assert stripped.shape[1] == 2
 
     def test_minimum_degree_one(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
@@ -80,8 +80,8 @@ class TestStripIdentitySlots:
         num_vars = 2
         const_one = RankDecomposition.one(num_vars, bool_algebra, backend=backend)
         # Pad to degree 5 (all slots identity)
-        padded = pad_upto(const_one.factors, max_rank=1, max_degree=5, algebra=bool_algebra)
-        stripped = strip_identity_slots(padded, bool_algebra)
+        padded = pad_upto(const_one.factors, max_rank=1, max_degree=5)
+        stripped = strip_identity_slots(padded)
         assert stripped.shape[1] >= 1
 
     def test_semantics_preserved(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
@@ -92,11 +92,11 @@ class TestStripIdentitySlots:
         x2 = RankDecomposition.variable(2, num_vars, bool_algebra, backend=backend)
         poly = (x0 * x1) + x2
 
-        padded_factors = pad_upto(poly.factors, max_rank=poly.rank, max_degree=8, algebra=bool_algebra)
+        padded_factors = pad_upto(poly.factors, max_rank=poly.rank, max_degree=8)
         _padded_rd = RankDecomposition(
             padded_factors, poly.max_rank, poly.max_degree, poly.max_replacement_degree, backend=backend
         )
-        stripped_factors = strip_identity_slots(padded_factors, bool_algebra)
+        stripped_factors = strip_identity_slots(padded_factors)
         stripped_rd = RankDecomposition(
             stripped_factors, poly.max_rank, poly.max_degree, poly.max_replacement_degree, backend=backend
         )
@@ -129,7 +129,7 @@ class TestMergeCompatibleComponents:
         combined_factors = alg.concat([p1.factors, p2.factors], axis=0)
         assert combined_factors.shape[0] == 2
 
-        merged = merge_compatible_components(combined_factors, bool_algebra)
+        merged = merge_compatible_components(combined_factors)
         # After merge: rank should drop from 2 to 1
         assert merged.shape[0] == 1
 
@@ -146,7 +146,7 @@ class TestMergeCompatibleComponents:
         import algebraic.ops as alg
 
         combined = alg.concat([p.factors for p in [x0 * x1, x0 * x2]], axis=0)
-        merged_factors = merge_compatible_components(combined, bool_algebra)
+        merged_factors = merge_compatible_components(combined)
         merged_rd = RankDecomposition(
             merged_factors, original.max_rank, original.max_degree, original.max_replacement_degree, backend=backend
         )
@@ -170,7 +170,7 @@ class TestMergeCompatibleComponents:
         import algebraic.ops as alg
 
         combined = alg.concat([p1.factors, p2.factors], axis=0)
-        merged = merge_compatible_components(combined, bool_algebra)
+        merged = merge_compatible_components(combined)
         assert merged.shape[0] == 2  # rank unchanged
 
 
@@ -185,7 +185,7 @@ class TestReduceDegree:
         x1 = RankDecomposition.variable(1, num_vars, bool_algebra, backend=backend)
         prod = x0 * x1  # degree 2
 
-        result = reduce_degree(prod.factors, max_degree=2, max_rank=10, algebra=bool_algebra)
+        result = reduce_degree(prod.factors, max_degree=2, max_rank=10)
         assert result.shape == prod.factors.shape
 
     def test_reduces_padded_component(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
@@ -196,11 +196,11 @@ class TestReduceDegree:
         prod = x0 * x1  # degree 2 with 2 non-identity slots
 
         # Pad to degree 7
-        padded = pad_upto(prod.factors, max_rank=prod.rank, max_degree=7, algebra=bool_algebra)
+        padded = pad_upto(prod.factors, max_rank=prod.rank, max_degree=7)
         assert padded.shape[1] == 7
 
         # reduce_degree with max_degree=2 should pack back
-        result = reduce_degree(padded, max_degree=2, max_rank=10, algebra=bool_algebra)
+        result = reduce_degree(padded, max_degree=2, max_rank=10)
         assert result.shape[1] == 2
 
     def test_semantics_preserved_for_good_components(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
@@ -212,8 +212,8 @@ class TestReduceDegree:
         poly = (x0 * x1) + x2
 
         # Pad to degree 6
-        padded = pad_upto(poly.factors, max_rank=poly.rank, max_degree=6, algebra=bool_algebra)
-        reduced = reduce_degree(padded, max_degree=2, max_rank=10, algebra=bool_algebra)
+        padded = pad_upto(poly.factors, max_rank=poly.rank, max_degree=6)
+        reduced = reduce_degree(padded, max_degree=2, max_rank=10)
 
         padded_rd = RankDecomposition(padded, poly.max_rank, poly.max_degree, poly.max_replacement_degree, backend=backend)
         reduced_rd = RankDecomposition(reduced, poly.max_rank, poly.max_degree, poly.max_replacement_degree, backend=backend)
@@ -245,10 +245,10 @@ class TestPruneFactorsWithDegree:
         x1 = RankDecomposition.variable(1, num_vars, bool_algebra, backend=backend)
         prod = x0 * x1  # degree 2
 
-        padded = pad_upto(prod.factors, max_rank=prod.rank, max_degree=8, algebra=bool_algebra)
+        padded = pad_upto(prod.factors, max_rank=prod.rank, max_degree=8)
         assert padded.shape[1] == 8
 
-        pruned = prune_factors(padded, max_rank=10, algebra=bool_algebra)
+        pruned = prune_factors(padded, max_rank=10)
         # Strip should have removed trailing identity slots
         assert pruned.shape[1] < 8
 
@@ -262,7 +262,7 @@ class TestPruneFactorsWithDegree:
             poly = poly + v  # 4 distinct components
 
         # Prune to rank 2
-        pruned = prune_factors(poly.factors, max_rank=2, algebra=bool_algebra)
+        pruned = prune_factors(poly.factors, max_rank=2)
         assert pruned.shape[0] <= 2
 
 

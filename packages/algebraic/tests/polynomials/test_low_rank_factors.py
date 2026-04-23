@@ -40,10 +40,10 @@ class TestLowRankFactorsCreation:
         x_0 = LowRankFactors.variable(0, num_vars, bool_algebra, backend=backend)
 
         result = x_0.evaluate(xp.asarray([bool_algebra.one, bool_algebra.zero, bool_algebra.zero]))
-        assert_equal(result.bias[0, 0].data, bool_algebra.one)
+        assert_equal(result, bool_algebra.one)
 
         result = x_0.evaluate(xp.asarray([bool_algebra.zero, bool_algebra.one, bool_algebra.one]))
-        assert_equal(result.bias[0, 0].data, bool_algebra.zero)
+        assert_equal(result, bool_algebra.zero)
 
     def test_constant_creation(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
         num_vars = 3
@@ -52,10 +52,10 @@ class TestLowRankFactorsCreation:
         c = LowRankFactors.constant(bool_algebra.one, num_vars, bool_algebra, backend=backend)
 
         result = c.evaluate(xp.asarray([bool_algebra.one, bool_algebra.one, bool_algebra.one]))
-        assert_equal(result.bias[0, 0].data, bool_algebra.one)
+        assert_equal(result, bool_algebra.one)
 
         result = c.evaluate(xp.asarray([bool_algebra.zero, bool_algebra.zero, bool_algebra.zero]))
-        assert_equal(result.bias[0, 0].data, bool_algebra.one)
+        assert_equal(result, bool_algebra.one)
 
     def test_zero_one(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
         num_vars = 2
@@ -65,8 +65,8 @@ class TestLowRankFactorsCreation:
         o = LowRankFactors.one(num_vars, bool_algebra, backend=backend)
         point = xp.asarray([bool_algebra.one, bool_algebra.one])
 
-        assert_equal(z.evaluate(point).bias[0, 0].data, bool_algebra.zero)
-        assert_equal(o.evaluate(point).bias[0, 0].data, bool_algebra.one)
+        assert_equal(z.evaluate(point), bool_algebra.zero)
+        assert_equal(o.evaluate(point), bool_algebra.one)
 
 
 class TestLowRankFactorsAddition:
@@ -87,8 +87,8 @@ class TestLowRankFactorsAddition:
 
         point = xp.asarray([2.0, 3.0, 4.0])
 
-        rd_value = sum_rd.evaluate(point).factors[0, 0, 0].data
-        lr_value = sum_lr.evaluate(point).bias[0, 0].data
+        rd_value = sum_rd.evaluate(point)
+        lr_value = sum_lr.evaluate(point)
 
         assert_close(rd_value, lr_value)
 
@@ -122,13 +122,7 @@ class TestLowRankFactorsAddition:
         result_rd = sum_rd.evaluate(make_array(point, backend))
         result_lr = sum_lr.evaluate(make_array(point, backend))
 
-        rd_sparse = result_rd.to_sparse()
-        lr_to_rd = result_lr.to_rank_decomposition()
-        lr_sparse = lr_to_rd.to_sparse()
-
-        assert set(rd_sparse.keys()) == set(lr_sparse.keys())
-        for monom in rd_sparse.keys():
-            assert_close(rd_sparse[monom], lr_sparse[monom])
+        assert_close(result_rd, result_lr)
 
 
 class TestLowRankFactorsMultiplication:
@@ -154,8 +148,8 @@ class TestLowRankFactorsMultiplication:
         ]
 
         for point in test_points:
-            rd_value = prod_rd.evaluate(point).factors[0, 0, 0].data
-            lr_value = prod_lr.evaluate(point).bias[0, 0].data
+            rd_value = prod_rd.evaluate(point)
+            lr_value = prod_lr.evaluate(point)
             assert_equal(rd_value, lr_value)
 
     def test_multiply_with_constant(self, maxmin_algebra: DeMorganAlgebra, backend: str) -> None:
@@ -173,8 +167,8 @@ class TestLowRankFactorsMultiplication:
 
         test_point = xp.asarray([3.0, 2.0])
 
-        rd_value = prod_rd.evaluate(test_point).factors[0, 0, 0].data
-        lr_value = prod_lr.evaluate(test_point).bias[0, 0].data
+        rd_value = prod_rd.evaluate(test_point)
+        lr_value = prod_lr.evaluate(test_point)
 
         assert_close(rd_value, lr_value)
 
@@ -188,7 +182,7 @@ class TestLowRankFactorsMultiplication:
         product = const_one * const_zero
 
         result = product.evaluate(xp.asarray([bool_algebra.one, bool_algebra.one, bool_algebra.zero]))
-        assert_equal(result.bias[0, 0].data, bool_algebra.zero)
+        assert_equal(result, bool_algebra.zero)
 
     def test_multiply_zero_with_variable(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
         num_vars = 3
@@ -201,7 +195,7 @@ class TestLowRankFactorsMultiplication:
 
         test_point = xp.asarray([bool_algebra.one, bool_algebra.one, bool_algebra.zero])
         eval_result = result.evaluate(test_point)
-        assert_equal(eval_result.bias[0, 0].data, bool_algebra.zero)
+        assert_equal(eval_result, bool_algebra.zero)
 
 
 class TestLowRankFactorsEvaluation:
@@ -215,8 +209,8 @@ class TestLowRankFactorsEvaluation:
 
         point = make_array([2.0, 3.0, 4.0], backend)
 
-        rd_value = x_0_rd.evaluate(point).factors[0, 0, 0].data
-        lr_value = x_0_lr.evaluate(point).bias[0, 0].data
+        rd_value = x_0_rd.evaluate(point)
+        lr_value = x_0_lr.evaluate(point)
 
         assert_close(rd_value, lr_value)
 
@@ -233,8 +227,8 @@ class TestLowRankFactorsEvaluation:
 
         point = make_array([2.0, 3.0], backend)
 
-        rd_value = p_rd.evaluate(point).factors[0, 0, 0].data
-        lr_value = p_lr.evaluate(point).bias[0, 0].data
+        rd_value = p_rd.evaluate(point)
+        lr_value = p_lr.evaluate(point)
 
         assert_close(rd_value, lr_value)
 
@@ -261,8 +255,8 @@ class TestLowRankFactorsCompose:
         ]
 
         for point in test_points:
-            rd_val = result_rd.evaluate(make_array(point, backend)).factors[0, 0, 0].data
-            lr_val = result_lr.evaluate(make_array(point, backend)).bias[0, 0].data
+            rd_val = result_rd.evaluate(make_array(point, backend))
+            lr_val = result_lr.evaluate(make_array(point, backend))
             assert_equal(rd_val, lr_val)
 
     def test_compose_zero_polynomial(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
@@ -274,7 +268,7 @@ class TestLowRankFactorsCompose:
         result = zero.compose([const_one, const_one, const_one])
 
         eval_result = result.evaluate(make_array([bool_algebra.one, bool_algebra.one, bool_algebra.one], backend))
-        assert_equal(eval_result.bias[0, 0].data, bool_algebra.zero)
+        assert_equal(eval_result, bool_algebra.zero)
 
     def test_compose_product_with_zero_substitution(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
         num_vars = 3
@@ -288,7 +282,7 @@ class TestLowRankFactorsCompose:
         result = product.compose([x_0, zero, x_2])
 
         eval_result = result.evaluate(make_array([bool_algebra.one, bool_algebra.one, bool_algebra.zero], backend))
-        assert_equal(eval_result.bias[0, 0].data, bool_algebra.zero)
+        assert_equal(eval_result, bool_algebra.zero)
 
 
 class TestLowRankFactorsConversion:
@@ -306,8 +300,8 @@ class TestLowRankFactorsConversion:
         p_rd_back = p_lr.to_rank_decomposition()
 
         point = make_array([2.0, 3.0], backend)
-        rd_value = p_rd.evaluate(point).factors[0, 0, 0].data
-        rd_back_value = p_rd_back.evaluate(point).factors[0, 0, 0].data
+        rd_value = p_rd.evaluate(point)
+        rd_back_value = p_rd_back.evaluate(point)
 
         assert_close(rd_value, rd_back_value)
 
@@ -330,8 +324,8 @@ class TestLowRankFactorsConversion:
         ]
 
         for point in test_points:
-            lr_value = p_lr.evaluate(point).bias[0, 0].data
-            lr_back_value = p_lr_back.evaluate(point).bias[0, 0].data
+            lr_value = p_lr.evaluate(point)
+            lr_back_value = p_lr_back.evaluate(point)
             assert_equal(lr_value, lr_back_value)
 
     def test_merged_split_round_trip(self, maxmin_algebra: DeMorganAlgebra, backend: str) -> None:
@@ -342,10 +336,7 @@ class TestLowRankFactorsConversion:
         x_back = LowRankFactors.from_merged(merged, x.max_rank, x.max_degree, x.max_replacement_degree, backend=backend)
 
         point = make_array([1.0, 2.0, 3.0], backend)
-        assert_close(
-            x.evaluate(point).bias[0, 0].data,
-            x_back.evaluate(point).bias[0, 0].data,
-        )
+        assert_close(x.evaluate(point), x_back.evaluate(point))
 
 
 class TestLowRankFactorsEdgeCases:
@@ -356,7 +347,7 @@ class TestLowRankFactorsEdgeCases:
         zero = LowRankFactors.zero(num_vars, maxmin_algebra, backend=backend)
 
         result = zero.evaluate(make_array([1.0, 2.0], backend))
-        assert_close(result.bias[0, 0], maxmin_algebra.zero)
+        assert_close(result, maxmin_algebra.zero)
 
     def test_multilinear_idempotence(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
         num_vars = 2
@@ -364,10 +355,10 @@ class TestLowRankFactorsEdgeCases:
         p = x_0 * x_0
 
         result = p.evaluate(make_array([bool_algebra.one, bool_algebra.zero], backend))
-        assert_equal(result.bias[0, 0].data, bool_algebra.one)
+        assert_equal(result, bool_algebra.one)
 
         result = p.evaluate(make_array([bool_algebra.zero, bool_algebra.zero], backend))
-        assert_equal(result.bias[0, 0].data, bool_algebra.zero)
+        assert_equal(result, bool_algebra.zero)
 
     def test_large_num_vars(self, maxmin_algebra: DeMorganAlgebra, backend: str) -> None:
         num_vars = 15
@@ -379,13 +370,15 @@ class TestLowRankFactorsEdgeCases:
 
         point = make_array(np.ones(15) * 2.0, backend)
         result = p.evaluate(point)
-        assert_close(result.bias[0, 0].data, 2.0)
+        assert_close(result, 2.0)
 
 
 class TestLowRankFactorsJAXTransformations:
     """Test JAX transformations (pytree support)."""
 
     def test_jit_compilation(self, maxmin_algebra: DeMorganAlgebra, jax_backend: str) -> None:
+        import functools as ft
+
         import jax
 
         num_vars = 2
@@ -393,11 +386,14 @@ class TestLowRankFactorsJAXTransformations:
         x_1 = LowRankFactors.variable(1, num_vars, maxmin_algebra, backend=jax_backend)
         p = x_0 * x_1
 
-        @jax.jit
-        def eval_fn(point):
-            return LowRankFactors.evaluate(p, point).bias[0, 0].data
+        @ft.partial(jax.jit, static_argnums=1)
+        def eval_fn(factors, aux, point):
+            poly = LowRankFactors.tree_unflatten(aux, factors)
+            return poly.evaluate(point)
 
-        result = eval_fn(make_array([2.0, 3.0], jax_backend))
+        factors, aux = p.tree_flatten()
+
+        result = eval_fn(factors, aux, make_array([2.0, 3.0], jax_backend))
         assert_close(result, 2.0)
 
     def test_vmap_evaluation(self, maxmin_algebra: DeMorganAlgebra, jax_backend: str) -> None:
@@ -408,7 +404,7 @@ class TestLowRankFactorsJAXTransformations:
 
         points = make_array([[1.0, 0.0], [2.0, 0.0], [3.0, 0.0]], jax_backend)
 
-        results = jax.vmap(lambda pt: x_0.evaluate(pt).bias[0, 0].data)(points)
+        results = jax.vmap(lambda pt: x_0.evaluate(pt))(points)
 
         expected = make_array([1.0, 2.0, 3.0], jax_backend)
         assert_close(results, expected)
@@ -422,7 +418,7 @@ class TestLowRankFactorsJAXTransformations:
         p = x_0 * x_1
 
         def fn(x):
-            return LowRankFactors.evaluate(p, x).bias[0, 0].data
+            return LowRankFactors.evaluate(p, x).data
 
         grad_fn = eqx.filter_grad(fn)
         point = make_array([2.0, 3.0], jax_backend)

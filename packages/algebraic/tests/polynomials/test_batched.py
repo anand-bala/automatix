@@ -102,12 +102,11 @@ class TestRankDecompositionBatchedAdd:
 
         assert batched_result.shape == (B,)
         for b in range(B):
-            assert_equal(batched_result[b], ref_result.factors[0, 0, 0].data)
+            assert_equal(batched_result[b], ref_result)
 
     def test_add_respects_algebra(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
         """x0 OR x0 == x0 (idempotent add in boolean algebra)."""
         B, num_vars = 3, 2
-        xp = Backend(backend).get_array_namespace()
 
         x0 = _rd_variable(0, num_vars, bool_algebra, backend, batch_shape=(B,))
         s = x0 + x0
@@ -156,7 +155,7 @@ class TestRankDecompositionBatchedMul:
 
         assert batched_result.shape == (B,)
         for b in range(B):
-            assert_equal(batched_result[b], ref_result.factors[0, 0, 0].data)
+            assert_equal(batched_result[b], ref_result)
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +191,7 @@ class TestRankDecompositionBatchedEvaluate:
         x0_ref = _rd_variable(0, num_vars, bool_algebra, backend)
         for b, row in enumerate(pts):
             ref = x0_ref.evaluate(xp.asarray(row))
-            assert_equal(result[b], ref.factors[0, 0, 0].data)
+            assert_equal(result[b], ref)
 
     def test_evaluate_all_true(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
         B, num_vars = 4, 3
@@ -248,7 +247,7 @@ class TestRankDecompositionBatchedCompose:
         batch_result = composed.evaluate(pts_batch)
         ref_result = composed_ref.evaluate(xp.asarray(pts_row))
         for b in range(B):
-            assert_equal(batch_result[b], ref_result.factors[0, 0, 0].data)
+            assert_equal(batch_result[b], ref_result)
 
 
 # ---------------------------------------------------------------------------
@@ -368,7 +367,7 @@ class TestLowRankFactorsBatchedOps:
 
         assert batch_result.shape == (B,)
         for b in range(B):
-            assert_equal(batch_result[b], ref_result.bias[0, 0].data)
+            assert_equal(batch_result[b], ref_result)
 
     def test_mul_shape(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
         B, num_vars = 4, 3
@@ -397,7 +396,7 @@ class TestLowRankFactorsBatchedOps:
 
         assert batch_result.shape == (B,)
         for b in range(B):
-            assert_equal(batch_result[b], ref_result.bias[0, 0].data)
+            assert_equal(batch_result[b], ref_result)
 
     def test_evaluate_shape(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
         B, num_vars = 5, 3

@@ -26,7 +26,7 @@ class TestRankDecompositionJAX:
         alg = max_min_algebra()
         x0 = RankDecomposition.variable(0, 2, alg, backend=jax_backend)
 
-        result = jax.jit(lambda pt: x0.evaluate(pt).factors[0, 0, 0].data)(jnp.array([2.0, 3.0]))
+        result = jax.jit(lambda pt: x0.evaluate(pt))(jnp.array([2.0, 3.0]))
         assert_close(result, 2.0)
 
     def test_vmap_evaluation(self, jax_backend: str) -> None:
@@ -35,7 +35,7 @@ class TestRankDecompositionJAX:
         x0 = RankDecomposition.variable(0, 2, alg, backend=jax_backend)
 
         pts = jnp.array([[1.0, 0.0], [2.0, 0.0], [3.0, 0.0]])
-        results = jax.vmap(lambda pt: x0.evaluate(pt).factors[0, 0, 0].data)(pts)
+        results = jax.vmap(lambda pt: x0.evaluate(pt))(pts)
 
         assert_close(results, jnp.array([1.0, 2.0, 3.0]))
 
@@ -50,8 +50,8 @@ class TestRankDecompositionJAX:
 
         pt = jnp.array([3.0, 1.0])
         assert_close(
-            p.evaluate(pt).factors[0, 0, 0].data,
-            reconstructed.evaluate(pt).factors[0, 0, 0].data,
+            p.evaluate(pt),
+            reconstructed.evaluate(pt),
         )
 
 

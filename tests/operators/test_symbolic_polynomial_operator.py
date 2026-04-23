@@ -53,9 +53,7 @@ def assert_poly_equivalent(
         point = np.array([algebra.one if b else algebra.zero for b in bits])
         actual_val = actual.evaluate(point)
         expected_val = expected.evaluate(point)
-        a_scalar = np.asarray(actual_val.factors.data[0, 0, 0]).flat[0]
-        e_scalar = np.asarray(expected_val.factors.data[0, 0, 0]).flat[0]
-        np.testing.assert_allclose(a_scalar, e_scalar, err_msg=f"Mismatch at point {bits}")
+        assert_close(actual_val, expected_val)
 
 
 def extract_scalar(poly_result: RankDecomposition, algebra: algebraic.BoundedDistributiveLattice) -> np.generic:
@@ -272,9 +270,7 @@ class TestBoolExprToSymbolicPolynomial:
 
         for bits in itertools.product([False, True], repeat=num_vars):
             point = np.array([algebra.one if b else algebra.zero for b in bits])
-            rd_val = np.asarray(rd.evaluate(point).factors.data[0, 0, 0]).flat[0]
-            lrf_val = np.asarray(lrf.evaluate(point).to_rank_decomposition().factors.data[0, 0, 0]).flat[0]
-            np.testing.assert_allclose(rd_val, lrf_val, err_msg=f"Mismatch at {bits}")
+            assert_close(rd.evaluate(point), lrf.evaluate(point))
 
     def test_custom_var_order(self, algebra: algebraic.BooleanAlgebra) -> None:
         """Custom var_order still produces a polynomial equivalent to the direct path."""
@@ -540,6 +536,6 @@ class TestSymbolicPolynomialOperatorStep:
         num_vars = op.num_states
         for bits in itertools.product([False, True], repeat=num_vars):
             point = np.array([algebra.one if b else algebra.zero for b in bits])
-            step_val = np.asarray(poly_via_step.evaluate(point).factors.data[0, 0, 0]).flat[0]
-            run_val = np.asarray(poly_via_run.evaluate(point).factors.data[0, 0, 0]).flat[0]
+            step_val = poly_via_step.evaluate(point).data
+            run_val = poly_via_run.evaluate(point).data
             np.testing.assert_allclose(step_val, run_val, err_msg=f"Mismatch at {bits}")

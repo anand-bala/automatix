@@ -20,4 +20,7 @@ def backend(request: pytest.FixtureRequest) -> str:
 def jax_backend() -> str:
     """Fixture that yields 'jax', skipping if JAX is not installed."""
     pytest.importorskip("jax")
+
+    import algebraic.utils.jax  # noqa: F401
+
     return "jax"
