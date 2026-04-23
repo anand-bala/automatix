@@ -23,7 +23,7 @@ from algebraic.utils import normalize_axes, validate_semiring
 from algebraic.utils.ops import DotPlan, prefix_scan_axis, reduce_axes
 
 if typing.TYPE_CHECKING:
-    from opt_einsum.contract import OptimizeKind, _MemoryLimit  # type: ignore[import-untyped]
+    from opt_einsum.contract import OptimizeKind, _MemoryLimit
 
 
 def add(x: AlgebraicArray, y: AlgebraicArray) -> AlgebraicArray:
@@ -614,7 +614,7 @@ def einsum(
     array([[4., 1.],
            [1., 3.]], dtype=float32)
     """
-    import opt_einsum  # type: ignore[import-untyped]
+    import opt_einsum
 
     if not operands:
         raise ValueError("einsum requires at least one operand.")
