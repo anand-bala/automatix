@@ -45,8 +45,11 @@ def array(
     --------
     >>> import algebraic
     >>> sr = algebraic.semirings.tropical_semiring(minplus=True)
-    >>> algebraic.array([1.0, 2.0], semiring=sr, backend="numpy")
-    AlgebraicArray(data=array([1., 2.], dtype=float32), semiring=Semiring(...
+    >>> algebraic.array([1.0, 2.0], semiring=sr, backend="numpy")  # doctest: +NORMALIZE_WHITESPACE, +ELLIPSIS
+    AlgebraicArray(
+        data=f32[2](numpy),
+        semiring=Semiring(...)
+    )
     """
     if backend is None:
         if not is_array(data) and not is_scalar(data):
