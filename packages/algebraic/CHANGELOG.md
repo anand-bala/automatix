@@ -1,3 +1,28 @@
+## [1.3.3] - 2026-04-23
+
+### Features
+
+- add batched evaluation for rank decomposition factors
+- handled potentially batched rank decomposition tensors
+
+### Bug Fixes
+
+- AlgebraicArray doctest needs to accomodate the new pretty repr
+- make AlgebraicStructure properties hashable for PyTree-ness
+
+### Refactor
+
+- don't pass around `algebra` for the polynomial helpers
+- [**breaking**] rank decomposed polynomial `evaluate` returns AlgebraicArray
+
+### Testing
+
+- add testing for batched rank decomposition representations
+- adapt tests to handle the new `evaluate` API
+
+### Miscellaneous
+
+- move opt_einsum mypy config into global conf instead of inline
 ## [1.3.2] - 2026-04-22
 
 ### Features

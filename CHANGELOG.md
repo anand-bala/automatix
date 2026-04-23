@@ -1,3 +1,21 @@
+## [0.7.3] - 2026-04-23
+
+### Refactor
+
+- [**breaking**] rank decomposed polynomial `evaluate` returns AlgebraicArray
+
+### Testing
+
+- adapt tests to handle the new `evaluate` API
+
+### Build
+
+- handle markdown headings parsing as comments in release
+- ignore typing for `wadler_lindig`
+
+### Miscellaneous
+
+- move opt_einsum mypy config into global conf instead of inline
 ## [0.7.2] - 2026-04-22
 
 ### Documentation
