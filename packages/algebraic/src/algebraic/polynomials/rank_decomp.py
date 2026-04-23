@@ -250,8 +250,15 @@ class RankDecomposition(AlgebraicPyTree):
         batch_shape: tuple[int, ...] = (),
     ) -> Self:
         return cls.constant(
-            algebra.zero, num_vars, algebra, max_rank, max_degree, max_replacement_degree,
-            backend=backend, device=device, batch_shape=batch_shape,
+            algebra.zero,
+            num_vars,
+            algebra,
+            max_rank,
+            max_degree,
+            max_replacement_degree,
+            backend=backend,
+            device=device,
+            batch_shape=batch_shape,
         )
 
     @classmethod
@@ -268,8 +275,15 @@ class RankDecomposition(AlgebraicPyTree):
         batch_shape: tuple[int, ...] = (),
     ) -> Self:
         return cls.constant(
-            algebra.one, num_vars, algebra, max_rank, max_degree, max_replacement_degree,
-            backend=backend, device=device, batch_shape=batch_shape,
+            algebra.one,
+            num_vars,
+            algebra,
+            max_rank,
+            max_degree,
+            max_replacement_degree,
+            backend=backend,
+            device=device,
+            batch_shape=batch_shape,
         )
 
     def _var_at(self, idx: int) -> Self:
@@ -369,7 +383,7 @@ class RankDecomposition(AlgebraicPyTree):
 
         return result
 
-    def evaluate(self, points: Array | AlgebraicArray) -> "RankDecomposition | Array":
+    def evaluate(self, points: Array | AlgebraicArray) -> AlgebraicArray:
         """Evaluate polynomial at given point.
 
         Parameters
@@ -380,15 +394,12 @@ class RankDecomposition(AlgebraicPyTree):
 
         Returns
         -------
-        RankDecomposition
-            Constant polynomial after evaluation (unbatched case).
-        Array
-            Raw array of shape ``(B,)`` (batched case).
+        AlgebraicArray
+            Array of shape ``(B,)`` (batched case) or a scalar array
         """
         if self.batch_shape:
-            return batched_evaluate_factors(self.factors, points, self.algebra, self.backend)
-        result_data = evaluate_factors(self.factors, points, self.algebra, self.backend)
-        return self._make_const(result_data)
+            return batched_evaluate_factors(self.factors, points, self.backend)
+        return evaluate_factors(self.factors, points, self.backend)
 
     def compose(self, replacements: Sequence["RankDecomposition"]) -> "RankDecomposition":
         """Compose polynomial with replacement polynomials.
@@ -804,8 +815,15 @@ class LowRankFactors(AlgebraicPyTree):
         batch_shape: tuple[int, ...] = (),
     ) -> "LowRankFactors":
         return cls.constant(
-            algebra.zero, num_vars, algebra, max_rank, max_degree, max_replacement_degree,
-            backend=backend, device=device, batch_shape=batch_shape,
+            algebra.zero,
+            num_vars,
+            algebra,
+            max_rank,
+            max_degree,
+            max_replacement_degree,
+            backend=backend,
+            device=device,
+            batch_shape=batch_shape,
         )
 
     @classmethod
@@ -822,8 +840,15 @@ class LowRankFactors(AlgebraicPyTree):
         batch_shape: tuple[int, ...] = (),
     ) -> "LowRankFactors":
         return cls.constant(
-            algebra.one, num_vars, algebra, max_rank, max_degree, max_replacement_degree,
-            backend=backend, device=device, batch_shape=batch_shape,
+            algebra.one,
+            num_vars,
+            algebra,
+            max_rank,
+            max_degree,
+            max_replacement_degree,
+            backend=backend,
+            device=device,
+            batch_shape=batch_shape,
         )
 
     def _var_at(self, idx: int) -> "LowRankFactors":
@@ -910,7 +935,7 @@ class LowRankFactors(AlgebraicPyTree):
             new_factors = prune_factors(new_factors, self.max_rank, self.max_degree)
         return self._replace_merged(new_factors)
 
-    def evaluate(self, points: Array | AlgebraicArray) -> "LowRankFactors | Array":
+    def evaluate(self, points: Array | AlgebraicArray) -> AlgebraicArray:
         """Evaluate polynomial at given point.
 
         Parameters
@@ -921,16 +946,13 @@ class LowRankFactors(AlgebraicPyTree):
 
         Returns
         -------
-        LowRankFactors
-            Constant polynomial after evaluation (unbatched case).
-        Array
-            Raw array of shape ``(B,)`` (batched case).
+        AlgebraicArray
+            Array of shape ``(B,)`` (batched case) or scalar array.
         """
         merged = self.to_merged()
         if self.batch_shape:
-            return batched_evaluate_factors(merged, points, self.algebra, self.backend)
-        result_data = evaluate_factors(merged, points, self.algebra, self.backend)
-        return self._make_const(result_data)
+            return batched_evaluate_factors(merged, points, self.backend)
+        return evaluate_factors(merged, points, self.backend)
 
     def compose(self, replacements: Sequence["LowRankFactors"]) -> "LowRankFactors":
         """Compose polynomial with replacement polynomials.

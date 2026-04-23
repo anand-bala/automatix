@@ -300,12 +300,8 @@ class SymbolicPolynomialOperator:
         accepting: list[int] = list(self.accepting_states)
         point = np.array([algebra.one if i in accepting else algebra.zero for i in range(self.num_states)])
         ret = poly.evaluate(point)
-        # Both types expose to_rank_decomposition() for uniform scalar extraction.
-        rd = ret if isinstance(ret, RankDecomposition) else ret.to_rank_decomposition()
-        factors = rd.factors
-        item = factors[0, 0, 0]
-        assert len(item.shape) == 0
-        return item
+        assert len(ret.shape) == 0
+        return ret
 
     # ------------------------------------------------------------------
     # Constructors

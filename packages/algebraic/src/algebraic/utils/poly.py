@@ -20,11 +20,7 @@ from algebraic.types import Array, Backend, Scalar, is_array
 # -- Core evaluation & composition -------------------------------------------------
 
 
-def evaluate_factors(
-    factors: AlgebraicArray,
-    points: Array | AlgebraicArray,
-    backend: str | Backend,
-) -> Scalar:
+def evaluate_factors(factors: AlgebraicArray, points: Array | AlgebraicArray, backend: str | Backend) -> AlgebraicArray:
     """Evaluate CP factors at a given point.
 
     Parameters
@@ -38,8 +34,8 @@ def evaluate_factors(
 
     Returns
     -------
-    Scalar
-        The raw evaluated scalar value.
+    AlgebraicArray
+        The evaluated value with scalar (in the algebra) value.
     """
     device = factors.device
     algebra = factors.semiring
@@ -57,14 +53,14 @@ def evaluate_factors(
     # (R,) -> (): sum over rank axis
     result = algebraic.sum(degree_prod, axis=0)
 
-    return result.data
+    return result
 
 
 def batched_evaluate_factors(
     factors: AlgebraicArray,
     points: Array | AlgebraicArray,
     backend: str | Backend,
-) -> Array:
+) -> AlgebraicArray:
     """Evaluate a batch of CP factors at corresponding points.
 
     Parameters
@@ -80,8 +76,8 @@ def batched_evaluate_factors(
 
     Returns
     -------
-    Array
-        Raw evaluated array of shape ``(B,)``.
+    AlgebraicArray
+        The evaluated array of shape ``(B,)``.
     """
     batch = factors.shape[0]
     device = factors.device
@@ -100,7 +96,7 @@ def batched_evaluate_factors(
     # (B, R) -> (B,): sum over rank axis
     result = algebraic.sum(degree_prod, axis=1)
 
-    return result.data
+    return result
 
 
 def compose_factors(

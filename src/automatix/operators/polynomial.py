@@ -262,9 +262,7 @@ class PolynomialOperator:
         algebra: Lattice = self.algebra
         accepting: list[int] = list(self.accepting_states)
         point = np.array([algebra.one if i in accepting else algebra.zero for i in range(self.num_states)])
-        ret = poly.evaluate(point)
-        factors = ret.factors
-        item = factors[0, 0, 0]
+        item = poly.evaluate(point)
         assert len(item.shape) == 0
         return item
 
