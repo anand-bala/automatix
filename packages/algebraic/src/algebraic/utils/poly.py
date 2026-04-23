@@ -795,6 +795,53 @@ def _add_factors(p: AlgebraicArray, q: AlgebraicArray, algebra: Lattice) -> Alge
     return algebraic.concat([a_padded, b_padded], axis=0)
 
 
+def _batched_add_factors(
+    p: AlgebraicArray,
+    q: AlgebraicArray,
+    algebra: Lattice,
+    max_rank: int,
+    max_degree: int | None,
+) -> AlgebraicArray:
+    """Batched add by concatenating rank-1 components per batch element.
+
+    Parameters
+    ----------
+    p : AlgebraicArray
+        Shape ``[B, R_p, d_p, n+1]``.
+    q : AlgebraicArray
+        Shape ``[B, R_q, d_q, n+1]``.
+    algebra : BoundedDistributiveLattice
+        Lattice algebra governing operations.
+    max_rank : int
+        Maximum rank for pruning after concatenation.
+    max_degree : int or None
+        Maximum degree for pruning (``None`` disables degree reduction).
+
+    Returns
+    -------
+    AlgebraicArray
+        Shape ``[B, R', D', n+1]`` with each element pruned independently.
+    """
+    batch = p.shape[0]
+    p_rank, p_degree = p.shape[1], p.shape[2]
+    q_rank, q_degree = q.shape[1], q.shape[2]
+    d = max(p_degree, q_degree)
+
+    pruned: list[AlgebraicArray] = []
+    for b in range(batch):
+        p_b = p[b]  # (R_p, D_p, N+1)
+        q_b = q[b]  # (R_q, D_q, N+1)
+        a_padded = pad_upto(p_b, max_rank=p_rank, max_degree=d, algebra=algebra)
+        b_padded = pad_upto(q_b, max_rank=q_rank, max_degree=d, algebra=algebra)
+        combined = algebraic.concat([a_padded, b_padded], axis=0)
+        pruned.append(prune_factors(combined, max_rank, max_degree, algebra))
+
+    max_r = max(pf.shape[0] for pf in pruned)
+    max_d = max(pf.shape[1] for pf in pruned)
+    padded = [pad_upto(pf, max_rank=max_r, max_degree=max_d, algebra=algebra) for pf in pruned]
+    return algebraic.stack(padded)
+
+
 def _batched_multiply_factors(p: AlgebraicArray, q: AlgebraicArray) -> AlgebraicArray:
     """Batched core multiplication on raw arrays -- no simplification/compression.
 
@@ -916,38 +963,39 @@ def batched_compose_factors(
 
 
 def _merge_weights_bias(weights: AlgebraicArray, bias: AlgebraicArray) -> AlgebraicArray:
-    """Merge split weights and bias into merged factors of shape ``(R, D, N+1)``.
+    """Merge split weights and bias into merged factors of shape ``(*batch, R, D, N+1)``.
 
     Parameters
     ----------
     weights : AlgebraicArray
-        Variable factors of shape ``(R, D, N)``.
+        Variable factors of shape ``(*batch, R, D, N)``.
     bias : AlgebraicArray
-        Constant factors of shape ``(R, D)``.
+        Constant factors of shape ``(*batch, R, D)``.
 
     Returns
     -------
     AlgebraicArray
-        Merged factors of shape ``(R, D, N+1)`` with bias as column 0.
+        Merged factors of shape ``(*batch, R, D, N+1)`` with bias as the last column.
     """
     bias_col = algebraic.reshape(bias, (*bias.shape, 1))
-    return algebraic.concat([bias_col, weights], axis=2)
+    return algebraic.concat([bias_col, weights], axis=-1)
 
 
 def _split_merged_factors(factors: AlgebraicArray) -> tuple[AlgebraicArray, AlgebraicArray]:
-    """Split merged factors of shape ``(R, D, N+1)`` into weights and bias.
+    """Split merged factors of shape ``(*batch, R, D, N+1)`` into weights and bias.
 
     Parameters
     ----------
     factors : AlgebraicArray
-        Merged factors of shape ``(R, D, N+1)``.
+        Merged factors of shape ``(*batch, R, D, N+1)``.
 
     Returns
     -------
     tuple[AlgebraicArray, AlgebraicArray]
-        ``(weights, bias)`` where weights has shape ``(R, D, N)`` and bias has shape ``(R, D)``.
+        ``(weights, bias)`` where weights has shape ``(*batch, R, D, N)``
+        and bias has shape ``(*batch, R, D)``.
     """
-    bias_col = factors[:, :, :1]  # (R, D, 1)
-    weights = factors[:, :, 1:]  # (R, D, N)
-    bias = algebraic.reshape(bias_col, bias_col.shape[:2])  # (R, D)
+    bias_col = factors[..., :1]  # (*batch, R, D, 1)
+    weights = factors[..., 1:]   # (*batch, R, D, N)
+    bias = algebraic.reshape(bias_col, bias_col.shape[:-1])  # (*batch, R, D)
     return weights, bias

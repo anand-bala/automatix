@@ -15,11 +15,15 @@ from algebraic.types import AlgebraicPyTree, AnyPyTree, Array, Backend, Scalar, 
 from algebraic.utils import pytree, validate_semiring
 from algebraic.utils.poly import (
     _add_factors,
+    _batched_add_factors,
+    _batched_multiply_factors,
     _merge_weights_bias,
     _multiply_factors,
     _split_merged_factors,
+    batched_evaluate_factors,
     compose_factors,
     evaluate_factors,
+    pad_upto,
     prune_factors,
 )
 
@@ -64,7 +68,7 @@ class RankDecomposition(AlgebraicPyTree):
             backend = Backend.from_array(factors.data)
         elif isinstance(backend, str):
             backend = Backend(backend)
-        num_vars = factors.shape[2] - 1
+        num_vars = factors.shape[-1] - 1
 
         if not isinstance(factors.semiring, Lattice):
             raise ValueError(
@@ -80,15 +84,20 @@ class RankDecomposition(AlgebraicPyTree):
 
     @property
     def rank(self) -> int:
-        return self.factors.shape[0]
+        return self.factors.shape[-3]
 
     @property
     def degree(self) -> int:
-        return self.factors.shape[1]
+        return self.factors.shape[-2]
 
     @property
     def num_vars(self) -> int:
-        return self.factors.shape[2] - 1
+        return self.factors.shape[-1] - 1
+
+    @property
+    def batch_shape(self) -> tuple[int, ...]:
+        """Leading batch dimensions; ``()`` for an unbatched polynomial."""
+        return self.factors.shape[:-3]
 
     def _replace_factors(self, factors: AlgebraicArray) -> "RankDecomposition":
         """Return a new instance with the given factors, preserving other attrs."""
@@ -106,6 +115,7 @@ class RankDecomposition(AlgebraicPyTree):
         *,
         backend: str | Backend,
         device: object | None = None,
+        batch_shape: tuple[int, ...] = (),
     ) -> Self:
         r"""Create rank-1 polynomial representing variable :math:`x_i`.
 
@@ -127,6 +137,10 @@ class RankDecomposition(AlgebraicPyTree):
             Backend to use.
         device : object or None, optional
             Target device for the underlying arrays.
+        batch_shape : tuple[int, ...], optional
+            Leading batch dimensions.  When non-empty the returned factors have
+            shape ``(*batch_shape, 1, 1, num_vars+1)`` with identical values
+            across the batch axis.
 
         Returns
         -------
@@ -144,6 +158,8 @@ class RankDecomposition(AlgebraicPyTree):
         """
         factors = algebraic.zeros((1, 1, num_vars + 1), semiring=algebra, backend=backend, device=device)
         factors = factors.at[(0, 0, i + 1)].set(algebra.one)
+        if batch_shape:
+            factors = algebraic.broadcast_to(factors, (*batch_shape, 1, 1, num_vars + 1))
 
         return cls(
             factors,
@@ -165,6 +181,7 @@ class RankDecomposition(AlgebraicPyTree):
         *,
         backend: str | Backend,
         device: object | None = None,
+        batch_shape: tuple[int, ...] = (),
     ) -> Self:
         """Create a rank-1 constant polynomial.
 
@@ -186,6 +203,10 @@ class RankDecomposition(AlgebraicPyTree):
             Backend to use.
         device : object or None, optional
             Target device for the underlying arrays.
+        batch_shape : tuple[int, ...], optional
+            Leading batch dimensions.  When non-empty the returned factors have
+            shape ``(*batch_shape, 1, 1, num_vars+1)`` with identical values
+            across the batch axis.
 
         Returns
         -------
@@ -204,6 +225,8 @@ class RankDecomposition(AlgebraicPyTree):
         factors = (
             algebraic.zeros((1, 1, num_vars + 1), semiring=algebra, backend=backend, device=device).at[(0, 0, 0)].set(value)
         )
+        if batch_shape:
+            factors = algebraic.broadcast_to(factors, (*batch_shape, 1, 1, num_vars + 1))
 
         return cls(
             factors,
@@ -224,9 +247,11 @@ class RankDecomposition(AlgebraicPyTree):
         *,
         backend: str | Backend,
         device: object | None = None,
+        batch_shape: tuple[int, ...] = (),
     ) -> Self:
         return cls.constant(
-            algebra.zero, num_vars, algebra, max_rank, max_degree, max_replacement_degree, backend=backend, device=device
+            algebra.zero, num_vars, algebra, max_rank, max_degree, max_replacement_degree,
+            backend=backend, device=device, batch_shape=batch_shape,
         )
 
     @classmethod
@@ -240,9 +265,11 @@ class RankDecomposition(AlgebraicPyTree):
         *,
         backend: str | Backend,
         device: object | None = None,
+        batch_shape: tuple[int, ...] = (),
     ) -> Self:
         return cls.constant(
-            algebra.one, num_vars, algebra, max_rank, max_degree, max_replacement_degree, backend=backend, device=device
+            algebra.one, num_vars, algebra, max_rank, max_degree, max_replacement_degree,
+            backend=backend, device=device, batch_shape=batch_shape,
         )
 
     def _var_at(self, idx: int) -> Self:
@@ -277,7 +304,18 @@ class RankDecomposition(AlgebraicPyTree):
         Converts to sparse form (enumerating all monomial evaluations) and back,
         producing a canonical CP decomposition with degree <= max_degree.
         This prevents unbounded degree growth across repeated :meth:`compose` calls.
+
+        Raises
+        ------
+        ValueError
+            If called on a batched polynomial (``batch_shape != ()``).
+            Call element-wise or use :meth:`compose` which handles this internally.
         """
+        if self.batch_shape:
+            raise ValueError(
+                "normalize() is not supported for batched RankDecomposition "
+                "(batch_shape != ()). Compose handles normalization per element internally."
+            )
         if self.degree <= self.max_degree:
             return self
         sparse = self.to_sparse()
@@ -293,6 +331,7 @@ class RankDecomposition(AlgebraicPyTree):
         """Add by concatenating rank-1 components.
 
         For CP decomposition: ``p + q`` = sum of all components from both.
+        For batched polynomials each batch element is added independently.
         """
         if is_scalar(other):
             other = self._make_const(other)
@@ -300,8 +339,13 @@ class RankDecomposition(AlgebraicPyTree):
         assert other.num_vars == self.num_vars
         validate_semiring(self.factors, other.factors)
 
-        new_factors = _add_factors(self.factors, other.factors, self.algebra)
-        new_factors = prune_factors(new_factors, self.max_rank, self.max_degree, self.algebra)
+        if self.batch_shape:
+            new_factors = _batched_add_factors(
+                self.factors, other.factors, self.algebra, self.max_rank, self.max_degree
+            )
+        else:
+            new_factors = _add_factors(self.factors, other.factors, self.algebra)
+            new_factors = prune_factors(new_factors, self.max_rank, self.max_degree, self.algebra)
         result = self._replace_factors(new_factors)
         return result
 
@@ -310,26 +354,41 @@ class RankDecomposition(AlgebraicPyTree):
 
         Delegates core multiplication to ``_multiply_arrays()``, then applies
         simplification and compression.
+        For batched polynomials each batch element is multiplied independently.
         """
-        new_factors = _multiply_factors(self.factors, other.factors)
-        new_factors = prune_factors(new_factors, self.max_rank, self.max_degree, self.algebra)
+        if self.batch_shape:
+            B = self.batch_shape[0]
+            new_factors = _batched_multiply_factors(self.factors, other.factors)
+            pruned = [prune_factors(new_factors[b], self.max_rank, self.max_degree, self.algebra) for b in range(B)]
+            max_r = max(pf.shape[0] for pf in pruned)
+            max_d = max(pf.shape[1] for pf in pruned)
+            padded = [pad_upto(pf, max_rank=max_r, max_degree=max_d, algebra=self.algebra) for pf in pruned]
+            new_factors = algebraic.stack(padded)
+        else:
+            new_factors = _multiply_factors(self.factors, other.factors)
+            new_factors = prune_factors(new_factors, self.max_rank, self.max_degree, self.algebra)
         result = self._replace_factors(new_factors)
 
         return result
 
-    def evaluate(self, points: Array | AlgebraicArray) -> "RankDecomposition":
+    def evaluate(self, points: Array | AlgebraicArray) -> "RankDecomposition | Array":
         """Evaluate polynomial at given point.
 
         Parameters
         ----------
         points : Array or AlgebraicArray
-            An array of shape ``(num_vars,)`` to replace each variable with.
+            For unbatched polynomials: shape ``(num_vars,)``.
+            For batched polynomials: shape ``(B, num_vars)``.
 
         Returns
         -------
         RankDecomposition
-            Constant polynomial after evaluation.
+            Constant polynomial after evaluation (unbatched case).
+        Array
+            Raw array of shape ``(B,)`` (batched case).
         """
+        if self.batch_shape:
+            return batched_evaluate_factors(self.factors, points, self.algebra, self.backend)
         result_data = evaluate_factors(self.factors, points, self.algebra, self.backend)
         return self._make_const(result_data)
 
@@ -339,7 +398,9 @@ class RankDecomposition(AlgebraicPyTree):
         Parameters
         ----------
         replacements : Sequence[RankDecomposition]
-            Sequence of replacement polynomials, one per variable.
+            Sequence of replacement polynomials, one per variable.  For batched
+            polynomials each replacement may itself be batched ``(B, R, D, N+1)``
+            or unbatched ``(R, D, N+1)`` (the latter is broadcast across the batch).
 
         Returns
         -------
@@ -350,6 +411,21 @@ class RankDecomposition(AlgebraicPyTree):
             raise ValueError(
                 f"Cannot compose a sequence of {len(replacements)} replacements for a polynomial with {self.num_vars} variables"
             )
+        if self.batch_shape:
+            B = self.batch_shape[0]
+            results: list[RankDecomposition] = []
+            for b in range(B):
+                single_factors = self.factors[b]  # (R, D, N+1)
+                single_poly = self._replace_factors(single_factors)
+                single_replacements = [
+                    r._replace_factors(r.factors[b]) if r.batch_shape else r
+                    for r in replacements
+                ]
+                results.append(single_poly.compose(single_replacements))
+            max_r = max(r.factors.shape[0] for r in results)
+            max_d = max(r.factors.shape[1] for r in results)
+            padded = [pad_upto(r.factors, max_rank=max_r, max_degree=max_d, algebra=self.algebra) for r in results]
+            return self._replace_factors(algebraic.stack(padded))
         replacement_factors = [r.factors for r in replacements]
         result_factors = compose_factors(self.factors, replacement_factors, self.max_rank, self.max_degree, self.algebra)
         result = self._replace_factors(result_factors)
@@ -374,6 +450,12 @@ class RankDecomposition(AlgebraicPyTree):
     def to_sparse(self) -> PolyDict:
         """Convert CP to sparse via a subset DP over variable bitmasks.
 
+        Raises
+        ------
+        ValueError
+            If called on a batched polynomial (``batch_shape != ()``).
+            The ``PolyDict`` representation is not batched; call element-wise.
+
         Replaces the previous ``O((n+1)^d)`` enumeration with an
         ``O(R * D * 2^n * n)`` DP that is independent of ``degree``.
         This prevents exponential blowup when ``degree > max_degree``
@@ -383,6 +465,11 @@ class RankDecomposition(AlgebraicPyTree):
         The DP assumes idempotent variable multiplication (``x_i * x_i = x_i``),
         which holds for multilinear polynomials over bounded distributive lattices.
         """
+        if self.batch_shape:
+            raise ValueError(
+                "to_sparse() is not supported for batched RankDecomposition "
+                "(batch_shape != ()). Call element-wise instead."
+            )
         backend = Backend(self.backend)
         device = self.factors.device
         zero = algebraic.zeros((), semiring=self.algebra, backend=self.backend, device=device)
@@ -561,7 +648,7 @@ class LowRankFactors(AlgebraicPyTree):
                 f"Unsupported type for polynomial sub-algebra {type(weights.semiring)}; expected BoundedDistributiveLattice"
             )
 
-        num_vars = weights.shape[2]
+        num_vars = weights.shape[-1]
         self.weights = weights
         self.bias = bias
         self.algebra = weights.semiring
@@ -572,18 +659,23 @@ class LowRankFactors(AlgebraicPyTree):
 
     @property
     def rank(self) -> int:
-        return self.weights.shape[0]
+        return self.weights.shape[-3]
 
     @property
     def degree(self) -> int:
-        return self.weights.shape[1]
+        return self.weights.shape[-2]
 
     @property
     def num_vars(self) -> int:
-        return self.weights.shape[2]
+        return self.weights.shape[-1]
+
+    @property
+    def batch_shape(self) -> tuple[int, ...]:
+        """Leading batch dimensions; ``()`` for an unbatched polynomial."""
+        return self.weights.shape[:-3]
 
     def to_merged(self) -> AlgebraicArray:
-        """Merge weights and bias into a single factors array of shape ``(R, D, N+1)``."""
+        """Merge weights and bias into a single factors array of shape ``(*batch, R, D, N+1)``."""
         return _merge_weights_bias(self.weights, self.bias)
 
     @classmethod
@@ -617,6 +709,7 @@ class LowRankFactors(AlgebraicPyTree):
         *,
         backend: str | Backend,
         device: object | None = None,
+        batch_shape: tuple[int, ...] = (),
     ) -> "LowRankFactors":
         r"""Create rank-1 polynomial representing variable :math:`x_i`.
 
@@ -638,6 +731,8 @@ class LowRankFactors(AlgebraicPyTree):
             Backend to use.
         device : object or None, optional
             Target device for the underlying arrays.
+        batch_shape : tuple[int, ...], optional
+            Leading batch dimensions.
 
         Returns
         -------
@@ -647,6 +742,9 @@ class LowRankFactors(AlgebraicPyTree):
         weights = algebraic.zeros((1, 1, num_vars), semiring=algebra, backend=backend, device=device)
         weights = weights.at[(0, 0, i)].set(algebra.one)
         bias = algebraic.zeros((1, 1), semiring=algebra, backend=backend, device=device)
+        if batch_shape:
+            weights = algebraic.broadcast_to(weights, (*batch_shape, 1, 1, num_vars))
+            bias = algebraic.broadcast_to(bias, (*batch_shape, 1, 1))
         return cls(weights, bias, max_rank, max_degree, max_replacement_degree, backend=backend)
 
     @classmethod
@@ -661,6 +759,7 @@ class LowRankFactors(AlgebraicPyTree):
         *,
         backend: str | Backend,
         device: object | None = None,
+        batch_shape: tuple[int, ...] = (),
     ) -> "LowRankFactors":
         """Create a rank-1 constant polynomial.
 
@@ -682,6 +781,8 @@ class LowRankFactors(AlgebraicPyTree):
             Backend to use.
         device : object or None, optional
             Target device for the underlying arrays.
+        batch_shape : tuple[int, ...], optional
+            Leading batch dimensions.
 
         Returns
         -------
@@ -690,6 +791,9 @@ class LowRankFactors(AlgebraicPyTree):
         """
         weights = algebraic.zeros((1, 1, num_vars), semiring=algebra, backend=backend, device=device)
         bias = algebraic.zeros((1, 1), semiring=algebra, backend=backend, device=device).at[(0, 0)].set(value)
+        if batch_shape:
+            weights = algebraic.broadcast_to(weights, (*batch_shape, 1, 1, num_vars))
+            bias = algebraic.broadcast_to(bias, (*batch_shape, 1, 1))
         return cls(weights, bias, max_rank, max_degree, max_replacement_degree, backend=backend)
 
     @classmethod
@@ -703,9 +807,11 @@ class LowRankFactors(AlgebraicPyTree):
         *,
         backend: str | Backend,
         device: object | None = None,
+        batch_shape: tuple[int, ...] = (),
     ) -> "LowRankFactors":
         return cls.constant(
-            algebra.zero, num_vars, algebra, max_rank, max_degree, max_replacement_degree, backend=backend, device=device
+            algebra.zero, num_vars, algebra, max_rank, max_degree, max_replacement_degree,
+            backend=backend, device=device, batch_shape=batch_shape,
         )
 
     @classmethod
@@ -719,9 +825,11 @@ class LowRankFactors(AlgebraicPyTree):
         *,
         backend: str | Backend,
         device: object | None = None,
+        batch_shape: tuple[int, ...] = (),
     ) -> "LowRankFactors":
         return cls.constant(
-            algebra.one, num_vars, algebra, max_rank, max_degree, max_replacement_degree, backend=backend, device=device
+            algebra.one, num_vars, algebra, max_rank, max_degree, max_replacement_degree,
+            backend=backend, device=device, batch_shape=batch_shape,
         )
 
     def _var_at(self, idx: int) -> "LowRankFactors":
@@ -752,14 +860,27 @@ class LowRankFactors(AlgebraicPyTree):
         """Canonicalize via truth-table round-trip, bounding degree to max_degree.
 
         Delegates to :meth:`RankDecomposition.normalize` via round-trip conversion.
+
+        Raises
+        ------
+        ValueError
+            If called on a batched polynomial (``batch_shape != ()``).
         """
+        if self.batch_shape:
+            raise ValueError(
+                "normalize() is not supported for batched LowRankFactors "
+                "(batch_shape != ()). Compose handles normalization per element internally."
+            )
         rd = self.to_rank_decomposition()
         if rd.degree <= rd.max_degree:
             return self
         return LowRankFactors.from_rank_decomposition(rd.normalize())
 
     def __add__(self, other: "LowRankFactors | Scalar") -> "LowRankFactors":
-        """Add by concatenating rank-1 components."""
+        """Add by concatenating rank-1 components.
+
+        For batched polynomials each batch element is added independently.
+        """
         if is_scalar(other):
             other = self._make_const(other)
         assert isinstance(other, LowRankFactors)
@@ -768,32 +889,54 @@ class LowRankFactors(AlgebraicPyTree):
 
         merged_self = self.to_merged()
         merged_other = other.to_merged()
-        new_factors = _add_factors(merged_self, merged_other, self.algebra)
-        new_factors = prune_factors(new_factors, self.max_rank, self.max_degree, self.algebra)
+        if self.batch_shape:
+            new_factors = _batched_add_factors(
+                merged_self, merged_other, self.algebra, self.max_rank, self.max_degree
+            )
+        else:
+            new_factors = _add_factors(merged_self, merged_other, self.algebra)
+            new_factors = prune_factors(new_factors, self.max_rank, self.max_degree, self.algebra)
         return self._replace_merged(new_factors)
 
     def __mul__(self, other: "LowRankFactors") -> "LowRankFactors":
-        """Multiply two CP-decomposed polynomials."""
+        """Multiply two CP-decomposed polynomials.
+
+        For batched polynomials each batch element is multiplied independently.
+        """
         merged_self = self.to_merged()
         merged_other = other.to_merged()
-        new_factors = _multiply_factors(merged_self, merged_other)
-        new_factors = prune_factors(new_factors, self.max_rank, self.max_degree, self.algebra)
+        if self.batch_shape:
+            B = self.batch_shape[0]
+            new_factors = _batched_multiply_factors(merged_self, merged_other)
+            pruned = [prune_factors(new_factors[b], self.max_rank, self.max_degree, self.algebra) for b in range(B)]
+            max_r = max(pf.shape[0] for pf in pruned)
+            max_d = max(pf.shape[1] for pf in pruned)
+            padded = [pad_upto(pf, max_rank=max_r, max_degree=max_d, algebra=self.algebra) for pf in pruned]
+            new_factors = algebraic.stack(padded)
+        else:
+            new_factors = _multiply_factors(merged_self, merged_other)
+            new_factors = prune_factors(new_factors, self.max_rank, self.max_degree, self.algebra)
         return self._replace_merged(new_factors)
 
-    def evaluate(self, points: Array | AlgebraicArray) -> "LowRankFactors":
+    def evaluate(self, points: Array | AlgebraicArray) -> "LowRankFactors | Array":
         """Evaluate polynomial at given point.
 
         Parameters
         ----------
         points : Array or AlgebraicArray
-            An array of shape ``(num_vars,)`` to replace each variable with.
+            For unbatched polynomials: shape ``(num_vars,)``.
+            For batched polynomials: shape ``(B, num_vars)``.
 
         Returns
         -------
         LowRankFactors
-            Constant polynomial after evaluation.
+            Constant polynomial after evaluation (unbatched case).
+        Array
+            Raw array of shape ``(B,)`` (batched case).
         """
         merged = self.to_merged()
+        if self.batch_shape:
+            return batched_evaluate_factors(merged, points, self.algebra, self.backend)
         result_data = evaluate_factors(merged, points, self.algebra, self.backend)
         return self._make_const(result_data)
 
@@ -803,7 +946,9 @@ class LowRankFactors(AlgebraicPyTree):
         Parameters
         ----------
         replacements : Sequence[LowRankFactors]
-            Sequence of replacement polynomials, one per variable.
+            Sequence of replacement polynomials, one per variable.  For batched
+            polynomials each replacement may itself be batched or unbatched
+            (the latter is broadcast across the batch).
 
         Returns
         -------
@@ -814,6 +959,24 @@ class LowRankFactors(AlgebraicPyTree):
             raise ValueError(
                 f"Cannot compose a sequence of {len(replacements)} replacements for a polynomial with {self.num_vars} variables"
             )
+        if self.batch_shape:
+            B = self.batch_shape[0]
+            results: list[LowRankFactors] = []
+            for b in range(B):
+                merged_b = self.to_merged()[b]  # (R, D, N+1)
+                single_poly = self._replace_merged(merged_b)
+                single_replacements = [
+                    r._replace_merged(r.to_merged()[b]) if r.batch_shape else r
+                    for r in replacements
+                ]
+                results.append(single_poly.compose(single_replacements))
+            max_r = max(r.weights.shape[0] for r in results)
+            max_d = max(r.weights.shape[1] for r in results)
+            padded = [
+                pad_upto(r.to_merged(), max_rank=max_r, max_degree=max_d, algebra=self.algebra)
+                for r in results
+            ]
+            return self._replace_merged(algebraic.stack(padded))
         merged_self = self.to_merged()
         replacement_merged = [r.to_merged() for r in replacements]
         result_factors = compose_factors(merged_self, replacement_merged, self.max_rank, self.max_degree, self.algebra)
