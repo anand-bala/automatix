@@ -44,9 +44,6 @@ def evaluate_factors(
     Scalar
         The raw evaluated scalar value.
     """
-    rank, d, n_plus_1 = factors.shape
-    num_vars = n_plus_1 - 1
-
     device = factors.device
     one_array = algebraic.ones((1,), semiring=algebra, backend=backend, device=device)
     if is_array(points):
@@ -55,16 +52,55 @@ def evaluate_factors(
         points_array = points
     selector = algebraic.concat([one_array, points_array])
 
-    result = algebraic.zeros((), semiring=algebra, backend=backend, device=device)
-    for r in range(rank):
-        component_value = algebraic.ones((), semiring=algebra, backend=backend, device=device)
-        for k in range(d):
-            dim_value = algebraic.zeros((), semiring=algebra, backend=backend, device=device)
-            for i in range(num_vars + 1):
-                term = factors[r, k, i] * selector[i]
-                dim_value = dim_value + term
-            component_value = component_value * dim_value
-        result = result + component_value
+    # (R, D, N+1) x (N+1,) -> (R, D): inner sum over variables
+    contracted = algebraic.einsum("rdk,k->rd", factors, selector)
+    # (R, D) -> (R,): product over degree axis
+    degree_prod = algebraic.prod(contracted, axis=1)
+    # (R,) -> (): sum over rank axis
+    result = algebraic.sum(degree_prod, axis=0)
+
+    return result.data
+
+
+def batched_evaluate_factors(
+    factors: AlgebraicArray,
+    points: Array | AlgebraicArray,
+    algebra: Lattice,
+    backend: str | Backend,
+) -> Array:
+    """Evaluate a batch of CP factors at corresponding points.
+
+    Parameters
+    ----------
+    factors : AlgebraicArray
+        Batch of CP factors of shape ``(B, R, D, N+1)``.
+    points : Array or AlgebraicArray
+        An array of shape ``(B, num_vars)`` to replace each variable with.
+    algebra : BoundedDistributiveLattice
+        Lattice algebra governing operations.
+    backend : str or Backend
+        Backend to use.
+
+    Returns
+    -------
+    Array
+        Raw evaluated array of shape ``(B,)``.
+    """
+    batch = factors.shape[0]
+    device = factors.device
+    one_col = algebraic.ones((batch, 1), semiring=algebra, backend=backend, device=device)
+    if is_array(points):
+        points_array = algebraic.array(points, semiring=algebra, backend=backend, device=device)
+    else:
+        points_array = points
+    selector = algebraic.concat([one_col, points_array], axis=1)
+
+    # (B, R, D, N+1) x (B, N+1) -> (B, R, D): inner sum over variables
+    contracted = algebraic.einsum("brdk,bk->brd", factors, selector)
+    # (B, R, D) -> (B, R): product over degree axis
+    degree_prod = algebraic.prod(contracted, axis=2)
+    # (B, R) -> (B,): sum over rank axis
+    result = algebraic.sum(degree_prod, axis=1)
 
     return result.data
 

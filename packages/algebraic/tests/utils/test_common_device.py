@@ -63,7 +63,7 @@ class TestToCommonDeviceCPU:
 
 
 # ---------------------------------------------------------------------------
-# GPU tests – skipped when no CUDA device is available
+# GPU tests - skipped when no CUDA device is available
 # ---------------------------------------------------------------------------
 
 _has_jax_gpu = False

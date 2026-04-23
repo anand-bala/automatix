@@ -32,7 +32,7 @@ class PyTreeModule(nn.Module, Generic[T]):
 
     On :meth:`forward`, the original algebraic object is reconstructed via
     ``pytree.unflatten`` so the caller gets back a fully functional
-    instance (``RankDecomposition``, ``LowRankFactors``, ``AlgebraicArray``, …)
+    instance (``RankDecomposition``, ``LowRankFactors``, ``AlgebraicArray``, ...)
     with all algebraic operations available and autograd flowing through the
     parameters.
 

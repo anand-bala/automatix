@@ -136,7 +136,7 @@ def _check_device_types_compatible(dev_a: "Device", dev_b: "Device") -> None:
         return
     if isinstance(dev_a, str) or isinstance(dev_b, str):
         return
-    # Both are concrete device objects – compare framework types.
+    # Both are concrete device objects - compare framework types.
     if type(dev_a).__module__.split(".")[0] != type(dev_b).__module__.split(".")[0]:
         raise TypeError(
             f"Cannot mix devices from different frameworks: "
@@ -184,7 +184,7 @@ def _scalar_to_array(x: Number, *, reference: "AlgebraicArray | Array") -> Array
 
 
 def to_device(x: Array, target: "Device") -> Array:
-    """Move *x* to *target*, handling cross-backend transfers (e.g. numpy → JAX GPU)."""
+    """Move *x* to *target*, handling cross-backend transfers (e.g. numpy -> JAX GPU)."""
     assert is_a_device(target)
     src_device = array_api_compat.device(x)
 
