@@ -1,6 +1,13 @@
 Quick Start
 ===========
 
+Installation
+------------
+
+.. code-block:: bash
+
+   pip install algebraic-arrays
+
 Recommended Import
 ------------------
 
