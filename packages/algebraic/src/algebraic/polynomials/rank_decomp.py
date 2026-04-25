@@ -15,16 +15,14 @@ from algebraic.types import AlgebraicPyTree, AnyPyTree, Array, Backend, Scalar, 
 from algebraic.utils import pytree, validate_semiring
 from algebraic.utils.poly import (
     _add_factors,
-    _batched_add_factors,
-    _batched_multiply_factors,
     _merge_weights_bias,
     _multiply_factors,
+    _prune_per_batch,
     _split_merged_factors,
     batched_compose_factors,
     batched_evaluate_factors,
     compose_factors,
     evaluate_factors,
-    pad_upto,
     prepare_replacement_factors,
     prune_factors,
 )
@@ -355,10 +353,10 @@ class RankDecomposition(AlgebraicPyTree):
         assert other.num_vars == self.num_vars
         validate_semiring(self.factors, other.factors)
 
+        new_factors = _add_factors(self.factors, other.factors)
         if self.batch_shape:
-            new_factors = _batched_add_factors(self.factors, other.factors, self.max_rank, self.max_degree)
+            new_factors = _prune_per_batch(new_factors, self.max_rank, self.max_degree)
         else:
-            new_factors = _add_factors(self.factors, other.factors)
             new_factors = prune_factors(new_factors, self.max_rank, self.max_degree)
         result = self._replace_factors(new_factors)
         return result
@@ -366,20 +364,14 @@ class RankDecomposition(AlgebraicPyTree):
     def __mul__(self, other: "RankDecomposition") -> "RankDecomposition":
         """Multiply two CP-decomposed polynomials.
 
-        Delegates core multiplication to ``_multiply_arrays()``, then applies
+        Delegates core multiplication to ``_multiply_factors()``, then applies
         simplification and compression.
-        For batched polynomials each batch element is multiplied independently.
+        For batched polynomials each batch element is pruned independently.
         """
+        new_factors = _multiply_factors(self.factors, other.factors)
         if self.batch_shape:
-            batch_size = self.batch_shape[0]
-            new_factors = _batched_multiply_factors(self.factors, other.factors)
-            pruned = [prune_factors(new_factors[b], self.max_rank, self.max_degree) for b in range(batch_size)]
-            max_r = max(pf.shape[0] for pf in pruned)
-            max_d = max(pf.shape[1] for pf in pruned)
-            padded = [pad_upto(pf, max_rank=max_r, max_degree=max_d) for pf in pruned]
-            new_factors = algebraic.stack(padded)
+            new_factors = _prune_per_batch(new_factors, self.max_rank, self.max_degree)
         else:
-            new_factors = _multiply_factors(self.factors, other.factors)
             new_factors = prune_factors(new_factors, self.max_rank, self.max_degree)
         result = self._replace_factors(new_factors)
 
@@ -931,30 +923,24 @@ class LowRankFactors(AlgebraicPyTree):
 
         merged_self = self.to_merged()
         merged_other = other.to_merged()
+        new_factors = _add_factors(merged_self, merged_other)
         if self.batch_shape:
-            new_factors = _batched_add_factors(merged_self, merged_other, self.max_rank, self.max_degree)
+            new_factors = _prune_per_batch(new_factors, self.max_rank, self.max_degree)
         else:
-            new_factors = _add_factors(merged_self, merged_other)
             new_factors = prune_factors(new_factors, self.max_rank, self.max_degree)
         return self._replace_merged(new_factors)
 
     def __mul__(self, other: "LowRankFactors") -> "LowRankFactors":
         """Multiply two CP-decomposed polynomials.
 
-        For batched polynomials each batch element is multiplied independently.
+        For batched polynomials each batch element is pruned independently.
         """
         merged_self = self.to_merged()
         merged_other = other.to_merged()
+        new_factors = _multiply_factors(merged_self, merged_other)
         if self.batch_shape:
-            batch_size = self.batch_shape[0]
-            new_factors = _batched_multiply_factors(merged_self, merged_other)
-            pruned = [prune_factors(new_factors[b], self.max_rank, self.max_degree) for b in range(batch_size)]
-            max_r = max(pf.shape[0] for pf in pruned)
-            max_d = max(pf.shape[1] for pf in pruned)
-            padded = [pad_upto(pf, max_rank=max_r, max_degree=max_d) for pf in pruned]
-            new_factors = algebraic.stack(padded)
+            new_factors = _prune_per_batch(new_factors, self.max_rank, self.max_degree)
         else:
-            new_factors = _multiply_factors(merged_self, merged_other)
             new_factors = prune_factors(new_factors, self.max_rank, self.max_degree)
         return self._replace_merged(new_factors)
 

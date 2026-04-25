@@ -896,114 +896,84 @@ def prune_factors(
 def _multiply_factors(p: AlgebraicArray, q: AlgebraicArray) -> AlgebraicArray:
     """Core multiplication on raw arrays -- no simplification/compression.
 
+    Works on any leading batch shape: ``p`` and ``q`` may be ``(R, D, N+1)`` or
+    ``(*batch, R, D, N+1)`` (with matching ``*batch``).
+
     Parameters
     ----------
     p : AlgebraicArray
-        Shape ``[R_p, d_p, n+1]``.
+        Shape ``(*batch, R_p, d_p, n+1)``.
     q : AlgebraicArray
-        Shape ``[R_q, d_q, n+1]``.
+        Shape ``(*batch, R_q, d_q, n+1)``.
 
     Returns
     -------
     AlgebraicArray
-        Shape ``[R_p * R_q, d_p + d_q, n+1]``.
+        Shape ``(*batch, R_p * R_q, d_p + d_q, n+1)``.
     """
-    rank_p, degree_p, n_plus_1 = p.shape
-    rank_q, degree_q, _ = q.shape
+    *batch_shape, rank_p, degree_p, n_plus_1 = p.shape
+    rank_q, degree_q = q.shape[-3], q.shape[-2]
 
-    p_expanded = algebraic.broadcast_to(p[:, None, :, :], (rank_p, rank_q, degree_p, n_plus_1))
-    q_expanded = algebraic.broadcast_to(q[None, :, :, :], (rank_p, rank_q, degree_q, n_plus_1))
+    p_expanded = algebraic.broadcast_to(p[..., :, None, :, :], (*batch_shape, rank_p, rank_q, degree_p, n_plus_1))
+    q_expanded = algebraic.broadcast_to(q[..., None, :, :, :], (*batch_shape, rank_p, rank_q, degree_q, n_plus_1))
 
-    result = algebraic.concat([p_expanded, q_expanded], axis=2)
-    result = algebraic.reshape(result, (rank_p * rank_q, degree_p + degree_q, n_plus_1))
+    result = algebraic.concat([p_expanded, q_expanded], axis=-2)
+    result = algebraic.reshape(result, (*batch_shape, rank_p * rank_q, degree_p + degree_q, n_plus_1))
     return result
 
 
 def _add_factors(p: AlgebraicArray, q: AlgebraicArray) -> AlgebraicArray:
     """Add by concatenating rank-1 components.
 
-    For CP decomposition: ``p + q`` = sum of all components from both.
+    Works on any leading batch shape.  No pruning -- callers handle that.
+
+    Parameters
+    ----------
+    p : AlgebraicArray
+        Shape ``(*batch, R_p, d_p, n+1)``.
+    q : AlgebraicArray
+        Shape ``(*batch, R_q, d_q, n+1)``.
+
+    Returns
+    -------
+    AlgebraicArray
+        Shape ``(*batch, R_p + R_q, max(d_p, d_q), n+1)``.
     """
-    p_rank, p_degree, n_plus_1 = p.shape
-    q_rank, q_degree, _ = q.shape
+    p_rank = p.shape[-3]
+    q_rank = q.shape[-3]
+    p_degree = p.shape[-2]
+    q_degree = q.shape[-2]
     d = max(p_degree, q_degree)
 
     a_padded = pad_upto(p, max_rank=p_rank, max_degree=d)
     b_padded = pad_upto(q, max_rank=q_rank, max_degree=d)
 
-    return algebraic.concat([a_padded, b_padded], axis=0)
+    return algebraic.concat([a_padded, b_padded], axis=-3)
 
 
-def _batched_add_factors(
-    p: AlgebraicArray,
-    q: AlgebraicArray,
+def _prune_per_batch(
+    factors: AlgebraicArray,
     max_rank: int,
     max_degree: int | None,
+    *,
+    atol: float = 1e-6,
+    shortcircuit: bool = False,
+    pack: bool = True,
 ) -> AlgebraicArray:
-    """Batched add by concatenating rank-1 components per batch element.
+    """Apply :func:`prune_factors` to each batch element of ``(B, R, D, N+1)``.
 
-    Parameters
-    ----------
-    p : AlgebraicArray
-        Shape ``[B, R_p, d_p, n+1]``.
-    q : AlgebraicArray
-        Shape ``[B, R_q, d_q, n+1]``.
-    algebra : BoundedDistributiveLattice
-        Lattice algebra governing operations.
-    max_rank : int
-        Maximum rank for pruning after concatenation.
-    max_degree : int or None
-        Maximum degree for pruning (``None`` disables degree reduction).
-
-    Returns
-    -------
-    AlgebraicArray
-        Shape ``[B, R', D', n+1]`` with each element pruned independently.
+    The smart prune passes (dedup / idempotence / merge / reduce_degree) all
+    produce ragged ranks per batch element, so the loop is unavoidable.  Each
+    pruned result is padded back to a common ``(B, R', D', N+1)`` shape.
     """
-    batch = p.shape[0]
-    p_rank, p_degree = p.shape[1], p.shape[2]
-    q_rank, q_degree = q.shape[1], q.shape[2]
-    d = max(p_degree, q_degree)
-
-    pruned: list[AlgebraicArray] = []
-    for b in range(batch):
-        p_b = p[b]  # (R_p, D_p, N+1)
-        q_b = q[b]  # (R_q, D_q, N+1)
-        a_padded = pad_upto(p_b, max_rank=p_rank, max_degree=d)
-        b_padded = pad_upto(q_b, max_rank=q_rank, max_degree=d)
-        combined = algebraic.concat([a_padded, b_padded], axis=0)
-        pruned.append(prune_factors(combined, max_rank, max_degree))
-
+    batch = factors.shape[0]
+    pruned = [
+        prune_factors(factors[b], max_rank, max_degree, atol=atol, shortcircuit=shortcircuit, pack=pack) for b in range(batch)
+    ]
     max_r = max(pf.shape[0] for pf in pruned)
     max_d = max(pf.shape[1] for pf in pruned)
     padded = [pad_upto(pf, max_rank=max_r, max_degree=max_d) for pf in pruned]
     return algebraic.stack(padded)
-
-
-def _batched_multiply_factors(p: AlgebraicArray, q: AlgebraicArray) -> AlgebraicArray:
-    """Batched core multiplication on raw arrays -- no simplification/compression.
-
-    Parameters
-    ----------
-    p : AlgebraicArray
-        Shape ``[B, R_p, d_p, n+1]``.
-    q : AlgebraicArray
-        Shape ``[B, R_q, d_q, n+1]``.
-
-    Returns
-    -------
-    AlgebraicArray
-        Shape ``[B, R_p * R_q, d_p + d_q, n+1]``.
-    """
-    batch, rank_p, degree_p, n_plus_1 = p.shape
-    _, rank_q, degree_q, _ = q.shape
-
-    p_expanded = algebraic.broadcast_to(p[:, :, None, :, :], (batch, rank_p, rank_q, degree_p, n_plus_1))
-    q_expanded = algebraic.broadcast_to(q[:, None, :, :, :], (batch, rank_p, rank_q, degree_q, n_plus_1))
-
-    result = algebraic.concat([p_expanded, q_expanded], axis=3)
-    result = algebraic.reshape(result, (batch, rank_p * rank_q, degree_p + degree_q, n_plus_1))
-    return result
 
 
 def batched_prune_fast(
@@ -1089,26 +1059,16 @@ def batched_contraction_compression(
     if shortcircuit:
         beam = batched_prune_fast(beam, max_rank, max_degree, atol=atol, pack=pack)
     else:
-        pruned = [prune_factors(beam[b], max_rank, max_degree, atol=atol, shortcircuit=False, pack=pack) for b in range(batch)]
-        max_pruned_rank = max(p.shape[0] for p in pruned)
-        max_pruned_degree = max(p.shape[1] for p in pruned)
-        padded = [pad_upto(p, max_rank=max_pruned_rank, max_degree=max_pruned_degree) for p in pruned]
-        beam = algebraic.stack(padded)
+        beam = _prune_per_batch(beam, max_rank, max_degree, atol=atol, shortcircuit=False, pack=pack)
 
     for d in range(1, degree1):
         candidate_d = candidates[:, d]  # (B, R*R_max, D_max, N+1)
-        beam = _batched_multiply_factors(beam, candidate_d)
+        beam = _multiply_factors(beam, candidate_d)
 
         if shortcircuit:
             beam = batched_prune_fast(beam, max_rank, max_degree, atol=atol, pack=pack)
         else:
-            pruned = [
-                prune_factors(beam[b], max_rank, max_degree, atol=atol, shortcircuit=False, pack=pack) for b in range(batch)
-            ]
-            max_pruned_rank = max(p.shape[0] for p in pruned)
-            max_pruned_degree = max(p.shape[1] for p in pruned)
-            padded = [pad_upto(p, max_rank=max_pruned_rank, max_degree=max_pruned_degree) for p in pruned]
-            beam = algebraic.stack(padded)
+            beam = _prune_per_batch(beam, max_rank, max_degree, atol=atol, shortcircuit=False, pack=pack)
 
     return beam
 
