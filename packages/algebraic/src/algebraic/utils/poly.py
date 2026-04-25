@@ -17,6 +17,17 @@ from algebraic.array import AlgebraicArray
 from algebraic.spec import BoundedDistributiveLattice as Lattice
 from algebraic.types import Array, Backend, Scalar, is_array
 
+
+def _eq_or_close(a: AlgebraicArray, b: AlgebraicArray, atol: float) -> Array:
+    """Elementwise equality with optional tolerance.
+
+    ``atol == 0`` -> exact equality; ``atol > 0`` -> ``isclose`` with that tol.
+    """
+    if atol > 0.0:
+        return algebraic.isclose(a, b, rtol=0.0, atol=atol)
+    return algebraic.equal(a, b)
+
+
 # -- Core evaluation & composition -------------------------------------------------
 
 
@@ -282,12 +293,19 @@ def contraction_compression(
     candidates = algebraic.reshape(candidates, (degree1, rank1 * rank2, degree2, n_plus_1))
 
     device = contracted.device
-    identity = algebraic.broadcast_to(
-        algebraic.eye(1, n_plus_1, semiring=algebra, backend=backend, device=device), (1, 1, n_plus_1)
-    )
-    beam = identity
 
-    for d in range(degree1):
+    if degree1 == 0:
+        return algebraic.broadcast_to(
+            algebraic.eye(1, n_plus_1, semiring=algebra, backend=backend, device=device), (1, 1, n_plus_1)
+        )
+
+    # Initialize beam with the first candidate directly (skips an identity-multiply
+    # that would otherwise leave a leading identity slot the trailing-only
+    # ``strip_identity_slots`` could not remove).
+    beam = candidates[0]
+    beam = prune_factors(beam, max_rank, max_degree)
+
+    for d in range(1, degree1):
         candidate_d = candidates[d]  # (rank1 * rank2, degree2, n+1)
         beam = _multiply_factors(beam, candidate_d)
         beam = prune_factors(beam, max_rank, max_degree)
@@ -298,13 +316,13 @@ def contraction_compression(
 # -- Pruning utilities ----------------------------------------------------------
 
 
-def deduplicate_rank_dim(factors: AlgebraicArray) -> AlgebraicArray:
+def deduplicate_rank_dim(factors: AlgebraicArray, atol: float = 1e-6) -> AlgebraicArray:
     """Remove duplicate rank components (keep first occurrence of each)."""
     a = factors[:, None, :, :]  # (rank, 1, d, n+1)
     b = factors[None, :, :, :]  # (1, rank, d, n+1)
 
     # eq[i, j] = True iff row i equals row j
-    eq = algebraic.equal(a, b).all((2, 3))  # (rank, rank) raw bool array
+    eq = _eq_or_close(a, b, atol).all((2, 3))  # (rank, rank) raw bool array
 
     backend = Backend.from_array(factors.data)
     xp = backend.get_array_namespace()
@@ -320,14 +338,14 @@ def deduplicate_rank_dim(factors: AlgebraicArray) -> AlgebraicArray:
     return factors[keep]
 
 
-def idempotence_pruning(factors: AlgebraicArray) -> AlgebraicArray:
+def idempotence_pruning(factors: AlgebraicArray, atol: float = 1e-6) -> AlgebraicArray:
     """Remove terms dominated by lattice idempotence laws."""
     # p <= q if p + q == q  (p is dominated by q)
     a = factors[:, None, :, :]  # (rank, 1, d, n+1)
     b = factors[None, :, :, :]  # (1, rank, d, n+1)
 
     added = a + b
-    check = algebraic.equal(added, b).all((2, 3))  # check[i,j] = (a[i] <= a[j])
+    check = _eq_or_close(added, b, atol).all((2, 3))  # check[i,j] = (a[i] <= a[j])
 
     backend = Backend.from_array(factors.data)
     xp = backend.get_array_namespace()
@@ -347,7 +365,7 @@ def idempotence_pruning(factors: AlgebraicArray) -> AlgebraicArray:
 # -- New pruning strategies --------------------------------------------------
 
 
-def strip_identity_slots(factors: AlgebraicArray) -> AlgebraicArray:
+def strip_identity_slots(factors: AlgebraicArray, atol: float = 1e-6) -> AlgebraicArray:
     """Strip trailing degree slots that are multiplicative identity across all rank components.
 
     A slot ``factors[r, k, :]`` is identity when it equals
@@ -384,7 +402,7 @@ def strip_identity_slots(factors: AlgebraicArray) -> AlgebraicArray:
     new_degree = degree
     for k in range(degree - 1, 0, -1):  # stop at 1 to keep at least degree 1
         slot = factors[:, k : k + 1, :]  # (R, 1, N+1)
-        if bool(algebraic.equal(slot, identity_row).all()):
+        if bool(_eq_or_close(slot, identity_row, atol).all()):
             new_degree -= 1
         else:
             break
@@ -394,7 +412,7 @@ def strip_identity_slots(factors: AlgebraicArray) -> AlgebraicArray:
     return factors[:, :new_degree, :]
 
 
-def merge_compatible_components(factors: AlgebraicArray) -> AlgebraicArray:
+def merge_compatible_components(factors: AlgebraicArray, atol: float = 1e-6) -> AlgebraicArray:
     """Merge rank-1 component pairs that differ at exactly one slot.
 
     Uses distributivity: ``(common * f_j) + (common * g_j) = common * (f_j + g_j)``.
@@ -424,7 +442,7 @@ def merge_compatible_components(factors: AlgebraicArray) -> AlgebraicArray:
         # slot_eq[i, j, k] = True iff components i and j are identical at slot k
         a = factors[:, None, :, :]  # (R, 1, D, N+1)
         b = factors[None, :, :, :]  # (1, R, D, N+1)
-        slot_eq = algebraic.equal(a, b).all(3)  # (R, R, D) raw bool array
+        slot_eq = _eq_or_close(a, b, atol).all(3)  # (R, R, D) raw bool array
 
         # match_count[i, j] = number of matching slots
         match_count = xp.sum(slot_eq, axis=2)  # (R, R) int array
@@ -585,6 +603,7 @@ def _monomials_to_factors(
 def _pack_component(
     component: AlgebraicArray,
     max_degree: int,
+    atol: float = 1e-6,
 ) -> AlgebraicArray:
     """Pack a single rank-1 component's non-identity slots to the front.
 
@@ -617,7 +636,7 @@ def _pack_component(
     non_identity: list[AlgebraicArray] = []
     for k in range(degree):
         slot = component[k : k + 1, :]  # (1, N+1)
-        if not bool(algebraic.equal(slot, identity_row).all()):
+        if not bool(_eq_or_close(slot, identity_row, atol).all()):
             non_identity.append(slot)
             if len(non_identity) >= max_degree:
                 break  # Reached max; any extras are dropped (lossy)
@@ -628,7 +647,7 @@ def _pack_component(
     return algebraic.concat(parts, axis=0)  # (max_degree, N+1)
 
 
-def reduce_degree(factors: AlgebraicArray, max_degree: int, max_rank: int) -> AlgebraicArray:
+def reduce_degree(factors: AlgebraicArray, max_degree: int, max_rank: int, atol: float = 1e-6) -> AlgebraicArray:
     """Reduce degree by decomposing over-degree components via monomial expansion.
 
     For each component whose effective degree (number of non-identity slots)
@@ -677,12 +696,12 @@ def reduce_degree(factors: AlgebraicArray, max_degree: int, max_rank: int) -> Al
         eff_degree = 0
         for k in range(degree):
             slot = component[k : k + 1, :]  # (1, N+1)
-            if not bool(algebraic.equal(slot, identity_row).all()):
+            if not bool(_eq_or_close(slot, identity_row, atol).all()):
                 eff_degree += 1
 
         if eff_degree <= max_degree:
             # Good component: pack non-identity slots to front, shape (max_degree, N+1)
-            packed = _pack_component(component, max_degree)
+            packed = _pack_component(component, max_degree, atol)
             good_packed.append(packed[None, :, :])  # (1, max_degree, N+1)
         else:
             # Bad component: run subset-DP and merge monomials
@@ -705,9 +724,9 @@ def reduce_degree(factors: AlgebraicArray, max_degree: int, max_rank: int) -> Al
 
     # Apply dedup + idempotence pruning on combined result
     if combined.shape[0] > 1:
-        combined = deduplicate_rank_dim(combined)
+        combined = deduplicate_rank_dim(combined, atol)
     if combined.shape[0] > 1:
-        combined = idempotence_pruning(combined)
+        combined = idempotence_pruning(combined, atol)
 
     return combined
 
@@ -716,20 +735,27 @@ def prune_factors(
     factors: AlgebraicArray,
     max_rank: int,
     max_degree: int | None = None,
+    *,
+    atol: float = 1e-6,
+    shortcircuit: bool = False,
 ) -> AlgebraicArray:
     """Reduce rank/degree of CP factors via a sequence of cheap-to-expensive strategies.
 
-    Execution order:
-    1. ``strip_identity_slots`` (if *algebra* provided) -- free degree reduction
-    2. ``deduplicate_rank_dim`` -- free rank reduction
-    3. ``idempotence_pruning`` -- free rank reduction
-    4. ``merge_compatible_components`` (if *algebra* provided) -- free rank reduction
-    5. ``reduce_degree`` (if *max_degree* provided and still exceeded) -- degree reduction
-    6. Re-apply dedup + idempotence after degree reduction
-    7. Hard rank truncation ``factors[:max_rank]`` (lossy fallback)
+    When ``shortcircuit=True`` the expensive O(R^2) smart passes (dedup /
+    idempotence / merge / monomial-expansion ``reduce_degree``) are skipped in
+    favour of a fast path: ``strip_identity_slots`` followed by hard
+    rank/degree truncation.  This is the right setting for non-idempotent /
+    float-valued algebras (e.g. soft Boolean) where the equality-based passes
+    almost never fire and just waste cycles.
 
-    Backward-compatible: ``max_degree=None`` and ``algebra=None`` preserve the
-    original three-step behaviour (dedup, idempotence, truncation).
+    When ``shortcircuit=False`` (the default) the full pipeline runs:
+        1. ``strip_identity_slots`` -- free degree reduction
+        2. ``deduplicate_rank_dim`` -- free rank reduction
+        3. ``idempotence_pruning`` -- free rank reduction
+        4. ``merge_compatible_components`` -- free rank reduction
+        5. ``reduce_degree`` (if ``max_degree`` provided and still exceeded)
+        6. Re-apply dedup + idempotence after degree reduction
+        7. Hard rank truncation ``factors[:max_rank]`` (lossy fallback)
 
     Parameters
     ----------
@@ -739,34 +765,48 @@ def prune_factors(
         Maximum rank for the output.
     max_degree : int or None, optional
         Maximum degree for the output (``None`` disables degree reduction).
-    algebra : BoundedDistributiveLattice or None, optional
-        Lattice algebra; required for the identity-based strategies.
+    atol : float, optional
+        Tolerance for equality checks in the smart passes (only used when
+        ``shortcircuit=False``).  ``0`` = exact equality.
+    shortcircuit : bool, optional
+        When ``True`` (default), skip O(R^2) smart passes and only do
+        ``strip_identity_slots`` + hard truncation.  When ``False`` run the
+        full smart pipeline using ``atol`` for equality.
 
     Returns
     -------
     AlgebraicArray
         Pruned factors of shape ``(R', D', N+1)`` with ``R' <= max_rank``.
     """
+    if shortcircuit:
+        # Fast path: trim trailing identity slots, then hard truncate.
+        factors = strip_identity_slots(factors, atol)
+        if max_degree is not None and factors.shape[1] > max_degree:
+            factors = factors[:, :max_degree, :]
+        if factors.shape[0] > max_rank:
+            factors = factors[:max_rank]
+        return factors
+
     # 1. Strip trailing identity slots (free degree reduction)
-    factors = strip_identity_slots(factors)
+    factors = strip_identity_slots(factors, atol)
 
     # 2. Remove duplicate rank components
-    factors = deduplicate_rank_dim(factors)
+    factors = deduplicate_rank_dim(factors, atol)
 
     # 3. Remove lattice-dominated components
-    factors = idempotence_pruning(factors)
+    factors = idempotence_pruning(factors, atol)
 
     # 4. Merge components that differ in exactly one slot (free rank reduction)
-    factors = merge_compatible_components(factors)
+    factors = merge_compatible_components(factors, atol)
 
     # 5. Selective degree reduction (degree reduction at rank cost)
     if max_degree is not None and factors.shape[1] > max_degree:
-        factors = reduce_degree(factors, max_degree, max_rank)
+        factors = reduce_degree(factors, max_degree, max_rank, atol)
         # 6. Re-apply dedup + idempotence after degree reduction
         if factors.shape[0] > 1:
-            factors = deduplicate_rank_dim(factors)
+            factors = deduplicate_rank_dim(factors, atol)
         if factors.shape[0] > 1:
-            factors = idempotence_pruning(factors)
+            factors = idempotence_pruning(factors, atol)
 
     # 7. Hard rank truncation (lossy fallback)
     factors = factors[:max_rank]
@@ -889,16 +929,71 @@ def _batched_multiply_factors(p: AlgebraicArray, q: AlgebraicArray) -> Algebraic
     return result
 
 
+def batched_strip_identity_slots(factors: AlgebraicArray, atol: float = 1e-6) -> AlgebraicArray:
+    """Vectorized ``strip_identity_slots`` over a batched ``(*batch, R, D, N+1)``.
+
+    Trims trailing degree slots that are identity for **all** batch + rank
+    elements simultaneously.
+    """
+    *batch_shape, rank, degree, n_plus_1 = factors.shape
+    if degree <= 1:
+        return factors
+
+    backend = Backend.from_array(factors.data)
+    device = factors.device
+    algebra = factors.semiring
+
+    identity_row = algebraic.zeros((n_plus_1,), semiring=algebra, backend=backend, device=device)
+    identity_row = identity_row.at[0].set(algebra.one)
+
+    new_degree = degree
+    for k in range(degree - 1, 0, -1):
+        slot = factors[..., k, :]  # (*batch, rank, N+1)
+        if bool(_eq_or_close(slot, identity_row, atol).all()):
+            new_degree -= 1
+        else:
+            break
+
+    if new_degree == degree:
+        return factors
+    return factors[..., :, :new_degree, :]
+
+
+def batched_prune_fast(
+    factors: AlgebraicArray,
+    max_rank: int,
+    max_degree: int | None = None,
+    *,
+    atol: float = 1e-6,
+) -> AlgebraicArray:
+    """Vectorized fast prune over ``(*batch, R, D, N+1)``: strip + hard truncate.
+
+    Only ``strip_identity_slots`` (vectorized over the whole batch) and hard
+    rank/degree truncation.  Skips all O(R^2) per-element passes; lossy when
+    the input has non-identity slots beyond ``max_degree`` or rank components
+    beyond ``max_rank``.
+    """
+    factors = batched_strip_identity_slots(factors, atol)
+    if max_degree is not None and factors.shape[-2] > max_degree:
+        factors = factors[..., :, :max_degree, :]
+    if factors.shape[-3] > max_rank:
+        factors = factors[..., :max_rank, :, :]
+    return factors
+
+
 def batched_contraction_compression(
     contracted: AlgebraicArray,
     max_rank: int,
     max_degree: int | None,
+    *,
+    atol: float = 1e-6,
+    shortcircuit: bool = True,
 ) -> AlgebraicArray:
     """Batched beam search over tensor contractions.
 
-    Uses batched multiplication for efficiency, then per-element pruning
-    for correctness (pruning changes rank per element via boolean indexing,
-    results are padded back to uniform shape for the next step).
+    When ``shortcircuit=True`` (default), uses :func:`batched_prune_fast`
+    (vectorized strip + hard truncation) at each beam step.  When ``False``,
+    falls back to per-batch :func:`prune_factors` (slower but smarter).
 
     Parameters
     ----------
@@ -908,8 +1003,10 @@ def batched_contraction_compression(
         Maximum rank for pruning at each beam step.
     max_degree : int or None
         Maximum degree for pruning (``None`` disables degree reduction).
-    algebra : BoundedDistributiveLattice
-        Lattice algebra governing operations.
+    atol : float, optional
+        Tolerance for equality checks; ``0`` = exact.
+    shortcircuit : bool, optional
+        When ``True`` (default), use the vectorized fast prune at each step.
 
     Returns
     -------
@@ -925,21 +1022,37 @@ def batched_contraction_compression(
     candidates = algebraic.reshape(candidates, (batch, degree1, rank1 * rank2, degree2, n_plus_1))
 
     device = contracted.device
-    identity = algebraic.broadcast_to(
-        algebraic.eye(1, n_plus_1, semiring=algebra, backend=backend, device=device),
-        (batch, 1, 1, n_plus_1),
-    )
-    beam = identity
 
-    for d in range(degree1):
-        candidate_d = candidates[:, d]  # (B, R*R_max, D_max, N+1)
-        beam = _batched_multiply_factors(beam, candidate_d)
+    if degree1 == 0:
+        return algebraic.broadcast_to(
+            algebraic.eye(1, n_plus_1, semiring=algebra, backend=backend, device=device),
+            (batch, 1, 1, n_plus_1),
+        )
 
-        pruned = [prune_factors(beam[b], max_rank, max_degree) for b in range(batch)]
+    # Initialize beam with the first candidate (skips identity-multiply; see
+    # unbatched ``contraction_compression`` for the rationale).
+    beam = candidates[:, 0]
+    if shortcircuit:
+        beam = batched_prune_fast(beam, max_rank, max_degree, atol=atol)
+    else:
+        pruned = [prune_factors(beam[b], max_rank, max_degree, atol=atol, shortcircuit=False) for b in range(batch)]
         max_pruned_rank = max(p.shape[0] for p in pruned)
         max_pruned_degree = max(p.shape[1] for p in pruned)
         padded = [pad_upto(p, max_rank=max_pruned_rank, max_degree=max_pruned_degree) for p in pruned]
         beam = algebraic.stack(padded)
+
+    for d in range(1, degree1):
+        candidate_d = candidates[:, d]  # (B, R*R_max, D_max, N+1)
+        beam = _batched_multiply_factors(beam, candidate_d)
+
+        if shortcircuit:
+            beam = batched_prune_fast(beam, max_rank, max_degree, atol=atol)
+        else:
+            pruned = [prune_factors(beam[b], max_rank, max_degree, atol=atol, shortcircuit=False) for b in range(batch)]
+            max_pruned_rank = max(p.shape[0] for p in pruned)
+            max_pruned_degree = max(p.shape[1] for p in pruned)
+            padded = [pad_upto(p, max_rank=max_pruned_rank, max_degree=max_pruned_degree) for p in pruned]
+            beam = algebraic.stack(padded)
 
     return beam
 
@@ -949,6 +1062,9 @@ def batched_compose_factors(
     replacement_factors: AlgebraicArray,
     max_rank: int,
     max_degree: int | None,
+    *,
+    atol: float = 1e-6,
+    shortcircuit: bool = True,
 ) -> AlgebraicArray:
     """Batched composition of CP factors with prepared replacement factor arrays.
 
@@ -976,7 +1092,7 @@ def batched_compose_factors(
     # Batched einsum: contract over variable axis
     # (B, R, D, N+1) x (B, N+1, R_max, D_max, N+1) -> (B, R, D, R_max, D_max, N+1)
     contracted = algebraic.einsum("bpdk,bkqev->bpdqev", factors, replacement_factors)
-    return batched_contraction_compression(contracted, max_rank, max_degree)
+    return batched_contraction_compression(contracted, max_rank, max_degree, atol=atol, shortcircuit=shortcircuit)
 
 
 # -- Weight/bias helpers -------------------------------------------------------

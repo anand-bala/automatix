@@ -329,3 +329,95 @@ All four representations support the following common operations:
 - ``cls.variable(i, ...)`` -- constructor for the :math:`i`-th variable.
 - ``cls.constant(value, ...)`` -- constructor for a constant polynomial.
 - ``cls.zero(...)`` / ``cls.one(...)`` -- additive / multiplicative identities.
+
+
+Composition: ``shortcircuit`` and ``atol`` tradeoffs
+-----------------------------------------------------
+
+``RankDecomposition.compose`` and ``LowRankFactors.compose`` accept two
+keyword arguments that control the prune step at every beam iteration of
+batched composition:
+
+.. code-block:: python
+
+   out = state.compose(replacements, atol=1e-6, shortcircuit=True)
+
+``shortcircuit`` (default ``True`` for batched compose)
+   When ``True``, each beam step uses the **vectorized fast prune**:
+   ``strip_identity_slots`` (vectorized over the whole batch) followed by
+   hard rank/degree truncation.  No ``O(R^2)`` per-element passes.
+
+   When ``False``, each beam step runs the **per-element smart prune**
+   (``deduplicate_rank_dim``, ``idempotence_pruning``,
+   ``merge_compatible_components``, and -- if degree exceeds ``max_degree``
+   -- ``reduce_degree`` via monomial expansion).  This is exact for
+   idempotent algebras when followed by hard truncation, but each batch
+   element is pruned in a Python loop with ``O(R^2)`` work per step,
+   making it dramatically slower for large batches.
+
+``atol`` (default ``1e-6``)
+   Tolerance for equality checks inside the smart-prune passes.  ``0``
+   uses exact equality (``algebraic.equal``); a positive value uses
+   ``algebraic.isclose`` with that absolute tolerance.  A non-zero
+   default is appropriate for soft / smooth Boolean algebras whose
+   values cluster near 0 or 1 but rarely match exactly due to
+   floating-point arithmetic.
+
+When the fast path is appropriate
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The fast path (``shortcircuit=True``) is the right default for
+**non-idempotent / float-valued algebras** such as the soft and smooth
+Boolean algebras.  In those settings the smart passes almost never fire
+because exact (or even tolerance-based) equality between independently
+computed floating point values is rare, so the ``O(R^2)`` work is pure
+overhead.
+
+When to use the smart prune
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use ``shortcircuit=False`` when:
+
+- the algebra is genuinely idempotent (e.g. logic Boolean, max-min)
+  *and* you want the smart passes to find real duplicates / dominated
+  components before hard truncation,
+- approximation quality matters more than throughput, or
+- the batch size is small enough that the per-element Python loop is
+  not the bottleneck.
+
+What the fast path drops (lossiness)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The fast prune is **lossy by design**.  Per beam step, after multiplying
+the beam by the next replacement candidate:
+
+1. ``strip_identity_slots`` removes only **trailing** identity slots.
+   The leading identity slot from the beam's prior state is **not**
+   removed, so degree typically grows by ``D_replacement`` per step.
+2. **Hard degree truncation** to ``max_degree`` drops the trailing
+   degree slots from every component.  Each dropped slot was a factor
+   in the rank-1 component's product, so dropping it changes the
+   component's value.  For values in :math:`[0, 1]` (soft Boolean),
+   product of fewer factors is **larger**, so degree truncation tends
+   to produce an **over-approximation**.
+3. **Hard rank truncation** to ``max_rank`` drops the trailing rank
+   components from the sum.  Dropping summands tends to produce an
+   **under-approximation**.
+
+The two effects partially cancel but the result is **not a sound
+one-sided bound** in general.  Validate empirically by sampling a few
+points and comparing fast vs.\ smart output, e.g.:
+
+.. code-block:: python
+
+   out_fast = state.compose(replacements, atol=ATOL, shortcircuit=True)
+   out_slow = state.compose(replacements, atol=ATOL, shortcircuit=False)
+   diff = (out_fast.evaluate(pts).data - out_slow.evaluate(pts).data).abs()
+   print("max drift", float(diff.max()), "mean drift", float(diff.mean()))
+
+If the empirical drift is acceptable for your use case, the fast path
+gives a major speedup (single fused operation per beam step instead of
+``B`` Python iterations × four ``O(R^2)`` passes).  If not, prefer the
+smart path or implement a more refined local compressor (see notes in
+``utils/poly.py`` on potential strategies: slot-merge by join, slot
+absorption, envelope clustering).

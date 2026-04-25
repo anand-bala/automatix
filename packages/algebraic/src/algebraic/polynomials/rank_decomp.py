@@ -403,7 +403,13 @@ class RankDecomposition(AlgebraicPyTree):
             return batched_evaluate_factors(self.factors, points, self.backend)
         return evaluate_factors(self.factors, points, self.backend)
 
-    def compose(self, replacements: Sequence["RankDecomposition"]) -> "RankDecomposition":
+    def compose(
+        self,
+        replacements: Sequence["RankDecomposition"],
+        *,
+        atol: float = 1e-6,
+        shortcircuit: bool = True,
+    ) -> "RankDecomposition":
         """Compose polynomial with replacement polynomials.
 
         Parameters
@@ -412,6 +418,14 @@ class RankDecomposition(AlgebraicPyTree):
             Sequence of replacement polynomials, one per variable.  For batched
             polynomials each replacement may itself be batched ``(B, R, D, N+1)``
             or unbatched ``(R, D, N+1)`` (the latter is broadcast across the batch).
+        atol : float, optional
+            Tolerance for equality checks in the smart prune passes.  ``0`` =
+            exact equality.  Only used when ``shortcircuit=False``.
+        shortcircuit : bool, optional
+            When ``True`` (default), use the vectorized fast prune
+            (strip identity slots + hard rank/degree truncation) at each beam
+            step.  When ``False``, run the full per-element smart prune
+            (dedup / idempotence / merge / monomial-expansion).
 
         Returns
         -------
@@ -425,7 +439,14 @@ class RankDecomposition(AlgebraicPyTree):
         if self.batch_shape:
             replacement_factors_list = [r.factors for r in replacements]
             q_factors = prepare_replacement_factors(replacement_factors_list, self.algebra, self.batch_shape)
-            result_factors = batched_compose_factors(self.factors, q_factors, self.max_rank, self.max_degree)
+            result_factors = batched_compose_factors(
+                self.factors,
+                q_factors,
+                self.max_rank,
+                self.max_degree,
+                atol=atol,
+                shortcircuit=shortcircuit,
+            )
             return self._replace_factors(result_factors)
         replacement_factors = [r.factors for r in replacements]
         result_factors = compose_factors(self.factors, replacement_factors, self.max_rank, self.max_degree)
@@ -949,7 +970,13 @@ class LowRankFactors(AlgebraicPyTree):
             return batched_evaluate_factors(merged, points, self.backend)
         return evaluate_factors(merged, points, self.backend)
 
-    def compose(self, replacements: Sequence["LowRankFactors"]) -> "LowRankFactors":
+    def compose(
+        self,
+        replacements: Sequence["LowRankFactors"],
+        *,
+        atol: float = 1e-6,
+        shortcircuit: bool = True,
+    ) -> "LowRankFactors":
         """Compose polynomial with replacement polynomials.
 
         Parameters
@@ -972,7 +999,14 @@ class LowRankFactors(AlgebraicPyTree):
             merged_self = self.to_merged()
             replacement_merged = [r.to_merged() for r in replacements]
             q_factors = prepare_replacement_factors(replacement_merged, self.algebra, self.batch_shape)
-            result_factors = batched_compose_factors(merged_self, q_factors, self.max_rank, self.max_degree)
+            result_factors = batched_compose_factors(
+                merged_self,
+                q_factors,
+                self.max_rank,
+                self.max_degree,
+                atol=atol,
+                shortcircuit=shortcircuit,
+            )
             return self._replace_merged(result_factors)
         merged_self = self.to_merged()
         replacement_merged = [r.to_merged() for r in replacements]
