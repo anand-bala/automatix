@@ -12,12 +12,14 @@ Covers:
 
 from __future__ import annotations
 
+import algebraic.ops as ops
 import numpy as np
 import pytest
 from algebraic import BooleanAlgebra
 from algebraic.polynomials import RankDecomposition
 from algebraic.utils.poly import (
     merge_compatible_components,
+    pack_non_identity_slots,
     pad_upto,
     prune_factors,
     reduce_degree,
@@ -311,6 +313,75 @@ class TestComposeDegreeWithMaxDegree:
             ref_val = _eval_rd(ref, point)
             res_val = _eval_rd(result, point)
             assert_close(ref_val, res_val)
+
+
+# -- pack_non_identity_slots ---------------------------------------------------
+
+
+class TestPackNonIdentitySlots:
+    """Tests for the new ``pack_non_identity_slots`` (and batched variant)."""
+
+    def test_pack_collapses_middle_identity(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
+        """An interleaved identity slot is removed by pack but not by strip."""
+        num_vars = 3
+        x0 = RankDecomposition.variable(0, num_vars, bool_algebra, backend=backend)
+        x1 = RankDecomposition.variable(1, num_vars, bool_algebra, backend=backend)
+        prod = x0 * x1  # (1, 2, 4)
+
+        padded = pad_upto(prod.factors, max_rank=1, max_degree=5)  # trailing identities
+        rolled = ops.roll(padded, 3, axis=1)  # identities now in the front, non-identity trailing
+
+        # strip cannot remove non-trailing identities -> shape unchanged
+        assert strip_identity_slots(rolled).shape[1] == 5
+        # pack collapses to true effective degree
+        packed = pack_non_identity_slots(rolled)
+        assert packed.shape[1] == 2
+
+    def test_pack_semantics_preserved(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
+        """Packed factors evaluate identically to the original polynomial."""
+        num_vars = 3
+        x0 = RankDecomposition.variable(0, num_vars, bool_algebra, backend=backend)
+        x1 = RankDecomposition.variable(1, num_vars, bool_algebra, backend=backend)
+        x2 = RankDecomposition.variable(2, num_vars, bool_algebra, backend=backend)
+        poly = (x0 * x1) + x2
+
+        padded = pad_upto(poly.factors, max_rank=poly.rank, max_degree=8)
+        rolled = ops.roll(padded, 3, axis=1)
+        packed = pack_non_identity_slots(rolled)
+
+        packed_rd = RankDecomposition(packed, poly.max_rank, poly.max_degree, poly.max_replacement_degree, backend=backend)
+
+        assert _truth_table(poly) == _truth_table(packed_rd)
+
+    def test_pack_minimum_degree_one(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
+        """All-identity input is collapsed to degree 1, never 0."""
+        num_vars = 2
+        const_one = RankDecomposition.one(num_vars, bool_algebra, backend=backend)
+        padded = pad_upto(const_one.factors, max_rank=1, max_degree=5)
+        packed = pack_non_identity_slots(padded)
+        assert packed.shape[1] >= 1
+
+    def test_pack_no_change_when_already_packed(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
+        """A factor with no identity slots is returned unchanged in shape."""
+        num_vars = 3
+        x0 = RankDecomposition.variable(0, num_vars, bool_algebra, backend=backend)
+        x1 = RankDecomposition.variable(1, num_vars, bool_algebra, backend=backend)
+        prod = x0 * x1
+        packed = pack_non_identity_slots(prod.factors)
+        assert packed.shape == prod.factors.shape
+
+    def test_batched_pack_collapses_middle_identity(self, bool_algebra: BooleanAlgebra, backend: str) -> None:
+        """The same ``pack_non_identity_slots`` works on batched inputs via ``...`` indexing."""
+        B, num_vars = 4, 3
+        x0 = RankDecomposition.variable(0, num_vars, bool_algebra, backend=backend, batch_shape=(B,))
+        x1 = RankDecomposition.variable(1, num_vars, bool_algebra, backend=backend, batch_shape=(B,))
+        prod = x0 * x1  # (B, 1, 2, 4)
+
+        padded = pad_upto(prod.factors, max_rank=1, max_degree=5)  # (B, 1, 5, 4)
+        rolled = ops.roll(padded, 3, axis=-2)
+        packed = pack_non_identity_slots(rolled)
+        assert packed.shape[-2] == 2
+        assert packed.shape[0] == B
 
 
 if __name__ == "__main__":

@@ -421,3 +421,27 @@ gives a major speedup (single fused operation per beam step instead of
 smart path or implement a more refined local compressor (see notes in
 ``utils/poly.py`` on potential strategies: slot-merge by join, slot
 absorption, envelope clustering).
+
+``pack`` (default ``True``)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A third keyword, ``pack``, controls how identity slots are removed
+during the fast prune step.
+
+When ``pack=True`` (default), the prune step uses
+``pack_non_identity_slots`` instead of ``strip_identity_slots``: it
+moves identity slots that appear *anywhere* in the degree axis to the
+back via a stable sort, then slices off the trailing identity region.
+Because rank-1 components are commutative products over the degree
+axis, this rearrangement is mathematically exact (modulo ``atol``).
+
+When ``pack=False`` the prune step falls back to
+``strip_identity_slots``, which only removes *trailing* identity slots.
+
+Pack makes the fast path **strictly less lossy**: identity slots
+introduced by ``pad_upto`` padding or beam initialization are now
+compacted away for free, instead of getting dropped by the subsequent
+hard degree truncation.  The kwarg is threaded through
+``RankDecomposition.compose``, ``LowRankFactors.compose``,
+``batched_compose_factors``, ``batched_contraction_compression``,
+``batched_prune_fast``, and ``prune_factors``.

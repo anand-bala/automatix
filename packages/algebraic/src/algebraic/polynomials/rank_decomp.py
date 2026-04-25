@@ -409,6 +409,7 @@ class RankDecomposition(AlgebraicPyTree):
         *,
         atol: float = 1e-6,
         shortcircuit: bool = True,
+        pack: bool = True,
     ) -> "RankDecomposition":
         """Compose polynomial with replacement polynomials.
 
@@ -426,6 +427,11 @@ class RankDecomposition(AlgebraicPyTree):
             (strip identity slots + hard rank/degree truncation) at each beam
             step.  When ``False``, run the full per-element smart prune
             (dedup / idempotence / merge / monomial-expansion).
+        pack : bool, optional
+            When ``True`` (default), the identity-slot pruning step also moves
+            non-trailing identity slots to the back of the degree axis before
+            slicing them off.  This makes the fast path strictly less lossy
+            (free degree compaction instead of a hard truncation drop).
 
         Returns
         -------
@@ -446,6 +452,7 @@ class RankDecomposition(AlgebraicPyTree):
                 self.max_degree,
                 atol=atol,
                 shortcircuit=shortcircuit,
+                pack=pack,
             )
             return self._replace_factors(result_factors)
         replacement_factors = [r.factors for r in replacements]
@@ -976,6 +983,7 @@ class LowRankFactors(AlgebraicPyTree):
         *,
         atol: float = 1e-6,
         shortcircuit: bool = True,
+        pack: bool = True,
     ) -> "LowRankFactors":
         """Compose polynomial with replacement polynomials.
 
@@ -1006,6 +1014,7 @@ class LowRankFactors(AlgebraicPyTree):
                 self.max_degree,
                 atol=atol,
                 shortcircuit=shortcircuit,
+                pack=pack,
             )
             return self._replace_merged(result_factors)
         merged_self = self.to_merged()
