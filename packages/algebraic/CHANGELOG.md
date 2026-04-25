@@ -1,3 +1,18 @@
+## [1.3.5] - 2026-04-25
+
+### Features
+
+- pruning a rank decomposition should allow for short circuiting and approx-equal checks
+- add a "packed" identity pruning strategy that is more aggressive
+- unify the polynomial factors' arithmetic for batch and unbatched
+
+### Other
+
+- add a scratch testing doc to check polynomial composition perf
+
+### Documentation
+
+- move all the tradeoffs and other things into a developer notes doc
 ## [1.3.4] - 2026-04-25
 
 ### Bug Fixes
