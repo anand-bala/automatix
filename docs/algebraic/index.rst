@@ -110,5 +110,6 @@ Optimization
    quick-start
    concepts/index
    api/modules
+   developer-notes
    changelog
 
