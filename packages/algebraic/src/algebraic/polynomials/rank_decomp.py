@@ -20,10 +20,12 @@ from algebraic.utils.poly import (
     _merge_weights_bias,
     _multiply_factors,
     _split_merged_factors,
+    batched_compose_factors,
     batched_evaluate_factors,
     compose_factors,
     evaluate_factors,
     pad_upto,
+    prepare_replacement_factors,
     prune_factors,
 )
 
@@ -421,17 +423,10 @@ class RankDecomposition(AlgebraicPyTree):
                 f"Cannot compose a sequence of {len(replacements)} replacements for a polynomial with {self.num_vars} variables"
             )
         if self.batch_shape:
-            batch_size = self.batch_shape[0]
-            results: list[RankDecomposition] = []
-            for b in range(batch_size):
-                single_factors = self.factors[b]  # (R, D, N+1)
-                single_poly = self._replace_factors(single_factors)
-                single_replacements = [r._replace_factors(r.factors[b]) if r.batch_shape else r for r in replacements]
-                results.append(single_poly.compose(single_replacements))
-            max_r = max(r.factors.shape[0] for r in results)
-            max_d = max(r.factors.shape[1] for r in results)
-            padded = [pad_upto(r.factors, max_rank=max_r, max_degree=max_d) for r in results]
-            return self._replace_factors(algebraic.stack(padded))
+            replacement_factors_list = [r.factors for r in replacements]
+            q_factors = prepare_replacement_factors(replacement_factors_list, self.algebra, self.batch_shape)
+            result_factors = batched_compose_factors(self.factors, q_factors, self.max_rank, self.max_degree)
+            return self._replace_factors(result_factors)
         replacement_factors = [r.factors for r in replacements]
         result_factors = compose_factors(self.factors, replacement_factors, self.max_rank, self.max_degree)
         result = self._replace_factors(result_factors)
@@ -974,17 +969,11 @@ class LowRankFactors(AlgebraicPyTree):
                 f"Cannot compose a sequence of {len(replacements)} replacements for a polynomial with {self.num_vars} variables"
             )
         if self.batch_shape:
-            batch_size = self.batch_shape[0]
-            results: list[LowRankFactors] = []
-            for b in range(batch_size):
-                merged_b = self.to_merged()[b]  # (R, D, N+1)
-                single_poly = self._replace_merged(merged_b)
-                single_replacements = [r._replace_merged(r.to_merged()[b]) if r.batch_shape else r for r in replacements]
-                results.append(single_poly.compose(single_replacements))
-            max_r = max(r.weights.shape[0] for r in results)
-            max_d = max(r.weights.shape[1] for r in results)
-            padded = [pad_upto(r.to_merged(), max_rank=max_r, max_degree=max_d) for r in results]
-            return self._replace_merged(algebraic.stack(padded))
+            merged_self = self.to_merged()
+            replacement_merged = [r.to_merged() for r in replacements]
+            q_factors = prepare_replacement_factors(replacement_merged, self.algebra, self.batch_shape)
+            result_factors = batched_compose_factors(merged_self, q_factors, self.max_rank, self.max_degree)
+            return self._replace_merged(result_factors)
         merged_self = self.to_merged()
         replacement_merged = [r.to_merged() for r in replacements]
         result_factors = compose_factors(merged_self, replacement_merged, self.max_rank, self.max_degree)

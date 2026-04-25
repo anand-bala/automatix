@@ -137,45 +137,73 @@ def compose_factors(
     return contraction_compression(contracted, max_rank, max_degree)
 
 
-def prepare_replacement_factors(replacement_factors: Sequence[AlgebraicArray], algebra: Lattice) -> AlgebraicArray:
+def prepare_replacement_factors(
+    replacement_factors: Sequence[AlgebraicArray],
+    algebra: Lattice,
+    batch_shape: tuple[int, ...] = (),
+) -> AlgebraicArray:
     """Prepare padded array of replacement factor arrays.
+
+    Each replacement may be either:
+    - unbatched ``(R_i, D_i, N+1)``, or
+    - batched ``(*batch_shape, R_i, D_i, N+1)`` matching ``batch_shape``.
+
+    Unbatched replacements are broadcast across the batch.  ``batch_shape=()``
+    yields the original unbatched output shape.
 
     Parameters
     ----------
     replacement_factors : Sequence[AlgebraicArray]
-        Sequence of N replacement factor arrays, each of shape ``(R_i, D_i, N_i+1)``.
+        Sequence of N replacement factor arrays.
     algebra : BoundedDistributiveLattice
         Lattice algebra governing operations.
+    batch_shape : tuple[int, ...], optional
+        Leading batch shape; ``()`` for unbatched output.
 
     Returns
     -------
     AlgebraicArray
-        Padded array of shape ``[N+1, R_max, D_max, N+1]``.
-        Index 0: constant (identity: always 1).
+        Padded array of shape ``(*batch_shape, N+1, R_max, D_max, N+1)``.
+        Index 0 along the variable axis: constant (identity: always 1).
         Index i+1: replacement for variable ``x_i``.
     """
+    bs_len = len(batch_shape)
+
+    def _rdn(q: AlgebraicArray) -> tuple[int, int, int]:
+        # Strip leading batch dims if present; unbatched replacements (ndim == 3)
+        # are broadcast across the batch.
+        offset = q.ndim - 3
+        return q.shape[offset], q.shape[offset + 1], q.shape[offset + 2]
+
     target_rank, target_degree, n_plus_1 = tuple(
         map(  # pyrefly: ignore[bad-specialization]
             max,
-            zip(*((q.shape[0], q.shape[1], q.shape[2]) for q in replacement_factors)),
+            zip(*(_rdn(q) for q in replacement_factors)),
         )
     )
     backend = Backend.from_array(replacement_factors[0].data)
     device = replacement_factors[0].device
 
-    # Create one-polynomial factors inline (avoids importing RankDecomposition)
+    # Identity factors: (1, 1, N+1) -> (target_rank, target_degree, N+1)
     one_factors_base = algebraic.zeros((1, 1, n_plus_1), semiring=algebra, backend=backend, device=device)
     one_factors_base = one_factors_base.at[(0, 0, 0)].set(algebra.one)
-    one_factors = pad_upto(
-        one_factors_base,
-        max_rank=target_rank,
-        max_degree=target_degree,
-    )
-    new_replacements = algebraic.stack(
-        [one_factors] + [pad_upto(q, max_rank=target_rank, max_degree=target_degree) for q in replacement_factors]
-    )
+    one_factors = pad_upto(one_factors_base, max_rank=target_rank, max_degree=target_degree)
+    if batch_shape:
+        one_factors = algebraic.broadcast_to(one_factors, (*batch_shape, target_rank, target_degree, n_plus_1))
 
-    assert new_replacements.shape == (n_plus_1, target_rank, target_degree, n_plus_1)
+    padded: list[AlgebraicArray] = [one_factors]
+    for q in replacement_factors:
+        if batch_shape and q.ndim == 3:
+            # Unbatched replacement: pad then broadcast across batch
+            q_padded = pad_upto(q, max_rank=target_rank, max_degree=target_degree)
+            q_padded = algebraic.broadcast_to(q_padded, (*batch_shape, target_rank, target_degree, n_plus_1))
+        else:
+            q_padded = pad_upto(q, max_rank=target_rank, max_degree=target_degree)
+        padded.append(q_padded)
+
+    new_replacements = algebraic.stack(padded, axis=bs_len)
+
+    assert new_replacements.shape == (*batch_shape, n_plus_1, target_rank, target_degree, n_plus_1)
     return new_replacements
 
 
@@ -185,8 +213,12 @@ def pad_upto(
     max_rank: int,
     max_degree: int,
 ) -> AlgebraicArray:
-    """Pad rank/degree axes with identity elements up to the given maximum."""
-    rank, degree, n_plus_1 = factors.shape
+    """Pad rank/degree axes with identity elements up to the given maximum.
+
+    Supports any leading batch shape: ``factors`` may be ``(R, D, N+1)`` or
+    ``(*batch, R, D, N+1)``.
+    """
+    *batch_shape, rank, degree, n_plus_1 = factors.shape
 
     if max_rank <= rank and max_degree <= degree:
         return factors
@@ -197,17 +229,22 @@ def pad_upto(
 
     new_rank = max(rank, max_rank)
     new_degree = max(degree, max_degree)
-    return_shape = (new_rank, new_degree, n_plus_1)
+    return_shape = (*batch_shape, new_rank, new_degree, n_plus_1)
 
     # Base: all identity, then overwrite existing slots
     one_terms = algebraic.broadcast_to(
         algebraic.eye(1, n_plus_1, semiring=algebra, backend=backend, device=device),
-        (rank, new_degree, n_plus_1),
+        (*batch_shape, rank, new_degree, n_plus_1),
     )
-    degree_padded = one_terms.at[:, :degree, :].set(factors)
+    degree_padded = one_terms.at[..., :, :degree, :].set(factors)
 
-    zero_terms = algebraic.zeros((new_rank - rank, new_degree, n_plus_1), semiring=algebra, backend=backend, device=device)
-    rank_padded = algebraic.concat((degree_padded, zero_terms), axis=0)
+    if new_rank > rank:
+        zero_terms = algebraic.zeros(
+            (*batch_shape, new_rank - rank, new_degree, n_plus_1), semiring=algebra, backend=backend, device=device
+        )
+        rank_padded = algebraic.concat((degree_padded, zero_terms), axis=-3)
+    else:
+        rank_padded = degree_padded
 
     assert rank_padded.shape == return_shape
     return rank_padded
