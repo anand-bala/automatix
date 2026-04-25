@@ -1,3 +1,12 @@
+## [1.3.4] - 2026-04-25
+
+### Bug Fixes
+
+- rank decomposition polynomial composition wasn't batched
+
+### Documentation
+
+- add pip install instructions
 ## [1.3.3] - 2026-04-23
 
 ### Features
