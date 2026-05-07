@@ -113,3 +113,15 @@ Optimization
    developer-notes
    changelog
 
+.. toctree::
+   :maxdepth: 2
+   :caption: Examples
+
+   training-rank-decomposition
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Roadmap
+
+   roadmap/sparse
+
