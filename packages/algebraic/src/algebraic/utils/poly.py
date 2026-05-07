@@ -141,9 +141,29 @@ def compose_factors(
     # shape: (N+1, R2, D2, N+1)
     q_factors = prepare_replacement_factors(replacement_factors, algebra)
 
-    # n-mode contraction over variable axis
-    # result: (R, D, R2, D2, N+1)
-    contracted = algebraic.einsum("pdk,kqev->pdqev", factors, q_factors)
+    # n-mode contraction over the variable axis ``k``.
+    #
+    # An obvious-but-wrong implementation is
+    #     einsum("pdk,kqev->pdqev", factors, q_factors)
+    # which sums over ``k``.  For monomial source slots (a single non-zero in
+    # ``factors[p, d, :]``) this is correct -- the einsum simply selects the
+    # corresponding ``q_factors[k]`` column.  For multi-non-zero "non-monomial"
+    # slots (produced by :func:`merge_compatible_components` via the
+    # distributive law) the einsum's ``OR``-sum collapses two CP-factor
+    # tensors element-wise, which is **not** the CP representation of their
+    # polynomial sum (CP sum is rank-axis concatenation, not elementwise OR).
+    #
+    # The correct contraction broadcasts ``factors`` and ``q_factors`` and
+    # reshapes the (k, q) axes into a single rank axis: each (p, d, k, q)
+    # stripe is ``factors[p, d, k] * q_factors[k, q]`` (a weighted rank-1
+    # component of ``q_factors[k]``).  Stripes where ``factors[p, d, k] == 0``
+    # become all-zero rank-1 components, which contribute 0 to the polynomial
+    # sum -- exactly the behaviour we want.
+    p, d, k = factors.shape
+    _, q, e, v = q_factors.shape
+    expanded = factors[:, :, :, None, None, None] * q_factors[None, None, :, :, :, :]
+    # (p, d, k, q, e, v) -> (p, d, k*q, e, v)
+    contracted = algebraic.reshape(expanded, (p, d, k * q, e, v))
 
     return contraction_compression(contracted, max_rank, max_degree)
 
@@ -1106,10 +1126,20 @@ def batched_compose_factors(
     AlgebraicArray
         Batch of composed CP factors, shape ``[B, R_out, D_out, N+1]``.
     """
-    # Batched einsum: contract over variable axis
-    # (B, R, D, N+1) x (B, N+1, R_max, D_max, N+1) -> (B, R, D, R_max, D_max, N+1)
-    contracted = algebraic.einsum("bpdk,bkqev->bpdqev", factors, replacement_factors)
-    return batched_contraction_compression(contracted, max_rank, max_degree, atol=atol, shortcircuit=shortcircuit, pack=pack)
+    # n-mode contraction over the variable axis ``k`` (batched form).
+    #
+    # See :func:`compose_factors` for the rationale: an einsum sum over ``k``
+    # mis-contracts multi-non-zero source slots (produced by
+    # ``merge_compatible_components``).  We instead broadcast and reshape the
+    # (k, q) axes into a combined rank axis of size ``K*Q``.
+    b, p, d, k = factors.shape
+    _, _, q, e, v = replacement_factors.shape
+    expanded = factors[:, :, :, :, None, None, None] * replacement_factors[:, None, None, :, :, :, :]
+    # (b, p, d, k, q, e, v) -> (b, p, d, k*q, e, v)
+    contracted = algebraic.reshape(expanded, (b, p, d, k * q, e, v))
+    return batched_contraction_compression(
+        contracted, max_rank, max_degree, atol=atol, shortcircuit=shortcircuit, pack=pack, static_shape=static_shape
+    )
 
 
 # -- Weight/bias helpers -------------------------------------------------------
