@@ -73,11 +73,19 @@ def trace_batched_compose(
     atol: float = 1e-6,
     shortcircuit: bool = True,
     pack: bool = True,
+    static_shape: bool = False,
 ) -> AlgebraicArray:
-    kw = {"atol": atol, "shortcircuit": shortcircuit, "pack": pack}
+    kw = {"atol": atol, "shortcircuit": shortcircuit, "pack": pack, "static_shape": static_shape}
     log(f"  >>> batched_compose_factors  state={tuple(factors.shape)}  q={tuple(replacement_factors.shape)}  kw={kw}")
     out = _orig_batched_compose(
-        factors, replacement_factors, max_rank, max_degree, atol=atol, shortcircuit=shortcircuit, pack=pack
+        factors,
+        replacement_factors,
+        max_rank,
+        max_degree,
+        atol=atol,
+        shortcircuit=shortcircuit,
+        pack=pack,
+        static_shape=static_shape,
     )
     sync()
     log(f"  <<< batched_compose_factors  out={tuple(out.shape)}")
@@ -92,6 +100,7 @@ def trace_batched_compress(
     atol: float = 1e-6,
     shortcircuit: bool = True,
     pack: bool = True,
+    static_shape: bool = False,
 ) -> AlgebraicArray:
     log(
         f"    >>> batched_contraction_compression  in={tuple(contracted.shape)}  "
@@ -121,7 +130,7 @@ def trace_batched_compress(
     sync()
     t0 = time.perf_counter()
     if shortcircuit:
-        beam = poly_utils.batched_prune_fast(beam, max_rank, max_degree, atol=atol, pack=pack)
+        beam = poly_utils.batched_prune_fast(beam, max_rank, max_degree, atol=atol, pack=pack, static_shape=static_shape)
     else:
         beam = poly_utils._prune_per_batch(beam, max_rank, max_degree, atol=atol, shortcircuit=False, pack=pack)
     sync()
@@ -139,7 +148,7 @@ def trace_batched_compress(
         sync()
         t0 = time.perf_counter()
         if shortcircuit:
-            beam = poly_utils.batched_prune_fast(beam, max_rank, max_degree, atol=atol, pack=pack)
+            beam = poly_utils.batched_prune_fast(beam, max_rank, max_degree, atol=atol, pack=pack, static_shape=static_shape)
             sync()
             log(f"        FAST batched_prune_fast done ({time.perf_counter() - t0:.3f}s)  beam.shape={tuple(beam.shape)}")
         else:

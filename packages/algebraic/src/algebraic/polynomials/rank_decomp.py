@@ -21,6 +21,7 @@ from algebraic.utils.poly import (
     _split_merged_factors,
     batched_compose_factors,
     batched_evaluate_factors,
+    batched_prune_fast,
     compose_factors,
     evaluate_factors,
     prepare_replacement_factors,
@@ -312,6 +313,49 @@ class RankDecomposition(AlgebraicPyTree):
             device=self.factors.device,
         )
 
+    def prune(
+        self,
+        *,
+        atol: float = 1e-6,
+        shortcircuit: bool = False,
+        pack: bool = True,
+        static_shape: bool = False,
+    ) -> "RankDecomposition":
+        """Run the prune pipeline on this polynomial's factors.
+
+        Use this to manually compress factors between JIT'd training steps.
+        With ``shortcircuit=False`` (default) the full smart-prune pipeline
+        runs (dedup / idempotence / merge / reduce_degree); this is *not*
+        JIT-safe.  With ``shortcircuit=True`` and (optionally) ``static_shape=True``
+        the JIT-safe fast path runs.
+
+        For batched polynomials each batch element is pruned independently
+        (per-batch loop) when ``shortcircuit=False``, or vectorized when
+        ``shortcircuit=True``.
+        """
+        if static_shape and not (shortcircuit and pack):
+            raise ValueError("static_shape=True requires shortcircuit=True and pack=True (the JIT-safe path)")
+        if self.batch_shape:
+            if shortcircuit:
+                new_factors = batched_prune_fast(
+                    self.factors, self.max_rank, self.max_degree, atol=atol, pack=pack, static_shape=static_shape
+                )
+            else:
+                new_factors = _prune_per_batch(
+                    self.factors, self.max_rank, self.max_degree, atol=atol, shortcircuit=False, pack=pack
+                )
+        else:
+            new_factors = prune_factors(
+                self.factors,
+                self.max_rank,
+                self.max_degree,
+                atol=atol,
+                shortcircuit=shortcircuit,
+                pack=pack,
+                static_shape=static_shape,
+            )
+        return self._replace_factors(new_factors)
+
     def normalize(self) -> "RankDecomposition":
         """Canonicalize via truth-table round-trip, bounding degree to max_degree.
 
@@ -341,12 +385,26 @@ class RankDecomposition(AlgebraicPyTree):
             backend=self.backend,
         )
 
-    def __add__(self, other: "RankDecomposition | Scalar") -> "RankDecomposition":
+    def add(
+        self,
+        other: "RankDecomposition | Scalar",
+        *,
+        atol: float = 1e-6,
+        shortcircuit: bool = False,
+        pack: bool = True,
+        static_shape: bool = False,
+    ) -> "RankDecomposition":
         """Add by concatenating rank-1 components.
 
         For CP decomposition: ``p + q`` = sum of all components from both.
         For batched polynomials each batch element is added independently.
+
+        Parameters mirror :meth:`compose`.  ``static_shape=True`` is the
+        JIT-safe path; it requires ``shortcircuit=True`` and ``pack=True`` and
+        skips the smart prune passes that produce dynamic shapes.
         """
+        if static_shape and not (shortcircuit and pack):
+            raise ValueError("static_shape=True requires shortcircuit=True and pack=True (the JIT-safe path)")
         if is_scalar(other):
             other = self._make_const(other)
         assert isinstance(other, RankDecomposition)
@@ -355,27 +413,82 @@ class RankDecomposition(AlgebraicPyTree):
 
         new_factors = _add_factors(self.factors, other.factors)
         if self.batch_shape:
-            new_factors = _prune_per_batch(new_factors, self.max_rank, self.max_degree)
+            if shortcircuit:
+                new_factors = batched_prune_fast(
+                    new_factors, self.max_rank, self.max_degree, atol=atol, pack=pack, static_shape=static_shape
+                )
+            else:
+                new_factors = _prune_per_batch(new_factors, self.max_rank, self.max_degree, atol=atol, pack=pack)
         else:
-            new_factors = prune_factors(new_factors, self.max_rank, self.max_degree)
-        result = self._replace_factors(new_factors)
-        return result
+            new_factors = prune_factors(
+                new_factors,
+                self.max_rank,
+                self.max_degree,
+                atol=atol,
+                shortcircuit=shortcircuit,
+                pack=pack,
+                static_shape=static_shape,
+            )
+        return self._replace_factors(new_factors)
+
+    def mul(
+        self,
+        other: "RankDecomposition",
+        *,
+        atol: float = 1e-6,
+        shortcircuit: bool = False,
+        pack: bool = True,
+        static_shape: bool = False,
+    ) -> "RankDecomposition":
+        """Multiply two CP-decomposed polynomials.
+
+        Delegates core multiplication to ``_multiply_factors()``, then applies
+        simplification and compression.  For batched polynomials each batch
+        element is pruned independently.
+
+        Parameters mirror :meth:`compose`.  ``static_shape=True`` is the
+        JIT-safe path.
+        """
+        if static_shape and not (shortcircuit and pack):
+            raise ValueError("static_shape=True requires shortcircuit=True and pack=True (the JIT-safe path)")
+        new_factors = _multiply_factors(self.factors, other.factors)
+        if self.batch_shape:
+            if shortcircuit:
+                new_factors = batched_prune_fast(
+                    new_factors, self.max_rank, self.max_degree, atol=atol, pack=pack, static_shape=static_shape
+                )
+            else:
+                new_factors = _prune_per_batch(new_factors, self.max_rank, self.max_degree, atol=atol, pack=pack)
+        else:
+            new_factors = prune_factors(
+                new_factors,
+                self.max_rank,
+                self.max_degree,
+                atol=atol,
+                shortcircuit=shortcircuit,
+                pack=pack,
+                static_shape=static_shape,
+            )
+        return self._replace_factors(new_factors)
+
+    def __add__(self, other: "RankDecomposition | Scalar") -> "RankDecomposition":
+        """Add by concatenating rank-1 components.
+
+        For CP decomposition: ``p + q`` = sum of all components from both.
+        For batched polynomials each batch element is added independently.
+
+        Use :meth:`add` directly for keyword arguments such as ``shortcircuit``
+        or ``static_shape`` (the latter is required for JIT-safe usage).
+        """
+        return self.add(other)
 
     def __mul__(self, other: "RankDecomposition") -> "RankDecomposition":
         """Multiply two CP-decomposed polynomials.
 
-        Delegates core multiplication to ``_multiply_factors()``, then applies
-        simplification and compression.
-        For batched polynomials each batch element is pruned independently.
+        Use :meth:`mul` directly for keyword arguments such as ``shortcircuit``
+        or ``static_shape`` (the latter is required for JIT-safe usage).
         """
-        new_factors = _multiply_factors(self.factors, other.factors)
-        if self.batch_shape:
-            new_factors = _prune_per_batch(new_factors, self.max_rank, self.max_degree)
-        else:
-            new_factors = prune_factors(new_factors, self.max_rank, self.max_degree)
-        result = self._replace_factors(new_factors)
-
-        return result
+        return self.mul(other)
 
     def evaluate(self, points: Array | AlgebraicArray) -> AlgebraicArray:
         """Evaluate polynomial at given point.
@@ -402,6 +515,7 @@ class RankDecomposition(AlgebraicPyTree):
         atol: float = 1e-6,
         shortcircuit: bool = True,
         pack: bool = True,
+        static_shape: bool = False,
     ) -> "RankDecomposition":
         """Compose polynomial with replacement polynomials.
 
@@ -424,12 +538,21 @@ class RankDecomposition(AlgebraicPyTree):
             non-trailing identity slots to the back of the degree axis before
             slicing them off.  This makes the fast path strictly less lossy
             (free degree compaction instead of a hard truncation drop).
+        static_shape : bool, optional
+            When ``True``, use only shape-preserving prune operations and skip
+            the unbatched ``normalize()`` round-trip; the output keeps the
+            input degree dimension intact (compaction is deferred to a static
+            slice at ``max_degree``).  Required for use inside ``jax.jit`` /
+            ``jax.vmap`` / ``jax.grad``.  Implies ``shortcircuit=True`` and
+            ``pack=True``; conflicting combinations raise ``ValueError``.
 
         Returns
         -------
         RankDecomposition
             The composed polynomial.
         """
+        if static_shape and not (shortcircuit and pack):
+            raise ValueError("static_shape=True requires shortcircuit=True and pack=True (the JIT-safe path)")
         if len(replacements) != self.num_vars:
             raise ValueError(
                 f"Cannot compose a sequence of {len(replacements)} replacements for a polynomial with {self.num_vars} variables"
@@ -445,11 +568,26 @@ class RankDecomposition(AlgebraicPyTree):
                 atol=atol,
                 shortcircuit=shortcircuit,
                 pack=pack,
+                static_shape=static_shape,
             )
             return self._replace_factors(result_factors)
         replacement_factors = [r.factors for r in replacements]
-        result_factors = compose_factors(self.factors, replacement_factors, self.max_rank, self.max_degree)
+        result_factors = compose_factors(
+            self.factors,
+            replacement_factors,
+            self.max_rank,
+            self.max_degree,
+            atol=atol,
+            shortcircuit=shortcircuit,
+            pack=pack,
+            static_shape=static_shape,
+        )
         result = self._replace_factors(result_factors)
+        if static_shape:
+            # Skip normalize() -- it round-trips through to_sparse() which uses
+            # Python dicts and bool(allclose(...)), neither of which is traceable.
+            # Degree is bounded statically via max_degree in compose_factors.
+            return result
         return result.normalize()
 
     def tree_flatten(self) -> tuple[list[AlgebraicArray], tuple[typing.Any, ...]]:
@@ -471,12 +609,6 @@ class RankDecomposition(AlgebraicPyTree):
     def to_sparse(self) -> PolyDict:
         """Convert CP to sparse via a subset DP over variable bitmasks.
 
-        Raises
-        ------
-        ValueError
-            If called on a batched polynomial (``batch_shape != ()``).
-            The ``PolyDict`` representation is not batched; call element-wise.
-
         Replaces the previous ``O((n+1)^d)`` enumeration with an
         ``O(R * D * 2^n * n)`` DP that is independent of ``degree``.
         This prevents exponential blowup when ``degree > max_degree``
@@ -485,6 +617,12 @@ class RankDecomposition(AlgebraicPyTree):
 
         The DP assumes idempotent variable multiplication (``x_i * x_i = x_i``),
         which holds for multilinear polynomials over bounded distributive lattices.
+
+        Raises
+        ------
+        ValueError
+            If called on a batched polynomial (``batch_shape != ()``).
+            The ``PolyDict`` representation is not batched; call element-wise.
         """
         if self.batch_shape:
             raise ValueError(
@@ -890,6 +1028,42 @@ class LowRankFactors(AlgebraicPyTree):
             device=self.weights.device,
         )
 
+    def prune(
+        self,
+        *,
+        atol: float = 1e-6,
+        shortcircuit: bool = False,
+        pack: bool = True,
+        static_shape: bool = False,
+    ) -> "LowRankFactors":
+        """Run the prune pipeline on this polynomial's factors.
+
+        See :meth:`RankDecomposition.prune` for parameter semantics.
+        """
+        if static_shape and not (shortcircuit and pack):
+            raise ValueError("static_shape=True requires shortcircuit=True and pack=True (the JIT-safe path)")
+        merged = self.to_merged()
+        if self.batch_shape:
+            if shortcircuit:
+                new_factors = batched_prune_fast(
+                    merged, self.max_rank, self.max_degree, atol=atol, pack=pack, static_shape=static_shape
+                )
+            else:
+                new_factors = _prune_per_batch(
+                    merged, self.max_rank, self.max_degree, atol=atol, shortcircuit=False, pack=pack
+                )
+        else:
+            new_factors = prune_factors(
+                merged,
+                self.max_rank,
+                self.max_degree,
+                atol=atol,
+                shortcircuit=shortcircuit,
+                pack=pack,
+                static_shape=static_shape,
+            )
+        return self._replace_merged(new_factors)
+
     def normalize(self) -> "LowRankFactors":
         """Canonicalize via truth-table round-trip, bounding degree to max_degree.
 
@@ -910,11 +1084,22 @@ class LowRankFactors(AlgebraicPyTree):
             return self
         return LowRankFactors.from_rank_decomposition(rd.normalize())
 
-    def __add__(self, other: "LowRankFactors | Scalar") -> "LowRankFactors":
+    def add(
+        self,
+        other: "LowRankFactors | Scalar",
+        *,
+        atol: float = 1e-6,
+        shortcircuit: bool = False,
+        pack: bool = True,
+        static_shape: bool = False,
+    ) -> "LowRankFactors":
         """Add by concatenating rank-1 components.
 
         For batched polynomials each batch element is added independently.
+        ``static_shape=True`` is the JIT-safe path.
         """
+        if static_shape and not (shortcircuit and pack):
+            raise ValueError("static_shape=True requires shortcircuit=True and pack=True (the JIT-safe path)")
         if is_scalar(other):
             other = self._make_const(other)
         assert isinstance(other, LowRankFactors)
@@ -925,24 +1110,69 @@ class LowRankFactors(AlgebraicPyTree):
         merged_other = other.to_merged()
         new_factors = _add_factors(merged_self, merged_other)
         if self.batch_shape:
-            new_factors = _prune_per_batch(new_factors, self.max_rank, self.max_degree)
+            if shortcircuit:
+                new_factors = batched_prune_fast(
+                    new_factors, self.max_rank, self.max_degree, atol=atol, pack=pack, static_shape=static_shape
+                )
+            else:
+                new_factors = _prune_per_batch(new_factors, self.max_rank, self.max_degree, atol=atol, pack=pack)
         else:
-            new_factors = prune_factors(new_factors, self.max_rank, self.max_degree)
+            new_factors = prune_factors(
+                new_factors,
+                self.max_rank,
+                self.max_degree,
+                atol=atol,
+                shortcircuit=shortcircuit,
+                pack=pack,
+                static_shape=static_shape,
+            )
         return self._replace_merged(new_factors)
 
-    def __mul__(self, other: "LowRankFactors") -> "LowRankFactors":
+    def mul(
+        self,
+        other: "LowRankFactors",
+        *,
+        atol: float = 1e-6,
+        shortcircuit: bool = False,
+        pack: bool = True,
+        static_shape: bool = False,
+    ) -> "LowRankFactors":
         """Multiply two CP-decomposed polynomials.
 
         For batched polynomials each batch element is pruned independently.
+        ``static_shape=True`` is the JIT-safe path.
         """
+        if static_shape and not (shortcircuit and pack):
+            raise ValueError("static_shape=True requires shortcircuit=True and pack=True (the JIT-safe path)")
         merged_self = self.to_merged()
         merged_other = other.to_merged()
         new_factors = _multiply_factors(merged_self, merged_other)
         if self.batch_shape:
-            new_factors = _prune_per_batch(new_factors, self.max_rank, self.max_degree)
+            if shortcircuit:
+                new_factors = batched_prune_fast(
+                    new_factors, self.max_rank, self.max_degree, atol=atol, pack=pack, static_shape=static_shape
+                )
+            else:
+                new_factors = _prune_per_batch(new_factors, self.max_rank, self.max_degree, atol=atol, pack=pack)
         else:
-            new_factors = prune_factors(new_factors, self.max_rank, self.max_degree)
+            new_factors = prune_factors(
+                new_factors,
+                self.max_rank,
+                self.max_degree,
+                atol=atol,
+                shortcircuit=shortcircuit,
+                pack=pack,
+                static_shape=static_shape,
+            )
         return self._replace_merged(new_factors)
+
+    def __add__(self, other: "LowRankFactors | Scalar") -> "LowRankFactors":
+        """Add by concatenating rank-1 components.  See :meth:`add`."""
+        return self.add(other)
+
+    def __mul__(self, other: "LowRankFactors") -> "LowRankFactors":
+        """Multiply two CP-decomposed polynomials.  See :meth:`mul`."""
+        return self.mul(other)
 
     def evaluate(self, points: Array | AlgebraicArray) -> AlgebraicArray:
         """Evaluate polynomial at given point.
@@ -970,6 +1200,7 @@ class LowRankFactors(AlgebraicPyTree):
         atol: float = 1e-6,
         shortcircuit: bool = True,
         pack: bool = True,
+        static_shape: bool = False,
     ) -> "LowRankFactors":
         """Compose polynomial with replacement polynomials.
 
@@ -979,12 +1210,19 @@ class LowRankFactors(AlgebraicPyTree):
             Sequence of replacement polynomials, one per variable.  For batched
             polynomials each replacement may itself be batched or unbatched
             (the latter is broadcast across the batch).
+        static_shape : bool, optional
+            When ``True``, use only shape-preserving prune operations and skip
+            the unbatched ``normalize()`` round-trip.  Required for use inside
+            ``jax.jit`` / ``jax.vmap`` / ``jax.grad``.  Implies
+            ``shortcircuit=True`` and ``pack=True``.
 
         Returns
         -------
         LowRankFactors
             The composed polynomial.
         """
+        if static_shape and not (shortcircuit and pack):
+            raise ValueError("static_shape=True requires shortcircuit=True and pack=True (the JIT-safe path)")
         if len(replacements) != self.num_vars:
             raise ValueError(
                 f"Cannot compose a sequence of {len(replacements)} replacements for a polynomial with {self.num_vars} variables"
@@ -1001,12 +1239,24 @@ class LowRankFactors(AlgebraicPyTree):
                 atol=atol,
                 shortcircuit=shortcircuit,
                 pack=pack,
+                static_shape=static_shape,
             )
             return self._replace_merged(result_factors)
         merged_self = self.to_merged()
         replacement_merged = [r.to_merged() for r in replacements]
-        result_factors = compose_factors(merged_self, replacement_merged, self.max_rank, self.max_degree)
+        result_factors = compose_factors(
+            merged_self,
+            replacement_merged,
+            self.max_rank,
+            self.max_degree,
+            atol=atol,
+            shortcircuit=shortcircuit,
+            pack=pack,
+            static_shape=static_shape,
+        )
         result = self._replace_merged(result_factors)
+        if static_shape:
+            return result
         return result.normalize()
 
     def to_rank_decomposition(self) -> RankDecomposition:

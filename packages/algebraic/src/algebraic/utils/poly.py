@@ -115,6 +115,11 @@ def compose_factors(
     replacement_factors: Sequence[AlgebraicArray],
     max_rank: int,
     max_degree: int | None,
+    *,
+    atol: float = 1e-6,
+    shortcircuit: bool = False,
+    pack: bool = True,
+    static_shape: bool = False,
 ) -> AlgebraicArray:
     """Compose CP factors with replacement factor arrays.
 
@@ -165,7 +170,9 @@ def compose_factors(
     # (p, d, k, q, e, v) -> (p, d, k*q, e, v)
     contracted = algebraic.reshape(expanded, (p, d, k * q, e, v))
 
-    return contraction_compression(contracted, max_rank, max_degree)
+    return contraction_compression(
+        contracted, max_rank, max_degree, atol=atol, shortcircuit=shortcircuit, pack=pack, static_shape=static_shape
+    )
 
 
 def prepare_replacement_factors(
@@ -285,6 +292,11 @@ def contraction_compression(
     contracted: AlgebraicArray,
     max_rank: int,
     max_degree: int | None,
+    *,
+    atol: float = 1e-6,
+    shortcircuit: bool = False,
+    pack: bool = True,
+    static_shape: bool = False,
 ) -> AlgebraicArray:
     """Beam search over tensor contractions.
 
@@ -323,12 +335,16 @@ def contraction_compression(
     # that would otherwise leave a leading identity slot the trailing-only
     # ``strip_identity_slots`` could not remove).
     beam = candidates[0]
-    beam = prune_factors(beam, max_rank, max_degree)
+    beam = prune_factors(
+        beam, max_rank, max_degree, atol=atol, shortcircuit=shortcircuit, pack=pack, static_shape=static_shape
+    )
 
     for d in range(1, degree1):
         candidate_d = candidates[d]  # (rank1 * rank2, degree2, n+1)
         beam = _multiply_factors(beam, candidate_d)
-        beam = prune_factors(beam, max_rank, max_degree)
+        beam = prune_factors(
+            beam, max_rank, max_degree, atol=atol, shortcircuit=shortcircuit, pack=pack, static_shape=static_shape
+        )
 
     return beam
 
@@ -396,6 +412,13 @@ def strip_identity_slots(factors: AlgebraicArray, atol: float = 1e-6) -> Algebra
     polynomial.  The function trims all such trailing slots, keeping at least
     one.
 
+    .. note::
+       This helper is **not** JIT-safe: the trailing-identity loop branches on
+       array values via ``bool(...)`` and produces value-dependent output
+       shapes.  For JIT/grad/vmap callers, use the default ``pack=True`` path
+       (which routes through :func:`pack_non_identity_slots`, a shape-preserving
+       variant) instead of ``pack=False``.
+
     Complexity: O(B * R * D * N).
 
     Parameters
@@ -434,19 +457,32 @@ def strip_identity_slots(factors: AlgebraicArray, atol: float = 1e-6) -> Algebra
     return factors[..., :, :new_degree, :]
 
 
-def pack_non_identity_slots(factors: AlgebraicArray, atol: float = 1e-6) -> AlgebraicArray:
+def pack_non_identity_slots(
+    factors: AlgebraicArray,
+    atol: float = 1e-6,
+    *,
+    static_shape: bool = False,
+) -> AlgebraicArray:
     """Pack non-identity degree slots to the front for every rank component.
 
     Works on any leading batch shape: ``factors`` may be ``(R, D, N+1)`` or
     ``(*batch, R, D, N+1)``.  Identity slots ``[one, zero, ..., zero]`` are
-    pushed to the back of the degree axis via a stable sort on a 0/1 key, then
-    the trailing identity region is sliced off (using the global max
-    non-identity count over the whole tensor so the output shape stays
-    uniform).  Because rank-1 components are commutative products over the
-    degree axis, this rearrangement is mathematically exact (modulo the
-    equality tolerance ``atol``).
+    pushed to the back of the degree axis via a stable sort on a 0/1 key.
+    With ``static_shape=False`` (default) the trailing identity region is
+    then sliced off based on the global max non-identity count -- a free
+    degree reduction.  Because rank-1 components are commutative products
+    over the degree axis, this rearrangement is mathematically exact
+    (modulo the equality tolerance ``atol``).
 
-    Compared to :func:`strip_identity_slots` this also removes identity slots
+    With ``static_shape=True`` the output shape matches the input shape;
+    the trailing identity region is left in place (each identity slot
+    multiplies the rank-1 product by 1, so it is mathematically inert).
+    This mode is JIT-safe -- no value-dependent shapes -- and is required
+    for use inside ``jax.jit`` / ``jax.vmap`` / ``jax.grad``.  Any
+    compaction below ``D`` is then the caller's responsibility (typically
+    via a static slice ``factors[..., :max_degree, :]``).
+
+    Compared to :func:`strip_identity_slots` this also handles identity slots
     that appear in the *middle* of the degree axis (e.g. introduced by
     ``pad_upto`` padding or beam initialisation).
 
@@ -458,11 +494,18 @@ def pack_non_identity_slots(factors: AlgebraicArray, atol: float = 1e-6) -> Alge
         CP factors of shape ``(*batch, R, D, N+1)``.
     atol : float, optional
         Tolerance for the identity-slot equality check.  ``0`` = exact equality.
+    static_shape : bool, optional
+        When ``True``, skip the value-dependent trailing slice; the output
+        keeps the input degree dimension intact.  Required for JIT.  Default
+        ``False`` preserves the historical free-compaction behaviour.
 
     Returns
     -------
     AlgebraicArray
-        CP factors of shape ``(*batch, R, D', N+1)`` with ``1 <= D' <= D``.
+        CP factors with non-identity slots packed to the front along the
+        degree axis.  Shape ``(*batch, R, D', N+1)`` with ``1 <= D' <= D``
+        (``static_shape=False``) or exactly ``(*batch, R, D, N+1)``
+        (``static_shape=True``).
     """
     *batch_shape, rank, degree, n_plus_1 = factors.shape
     if degree <= 1:
@@ -479,21 +522,103 @@ def pack_non_identity_slots(factors: AlgebraicArray, atol: float = 1e-6) -> Alge
     # is_identity[..., r, d] = True iff slot (r, d) is the identity row
     is_identity = _eq_or_close(factors, identity_row, atol).all(-1)  # (*batch, R, D)
 
-    # Output degree is the global max non-identity count, at least 1
-    non_identity_count = xp.sum(xp.astype(~is_identity, xp.int32), axis=-1)  # (*batch, R)
-    new_degree = int(xp.max(non_identity_count))
-    if new_degree < 1:
-        new_degree = 1
-    if new_degree >= degree:
-        return factors
-
     # Stable sort: identity slots (key=1) move to the back, non-identity (key=0) stay in order
     sort_key = xp.astype(is_identity, xp.int32)  # (*batch, R, D)
     indices = xp.argsort(sort_key, axis=-1, stable=True)  # (*batch, R, D)
     indices_b = xp.broadcast_to(indices[..., None], (*batch_shape, rank, degree, n_plus_1))
 
     packed = algebraic.take_along_axis(factors, indices_b, axis=-2)
+    if static_shape:
+        return packed
+
+    # Output degree is the global max non-identity count, at least 1
+    non_identity_count = xp.sum(xp.astype(~is_identity, xp.int32), axis=-1)  # (*batch, R)
+    new_degree = int(xp.max(non_identity_count))
+    if new_degree < 1:
+        new_degree = 1
+    if new_degree >= degree:
+        return packed
     return packed[..., :, :new_degree, :]
+
+
+def pack_non_zero_components(
+    factors: AlgebraicArray,
+    atol: float = 1e-6,
+    *,
+    static_shape: bool = False,
+) -> AlgebraicArray:
+    """Sort rank-1 components so non-zero components come first.
+
+    A rank-1 component is the zero polynomial iff *any* of its degree slots is
+    the all-zero coefficient row (since the rank-1 product picks up a zero
+    factor and the absorbing law ``0 * x = 0`` kills the component).  Such
+    components contribute nothing to the additive sum-over-rank, so they are
+    safe to push to the back of the rank axis.  Doing so before a hard
+    ``factors[:max_rank]`` truncation guarantees we keep meaningful components
+    rather than padded zero ones.
+
+    Works on any leading batch shape.  With ``static_shape=False`` (default)
+    the trailing all-zero-rank region is sliced off based on the per-element
+    max non-zero count (free rank reduction); the output has dynamic rank.
+    With ``static_shape=True`` the output shape matches the input shape (no
+    truncation, JIT-safe).
+
+    Complexity: O(B * R * D * N).
+
+    Parameters
+    ----------
+    factors : AlgebraicArray
+        CP factors of shape ``(*batch, R, D, N+1)``.
+    atol : float, optional
+        Tolerance for the all-zero check.  ``0`` = exact equality with the
+        algebra's zero element.
+    static_shape : bool, optional
+        When ``True``, skip the value-dependent trailing slice; the output
+        keeps the input rank dimension intact.  Required for JIT.
+
+    Returns
+    -------
+    AlgebraicArray
+        CP factors with non-zero rank-1 components at the front of the rank
+        axis.  Shape ``(*batch, R', D, N+1)`` with ``1 <= R' <= R``
+        (``static_shape=False``) or exactly ``(*batch, R, D, N+1)``
+        (``static_shape=True``).
+    """
+    *batch_shape, rank, degree, n_plus_1 = factors.shape
+    if rank <= 1:
+        return factors
+
+    backend = Backend.from_array(factors.data)
+    device = factors.device
+    algebra = factors.semiring
+    xp = backend.get_array_namespace()
+
+    zero_row = algebraic.zeros((n_plus_1,), semiring=algebra, backend=backend, device=device)
+
+    # is_zero_slot[..., r, d] = True iff slot (r, d) is the all-zero row
+    is_zero_slot = _eq_or_close(factors, zero_row, atol).all(-1)  # (*batch, R, D)
+    # is_zero_rank[..., r] = True iff *any* slot of rank-1 r is all-zero
+    # (which makes the whole rank-1 the zero polynomial via the absorbing law)
+    is_zero_rank = is_zero_slot.any(-1)  # (*batch, R)
+
+    # Stable sort: zero rank-1s (key=1) move to the back, non-zero (key=0) stay in order
+    sort_key = xp.astype(is_zero_rank, xp.int32)  # (*batch, R)
+    indices = xp.argsort(sort_key, axis=-1, stable=True)  # (*batch, R)
+    indices_b = xp.broadcast_to(indices[..., None, None], (*batch_shape, rank, degree, n_plus_1))
+
+    packed = algebraic.take_along_axis(factors, indices_b, axis=-3)
+    if static_shape:
+        return packed
+
+    # Dynamic slice: keep only as many ranks as the global max non-zero count
+    # (across all batch elements; ensures uniform output shape).
+    non_zero_count = xp.sum(xp.astype(~is_zero_rank, xp.int32), axis=-1)  # (*batch,)
+    new_rank = int(xp.max(non_zero_count))
+    if new_rank < 1:
+        new_rank = 1
+    if new_rank >= rank:
+        return packed
+    return packed[..., :new_rank, :, :]
 
 
 def merge_compatible_components(factors: AlgebraicArray, atol: float = 1e-6) -> AlgebraicArray:
@@ -823,6 +948,7 @@ def prune_factors(
     atol: float = 1e-6,
     shortcircuit: bool = False,
     pack: bool = True,
+    static_shape: bool = False,
 ) -> AlgebraicArray:
     """Reduce rank/degree of CP factors via a sequence of cheap-to-expensive strategies.
 
@@ -870,11 +996,17 @@ def prune_factors(
         Pruned factors of shape ``(R', D', N+1)`` with ``R' <= max_rank``.
     """
     if shortcircuit:
-        # Fast path: trim identity slots, then hard truncate.
+        # Fast path: pack identity slots + push zero rank-1s to the back, then
+        # hard truncate.  Both packs are O(R*D*N), shape-preserving, and JIT-safe.
         if pack:
-            factors = pack_non_identity_slots(factors, atol)
+            factors = pack_non_identity_slots(factors, atol, static_shape=static_shape)
         else:
             factors = strip_identity_slots(factors, atol)
+        # Sort zero rank-1 components to the back so the rank truncation below
+        # keeps meaningful components.  Without this, compose's broadcast-style
+        # contraction (which intentionally leaves zero rank-1 stripes from
+        # zeroed slot[k]) can lose the non-zero component to truncation.
+        factors = pack_non_zero_components(factors, atol, static_shape=static_shape)
         if max_degree is not None and factors.shape[1] > max_degree:
             factors = factors[:, :max_degree, :]
         if factors.shape[0] > max_rank:
@@ -893,7 +1025,10 @@ def prune_factors(
     # 3. Remove lattice-dominated components
     factors = idempotence_pruning(factors, atol)
 
-    # 4. Merge components that differ in exactly one slot (free rank reduction)
+    # 4. Merge components that differ in exactly one slot (free rank reduction).
+    # Note: this can produce multi-non-zero ("non-monomial") slots; compose's
+    # contraction handles these correctly via a broadcast-reshape (rather than
+    # the obvious-but-wrong einsum sum that mis-contracts multi-non-zero slots).
     factors = merge_compatible_components(factors, atol)
 
     # 5. Selective degree reduction (degree reduction at rank cost)
@@ -1003,6 +1138,7 @@ def batched_prune_fast(
     *,
     atol: float = 1e-6,
     pack: bool = True,
+    static_shape: bool = False,
 ) -> AlgebraicArray:
     """Vectorized fast prune over ``(*batch, R, D, N+1)``: strip + hard truncate.
 
@@ -1012,11 +1148,17 @@ def batched_prune_fast(
     ``...`` indexing.  Skips all O(R^2) per-element passes; lossy when the
     input has non-identity slots beyond ``max_degree`` or rank components
     beyond ``max_rank``.
+
+    Pass ``static_shape=True`` (in combination with ``pack=True``) to make this
+    function fully JIT-safe: no value-dependent shapes are produced.
     """
     if pack:
-        factors = pack_non_identity_slots(factors, atol)
+        factors = pack_non_identity_slots(factors, atol, static_shape=static_shape)
     else:
         factors = strip_identity_slots(factors, atol)
+    # Push zero rank-1 components to the back of the rank axis so the hard
+    # truncation below preserves meaningful (non-zero) components.
+    factors = pack_non_zero_components(factors, atol, static_shape=static_shape)
     if max_degree is not None and factors.shape[-2] > max_degree:
         factors = factors[..., :, :max_degree, :]
     if factors.shape[-3] > max_rank:
@@ -1032,6 +1174,7 @@ def batched_contraction_compression(
     atol: float = 1e-6,
     shortcircuit: bool = True,
     pack: bool = True,
+    static_shape: bool = False,
 ) -> AlgebraicArray:
     """Batched beam search over tensor contractions.
 
@@ -1077,7 +1220,7 @@ def batched_contraction_compression(
     # unbatched ``contraction_compression`` for the rationale).
     beam = candidates[:, 0]
     if shortcircuit:
-        beam = batched_prune_fast(beam, max_rank, max_degree, atol=atol, pack=pack)
+        beam = batched_prune_fast(beam, max_rank, max_degree, atol=atol, pack=pack, static_shape=static_shape)
     else:
         beam = _prune_per_batch(beam, max_rank, max_degree, atol=atol, shortcircuit=False, pack=pack)
 
@@ -1086,7 +1229,7 @@ def batched_contraction_compression(
         beam = _multiply_factors(beam, candidate_d)
 
         if shortcircuit:
-            beam = batched_prune_fast(beam, max_rank, max_degree, atol=atol, pack=pack)
+            beam = batched_prune_fast(beam, max_rank, max_degree, atol=atol, pack=pack, static_shape=static_shape)
         else:
             beam = _prune_per_batch(beam, max_rank, max_degree, atol=atol, shortcircuit=False, pack=pack)
 
@@ -1102,6 +1245,7 @@ def batched_compose_factors(
     atol: float = 1e-6,
     shortcircuit: bool = True,
     pack: bool = True,
+    static_shape: bool = False,
 ) -> AlgebraicArray:
     """Batched composition of CP factors with prepared replacement factor arrays.
 
