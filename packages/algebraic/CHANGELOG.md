@@ -1,3 +1,17 @@
+## [1.3.6] - 2026-05-07
+
+### Features
+
+- expose JIT-safe paths for polynomial composition and evaluation
+
+### Bug Fixes
+
+- einsum for composition; replace with reshape-broadcast
+
+### Documentation
+
+- roadmap/plan for speeding up rank decomp with sparse arrays
+- add docs for training with rank decomposition
 ## [1.3.5] - 2026-04-25
 
 ### Features
