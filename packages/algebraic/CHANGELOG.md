@@ -1,3 +1,8 @@
+## [1.3.7] - 2026-05-08
+
+### Bug Fixes
+
+- tree_unflatten should not be testing for correctness
 ## [1.3.6] - 2026-05-07
 
 ### Features
