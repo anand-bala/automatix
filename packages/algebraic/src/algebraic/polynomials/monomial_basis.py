@@ -308,8 +308,16 @@ class MonomialBasis(AlgebraicPyTree):
     def tree_unflatten(cls, aux_data: tuple[typing.Any, ...], children: Sequence[AnyPyTree]) -> "MonomialBasis":
         algebra, backend = aux_data
         coeffs = children[0]
-        assert isinstance(coeffs, AlgebraicArray)
-        return cls(coeffs=coeffs, algebra=algebra, backend=backend)
+        # Bypass __init__ so this round-trips arbitrary leaves through jax.tree_util
+        # (eqx.filter_jit partition uses bool leaves; nnx.jit clear_non_graph_nodes
+        # uses jax.Tracer leaves). The dataclass __init__ would accept any value, but
+        # downstream attribute access expects an AlgebraicArray; bypassing __init__
+        # keeps the round-trip a pure structural operation.
+        obj = cls.__new__(cls)
+        obj.coeffs = coeffs  # type: ignore[assignment]
+        obj.algebra = algebra
+        obj.backend = backend
+        return obj
 
     # -- Conversion ------------------------------------------------------------
 

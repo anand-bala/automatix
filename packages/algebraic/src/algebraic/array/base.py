@@ -59,6 +59,11 @@ class AlgebraicArray:
     _vdot: VdotFn | None = None
     _matmul: MatmulFn | None = None
 
+    def __post_init__(self) -> None:
+        data: object = self.data
+        if not (is_array(data) or isinstance(data, Number)):
+            raise ValueError("AlgebraicArray data must be a builtin Number or a valid Array")
+
     def _wrap(self, data: Array | Number) -> "AlgebraicArray":
         """Create a new instance with the given data, preserving all other attributes."""
         if is_torch_array(self.data):
@@ -302,8 +307,17 @@ class AlgebraicArray:
     def tree_unflatten(cls, aux_data: tuple[typing.Any, ...], children: Sequence[AnyPyTree]) -> "AlgebraicArray":
         semiring, _vdot, _matmul = aux_data
         data = children[0]
-        assert is_array(data)
-        return cls(data, semiring, _vdot, _matmul)
+        # tree_unflatten is a polymorphic protocol method that must accept arbitrary
+        # leaf values to round-trip through jax.tree_util.tree_map (eqx.filter_jit's
+        # partition pass uses bool leaves; nnx.jit's clear_non_graph_nodes uses
+        # jax.Tracer leaves). Bypass __init__/__post_init__ validation here so the
+        # round-trip works; user-facing construction still goes through __init__.
+        obj = cls.__new__(cls)
+        obj.data = data  # type: ignore[assignment]
+        obj.semiring = semiring
+        obj._vdot = _vdot
+        obj._matmul = _matmul
+        return obj
 
     __tree_unflatten__ = tree_unflatten
 

@@ -292,8 +292,15 @@ class PolyDict(AlgebraicPyTree):
     @classmethod
     def tree_unflatten(cls, aux_data: tuple[typing.Any, ...], children: Sequence[AnyPyTree]) -> "PolyDict":
         algebra, num_vars, keys, backend = aux_data
-        children = typing.cast(Sequence[AlgebraicArray], children)
-        return cls(algebra, num_vars, dict(zip(keys, children)), backend=backend)
+        # Bypass __init__ so this round-trips arbitrary leaves through jax.tree_util
+        # (eqx.filter_jit partition uses bool leaves; nnx.jit clear_non_graph_nodes
+        # uses jax.Tracer leaves). Keeps the round-trip a pure structural operation.
+        obj = cls.__new__(cls)
+        obj.algebra = algebra
+        obj.num_vars = num_vars
+        obj.data = dict(zip(keys, children))  # type: ignore[arg-type]
+        obj.backend = backend
+        return obj
 
     def __repr__(self) -> str:
         import wadler_lindig as wl

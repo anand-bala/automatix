@@ -597,8 +597,18 @@ class RankDecomposition(AlgebraicPyTree):
     def tree_unflatten(cls, aux_data: tuple[typing.Any, ...], children: Sequence[AnyPyTree]) -> "RankDecomposition":
         algebra, max_rank, max_degree, max_replacement_degree, backend = aux_data
         factors = children[0]
-        assert isinstance(factors, AlgebraicArray)
-        return cls(factors, max_rank, max_degree, max_replacement_degree, backend=backend)
+        # Bypass __init__ so this round-trips arbitrary leaves through jax.tree_util
+        # (eqx.filter_jit partition uses bool leaves; nnx.jit clear_non_graph_nodes
+        # uses jax.Tracer leaves). __init__ inspects factors.shape and factors.semiring,
+        # which are not meaningful for those leaf types.
+        obj = cls.__new__(cls)
+        obj.factors = factors  # type: ignore[assignment]
+        obj.algebra = algebra
+        obj.max_rank = max_rank
+        obj.max_degree = max_degree
+        obj.max_replacement_degree = max_replacement_degree
+        obj.backend = backend
+        return obj
 
     def _index_to_bits(self, index: int) -> tuple[int, ...]:
         """Convert flat index to n-bit tuple."""
@@ -1284,9 +1294,19 @@ class LowRankFactors(AlgebraicPyTree):
         algebra, max_rank, max_degree, max_replacement_degree, backend = aux_data
         weights = children[0]
         bias = children[1]
-        assert isinstance(weights, AlgebraicArray)
-        assert isinstance(bias, AlgebraicArray)
-        return cls(weights, bias, max_rank, max_degree, max_replacement_degree, backend=backend)
+        # Bypass __init__ so this round-trips arbitrary leaves through jax.tree_util
+        # (eqx.filter_jit partition uses bool leaves; nnx.jit clear_non_graph_nodes
+        # uses jax.Tracer leaves). __init__ inspects weights.shape and weights.semiring,
+        # which are not meaningful for those leaf types.
+        obj = cls.__new__(cls)
+        obj.weights = weights  # type: ignore[assignment]
+        obj.bias = bias  # type: ignore[assignment]
+        obj.algebra = algebra
+        obj.max_rank = max_rank
+        obj.max_degree = max_degree
+        obj.max_replacement_degree = max_replacement_degree
+        obj.backend = backend
+        return obj
 
     def __repr__(self) -> str:
         import wadler_lindig as wl
